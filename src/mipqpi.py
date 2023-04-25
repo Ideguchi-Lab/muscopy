@@ -42,7 +42,10 @@ def mipqpi(array_on, array_off, params, print_backend=False):
     ]
     array_on = xp.fft.ifft2(xp.fft.ifftshift(array_on_fft))
 
-    dif_phase = xp.angle(array_on / array_off)
+    # reference area may be changed
+    phase_mean = xp.mean(xp.angle(array_off[0:30, 0:30]))
+
+    dif_phase = xp.angle(array_on / array_off) - phase_mean
 
     if print_backend:
         backend = "cupy" if _cp else "numpy"

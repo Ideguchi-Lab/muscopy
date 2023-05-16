@@ -64,11 +64,11 @@ def qpi(array, reference, params):
     reference_fft = reference_fft * mask
     reference_fft = reference_fft[
         params.center[1]
-        - params.aperturesize // 2 : params.center[1]
+        - params.aperturesize // 2: params.center[1]
         + params.aperturesize // 2
         + 1,
         params.center[0]
-        - params.aperturesize // 2 : params.center[0]
+        - params.aperturesize // 2: params.center[0]
         + params.aperturesize // 2
         + 1,
     ]
@@ -78,11 +78,11 @@ def qpi(array, reference, params):
     array_fft = array_fft * mask
     array_fft = array_fft[
         params.center[1]
-        - params.aperturesize // 2 : params.center[1]
+        - params.aperturesize // 2: params.center[1]
         + params.aperturesize // 2
         + 1,
         params.center[0]
-        - params.aperturesize // 2 : params.center[0]
+        - params.aperturesize // 2: params.center[0]
         + params.aperturesize // 2
         + 1,
     ]
@@ -92,7 +92,7 @@ def qpi(array, reference, params):
 
     dif_phase = xp.angle(array / reference)
 
-    dif_phase = mean_phase
+    dif_phase = dif_phase - mean_phase
 
     return dif_phase
 

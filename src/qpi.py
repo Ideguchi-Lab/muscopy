@@ -100,7 +100,7 @@ def qpi(array, reference, params):
 def convert_to_png(array, nonzero_range=None):
     # set elements to 0 outside the specified range.
     array_extracted = array.copy()
-    if range is not None:
+    if nonzero_range is not None:
         array_extracted[array_extracted < nonzero_range[0]] = nonzero_range[0]
         array_extracted[array_extracted > nonzero_range[1]] = nonzero_range[1]
     dr = xp.max(array_extracted) - xp.min(array_extracted)

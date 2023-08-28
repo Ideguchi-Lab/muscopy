@@ -25,12 +25,6 @@ class QPIParameters:
         )
 
 
-def decode_adimec(array):
-    array_upper = array[::2, :]
-    array_buttom = array[1::2, :]
-    array_buttom = xp.flip(array_buttom, 0)
-    return xp.concatenate((array_upper, array_buttom))
-
 
 def make_disk(center, radius, array_shape, highpass=False):
     """internal method. return disk filled with 1.
@@ -60,7 +54,7 @@ def make_disk(center, radius, array_shape, highpass=False):
 def qpi(array, reference, params):
     assert array.shape == reference.shape
     reference_fft = xp.fft.fftshift(xp.fft.fft2(reference))
-    mask = make_disk(params.center, params.aperturesize, params.img_shape)
+    mask = make_disk(params.center, params.aperturesize/2, params.img_shape)
     reference_fft = reference_fft * mask
     reference_fft = reference_fft[
         params.center[1]
@@ -88,27 +82,11 @@ def qpi(array, reference, params):
     ]
     array = xp.fft.ifft2(xp.fft.ifftshift(array_fft))
 
-    mean_phase = xp.mean(xp.angle(reference))
+    # mean_phase = xp.mean(xp.angle(reference))
 
     dif_phase = xp.angle(array / reference)
 
-    dif_phase = dif_phase - mean_phase
+    # dif_phase = dif_phase - mean_phase
 
     return dif_phase
 
-
-def convert_to_png(array, nonzero_range=None):
-    # set elements to 0 outside the specified range.
-    array_extracted = array.copy()
-    if range is not None:
-        array_extracted[array_extracted < nonzero_range[0]] = nonzero_range[0]
-        array_extracted[array_extracted > nonzero_range[1]] = nonzero_range[1]
-    dr = xp.max(array_extracted) - xp.min(array_extracted)
-    origin_shift = xp.min(array_extracted)
-    # shift
-    array_converted = array_extracted - origin_shift
-    x = (2**16 - 1) / dr
-    assert x >= 0
-    array_converted = array_converted * x
-    array_converted = array_converted.astype(xp.uint16)
-    return array_converted

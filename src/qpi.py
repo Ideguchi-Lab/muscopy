@@ -20,7 +20,7 @@ class QPIParameters:
     def calc_params(self):
         self.dim = self.img_shape[0]
         self.freq_per_pixel = 1 / (self.pixelsize * self.dim)
-        self.aperturesize = 2 * round(2 * self.NA / self.wav / self.freq_per_pixel / 2) + 1
+        self.aperturesize = 2 * round(self.NA / self.wav / self.freq_per_pixel) + 1
 
 
 def make_disk(center, radius, array_shape, highpass=False):

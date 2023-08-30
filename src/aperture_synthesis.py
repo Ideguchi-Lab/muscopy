@@ -287,6 +287,7 @@ class Synthesizer:
             synthesized_fft += fft_divided
             synthesized_weight += disk_synthesized != 0
 
+        synthesized_weight -= synthesized_weight != 1
         synthesized_fft /= synthesized_weight
         synthesized_qpi = xp.angle(xp.fft.ifft2(xp.fft.ifftshift(synthesized_fft)))
 

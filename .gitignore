@@ -129,3 +129,4 @@ dmypy.json
 .pyre/
 
 examples/source
+odt_test_data

@@ -27,6 +27,12 @@ class ODTParameters(QPIParameters):
         super().calc_params()
         self.ki_mag = self.n_sol / self.wav / self.freq_per_pixel
 
+    def print_all_parameters(self):
+        super().print_all_parameters()
+        print(f"{self.n_sol=}")
+        print(f"{self.ki_mag=}")
+
+
 
 class ODTSynthesizer(Synthesizer):
     def set_parameters(self, wavelength, NA, img_shape, img_center, pixelsize, offaxis_center, n_sol):

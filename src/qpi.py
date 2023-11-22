@@ -22,6 +22,19 @@ class QPIParameters:
         self.freq_per_pixel = 1 / (self.pixelsize * self.dim)
         self.aperturesize = 2 * round(self.NA / self.wav / self.freq_per_pixel) + 1
 
+        
+    def print_all_parameters(self):
+        print(f"{self.dim=}")
+        print(f"{self.freq_per_pixel=}")
+        print(f"{self.aperturesize=}")
+        print(f"{self.offaxis_center=}")
+        print(f"{self.img_center=}")
+        print(f"{self.pixelsize=}")
+        print(f"{self.img_shape=}")
+        print(f"{self.NA=}")
+        print(f"{self.wav=}")
+
+
 
 def make_disk(center, radius, array_shape, highpass=False):
     """internal method. return disk filled with 1.

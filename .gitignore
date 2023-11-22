@@ -130,3 +130,5 @@ dmypy.json
 
 examples/source
 odt_test_data
+
+*.png

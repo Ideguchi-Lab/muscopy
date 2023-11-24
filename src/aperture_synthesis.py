@@ -51,13 +51,9 @@ def preprocess_for_synthesis(array, ref_array=None, params=None):
     array_fft = array_fft * disk
     max_x, max_y, _ = find_max_args(np.abs(array_fft))
     oblique_center = (
-        max_x - params.offaxis_center[0],
-        max_y - params.offaxis_center[1],
+        max_x - params.offaxis_center[1],
+        max_y - params.offaxis_center[0],
     )
-    print(max_x, max_y)
-    print(params.offaxis_center)
-    print(oblique_center)
-    print(oblique_center[0] ** 2 + oblique_center[1] ** 2)
 
     left_index = max_x - params.aperturesize
     right_index = max_x + params.aperturesize + 1
@@ -74,9 +70,6 @@ def preprocess_for_synthesis(array, ref_array=None, params=None):
         constant_values=0,
     )
 
-    # save padded array for debugging in png
-    # plt.imsave("padded_array.png", np.abs(array_fft_pad), cmap="gray")
-    # plt.imsave("array_fft.png", np.abs(array_fft), cmap="gray")
     array_fft = array_fft_pad[
         left_index + params.aperturesize : right_index + params.aperturesize,
         top_index + params.aperturesize : bottom_index + params.aperturesize,
@@ -133,8 +126,8 @@ def preprocess_for_synthesis(array, ref_array=None, params=None):
     phase_offset = xp.mean(phase_offset_list)
     amplitude_offset = xp.mean(amplitude_offset_list)
 
-    # array_divided = array_divided * xp.exp(-1j * phase_offset)
-    # array_divided = array_divided / amplitude_offset
+    array_divided = array_divided * xp.exp(-1j * phase_offset)
+    array_divided = array_divided / amplitude_offset
 
     return array_divided, oblique_center
 
@@ -193,7 +186,6 @@ class Synthesizer:
                 array_cropped, oblique_center = preprocess_for_synthesis(
                     array, params=self.params
                 )
-            print(i, oblique_center)
             disk_synthesized = make_disk(
                 (
                     synthesized_center[0] - oblique_center[1],
@@ -230,6 +222,5 @@ class Synthesizer:
                 plt.imsave(
                     f"multiangle_qpi/{i:03}.png", self.multiangle_qpi[i], cmap="gray"
                 )
-                # np.save(f"multiangle_qpi/{i:03}.npy", self.multiangle_qpi[i])
 
         return synthesized_qpi, synthesized_fft

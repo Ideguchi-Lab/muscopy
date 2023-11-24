@@ -36,34 +36,36 @@ params = ODTParameters(
 params.calc_params()
 params.print_all_parameters()
 
-# make answer 3D refractive map
-rindex = (
-    generate_3D_sphere(
-        shape=params.aperturesize * 2,
-        radius=params.aperturesize / 5.0,
-        center=(params.aperturesize, params.aperturesize, params.aperturesize),
-    )
-    * 2
-)
-complex_field = xp.ones(rindex.shape, dtype=xp.complex128) * xp.exp(1j * rindex)
+# # make answer 3D refractive map
+# rindex = (
+#     generate_3D_sphere(
+#         shape=params.aperturesize * 2,
+#         radius=params.aperturesize / 5.0,
+#         center=(params.aperturesize, params.aperturesize, params.aperturesize),
+#     )
+#     * 2
+# )
+# complex_field = xp.ones(rindex.shape, dtype=xp.complex128) * xp.exp(1j * rindex)
 
-# convert to fft space
-array_3d_fft = xp.fft.fftshift(xp.fft.fftn(complex_field))
+# # convert to fft space
+# array_3d_fft = xp.fft.fftshift(xp.fft.fftn(complex_field))
 
-# %%
-# generate hologram
-step_angle = 360 / 10
-NA_illumi = 1
+# # %%
+# # generate hologram
+# step_angle = 360 / 10
+# NA_illumi = 1
 
-generate_test_data(array_3d_fft, params, step_angle, NA_illumi)
-print("generated test data!")
+# generate_test_data(array_3d_fft, params, step_angle, NA_illumi)
+# print("generated test data!")
 
 # %%
 # execute synthetic aperture
-test_data = numpy_parser("odt_test_data")
+# test_data = numpy_parser("odt_test_data")
+test_data = numpy_parser("../data/aperture_sample_beads")
+ref_data = numpy_parser("../data/aperture_ref_beads")
 qpi_synthesizer = QPISynthesizer()
 qpi_synthesizer.set_parameters(params)
-qpi_synthesizer.set_data(test_data)
+qpi_synthesizer.set_data(test_data, ref_data)
 qpi_synthesized, qpi_fft = qpi_synthesizer.synthesize(save_multiangle=True)
 
 if _cp:
@@ -83,7 +85,7 @@ fig = plt.figure()
 ax = fig.add_subplot(111)
 ax.imshow(np.log(np.abs(qpi_fft)))
 ax.scatter(qpi_fft.shape[0] // 2, qpi_fft.shape[1] // 2, s=10, c="red")
-plt.savefig("synthesized_qpi_fft.png")
+plt.savefig("synthesized_qpi_fft.png", dpi=300)
 
 
 # %%

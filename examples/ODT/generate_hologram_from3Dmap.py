@@ -88,6 +88,15 @@ def extract3Dto2D(
     return array_2d_fft
 
 
+# def map_2d_to_3d(array_fft_2d: xp.ndarray, array_fft_3d: xp.ndarray, params: ODTParameters, oblique_center: tuple[int, int])->xp.ndarray:
+#     xx, yy = xp.meshgrid(xp.arange(params.img_shape[0]), xp.arange(params.img_shape[1]), indexing="ij")
+#     circle = (xx - params.offaxis_center[0]) ** 2 + (yy - params.offaxis_center[1]) ** 2
+#     circle = circle < (params.aperturesize // 2) ** 2
+
+#     for i, j in zip(*xp.where(circle)):
+#         Kz = int(xp.sqrt(params.ki_mag**2 - (i - params.offaxis_center[0]) ** 2 - (j - params.offaxis_center[1]) ** 2) - xp.sqrt(params.ki_mag**2 - ))
+
+
 def generate_test_data(
     array_3d_fft: xp.ndarray,
     params: ODTParameters,

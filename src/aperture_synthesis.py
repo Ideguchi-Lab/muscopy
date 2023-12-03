@@ -123,8 +123,8 @@ def preprocess_for_synthesis(array, ref_array=None, params=None):
                 )
             )
         )
-    phase_offset = xp.mean(phase_offset_list)
-    amplitude_offset = xp.mean(amplitude_offset_list)
+    phase_offset = xp.mean(xp.array(phase_offset_list))
+    amplitude_offset = xp.mean(xp.array(amplitude_offset_list))
 
     array_divided = array_divided * xp.exp(-1j * phase_offset)
     array_divided = array_divided / amplitude_offset
@@ -219,8 +219,17 @@ class Synthesizer:
                 os.mkdir("multiangle_qpi")
             for i in range(len(self.target_data)):
                 # save as png
-                plt.imsave(
-                    f"multiangle_qpi/{i:03}.png", self.multiangle_qpi[i], cmap="gray"
-                )
+                if _cp:
+                    plt.imsave(
+                        f"multiangle_qpi/{i:03}.png",
+                        xp.asnumpy(self.multiangle_qpi[i]),
+                        cmap="gray",
+                    )
+                else:
+                    plt.imsave(
+                        f"multiangle_qpi/{i:03}.png",
+                        self.multiangle_qpi[i],
+                        cmap="gray",
+                    )
 
         return synthesized_qpi, synthesized_fft

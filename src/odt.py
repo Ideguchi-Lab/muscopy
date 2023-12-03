@@ -88,7 +88,7 @@ class ODTSynthesizer(Synthesizer):
             sphere_center = (
                 synthesized_center[0] - oblique_center[1],
                 synthesized_center[1] - oblique_center[0],
-                synthesized_center[2] + kz,
+                synthesized_center[2] - kz,
             )
             sphere_mask = make_semisphere_surface(
                 sphere_center, self.params.ki_mag, synthesized_fft.shape
@@ -102,16 +102,26 @@ class ODTSynthesizer(Synthesizer):
             synthesized_weight += fft_cropped_tiled != 0
 
         synthesized_fft /= synthesized_weight
-        synthesized_odt = xp.angle(xp.fft.ifftn(xp.fft.ifftshift(synthesized_fft)))
+        synthesized_array = xp.fft.ifftn(xp.fft.ifftshift(synthesized_fft))
 
-        if _cp:
-            synthesized_fft = xp.asnumpy(synthesized_fft)
-            synthesized_odt = xp.asnumpy(synthesized_odt)
+        # if _cp:
+        #     synthesized_array = xp.asnumpy(synthesized_array)
+        #     synthesized_fft = xp.asnumpy(synthesized_fft)
 
-        return synthesized_odt, synthesized_fft
+        return synthesized_array, synthesized_fft
 
-    def iterative_ODT(self, epsilon=1e-6, man_N=1000):
-        pass
+    def iterative_ODT(self, epsilon=1e-6, max_N=1000):
+        ref_array, ref_fft = self.ODT_synthesize()
+        current_array = ref_array.copy()
+        delta = xp.inf
+        iteration = 0
+        while (delta > epsilon) and (iteration < max_N):
+            current_array[np.angle(current_array) < 0] *= np.exp(
+                -1j * np.angle(current_array)
+            )
+            current_fft = xp.fft.fftshift(xp.fft.fftn(current_odt))
+            current_fft[ref_fft != 0] = ref_fft[ref_fft != 0]
+            current_odt = xp.angle(xp.fft.ifftn(xp.fft.ifftshift(current_fft)))
 
 
 def map_to_3d(array, shape, oblique_center, synthesized_center, aperturesize, kz):
@@ -149,332 +159,5 @@ def make_semisphere_surface(center, radius, array_shape):
         indexing="xy",
     )
     sphere = (xx - center[0]) ** 2 + (yy - center[1]) ** 2 + (zz - center[2]) ** 2
-    sphere = (sphere < radius**2) & (zz > center[2])
+    sphere = (xp.abs(sphere - radius**2) < 1e1) & (zz > center[2])
     return sphere
-
-
-# class ODTSynthesizer(Synthesizer):
-#     def ODT_synthesize(self):
-#         # calculate Z dimension
-#         z_plus = self.params.ki_mag - np.sqrt(
-#             self.params.ki_mag**2 - (self.params.aperturesize // 2) ** 2
-#         )
-#         z_minus = -self.params.ki_mag - np.sqrt(
-#             self.params.ki_mag**2 - (self.params.aperturesize // 2) ** 2
-#         )
-#         z_length = int(np.ceil(z_plus - z_minus))
-#         z_center = round(-z_minus)
-
-#         memory_per_picture = (
-#             (2 * self.params.aperturesize + 1) ** 2 * z_length * 16 * 1e-9
-#         )
-#         print("memory per picture: {} GB".format(memory_per_picture))
-
-#         synthesized_fft = xp.zeros(
-#             (
-#                 2 * self.params.aperturesize + 1,
-#                 2 * self.params.aperturesize + 1,
-#                 z_length,
-#             ),
-#             dtype=xp.complex128,
-#         )
-#         synthesized_center = (
-#             self.params.aperturesize,
-#             self.params.aperturesize,
-#             z_center,
-#         )
-#         synthesized_weight = xp.ones(
-#             (
-#                 2 * self.params.aperturesize + 1,
-#                 2 * self.params.aperturesize + 1,
-#                 z_length,
-#             ),
-#             dtype=xp.int64,
-#         )
-
-#         path_list = os.listdir(self.target_path)
-#         pic_path_list = []
-#         ref_path_list = os.listdir(self.ref_path)
-#         ref_pic_path_list = []
-
-#         for i in range(len(path_list)):
-#             filename = path_list[i]
-#             if filename.endswith(".png"):
-#                 pic_path_list.append(filename)
-#         for i in range(len(ref_path_list)):
-#             filename = ref_path_list[i]
-#             if filename.endswith(".png"):
-#                 ref_pic_path_list.append(filename)
-
-#         pic_path_list.sort()
-#         ref_pic_path_list.sort()
-
-#         print("ODT Synthesizing...")
-#         for i in tqdm(range(len(pic_path_list))):
-#             filename = pic_path_list[i]
-#             ref_filename = ref_pic_path_list[i]
-#             array = xp.array(
-#                 Image.open(os.path.join(self.target_path, filename))
-#             ).reshape(self.params.img_shape)
-#             ref_array = xp.array(
-#                 Image.open(os.path.join(self.ref_path, ref_filename))
-#             ).reshape(self.params.img_shape)
-
-#             fft = xp.fft.fftshift(xp.fft.fftn(array))
-#             ref_fft = xp.fft.fftshift(xp.fft.fftn(ref_array))
-
-#             oblique_center = self.oblique_centers[i]
-#             disk = make_disk(
-#                 self.params.off_axis,
-#                 self.params.aperturesize / 2,
-#                 self.params.img_shape,
-#             )
-
-#             fft = fft * disk
-#             ref_fft = ref_fft * disk
-
-#             left_index = (
-#                 self.params.offaxis_center[1]
-#                 + oblique_center[0]
-#                 - self.params.aperturesize
-#             )
-#             right_index = (
-#                 self.params.offaxis_center[1]
-#                 + oblique_center[0]
-#                 + self.params.aperturesize
-#                 + 1
-#             )
-#             top_index = (
-#                 self.params.offaxis_center[0]
-#                 + oblique_center[1]
-#                 - self.params.aperturesize
-#             )
-#             bottom_index = (
-#                 self.params.offaxis_center[0]
-#                 + oblique_center[1]
-#                 + self.params.aperturesize
-#                 + 1
-#             )
-#             if left_index < 0:
-#                 left_index = 0
-#             if right_index > self.params.img_shape[0]:
-#                 right_index = self.params.img_shape[0]
-#             if top_index < 0:
-#                 top_index = 0
-#             if bottom_index > self.params.img_shape[1]:
-#                 bottom_index = self.params.img_shape[1]
-
-#             fft = fft[
-#                 left_index:right_index,
-#                 top_index:bottom_index,
-#             ]
-#             ref_fft = ref_fft[
-#                 left_index:right_index,
-#                 top_index:bottom_index,
-#             ]
-
-#             if (
-#                 self.params.offaxis_center[1]
-#                 + oblique_center[0]
-#                 - self.params.aperturesize
-#                 < 0
-#             ):
-#                 fft = xp.pad(
-#                     fft,
-#                     (
-#                         (
-#                             -self.params.offaxis_center[1]
-#                             - oblique_center[0]
-#                             + self.params.aperturesize,
-#                             0,
-#                         ),
-#                         (0, 0),
-#                     ),
-#                     "constant",
-#                 )
-#                 ref_fft = xp.pad(
-#                     ref_fft,
-#                     (
-#                         (
-#                             -self.params.offaxis_center[1]
-#                             - oblique_center[0]
-#                             + self.params.aperturesize,
-#                             0,
-#                         ),
-#                         (0, 0),
-#                     ),
-#                     "constant",
-#                 )
-#             if (
-#                 self.params.offaxis_center[1]
-#                 + oblique_center[0]
-#                 + self.params.aperturesize
-#                 + 1
-#                 > self.params.img_shape[0]
-#             ):
-#                 fft = xp.pad(
-#                     fft,
-#                     (
-#                         (
-#                             0,
-#                             self.params.offaxis_center[1]
-#                             + oblique_center[0]
-#                             + self.params.aperturesize
-#                             + 1
-#                             - self.params.img_shape[0],
-#                         ),
-#                         (0, 0),
-#                     ),
-#                     "constant",
-#                 )
-#                 ref_fft = xp.pad(
-#                     ref_fft,
-#                     (
-#                         (
-#                             0,
-#                             self.params.offaxis_center[1]
-#                             + oblique_center[0]
-#                             + self.params.aperturesize
-#                             + 1
-#                             - self.params.img_shape[0],
-#                         ),
-#                         (0, 0),
-#                     ),
-#                     "constant",
-#                 )
-#             if (
-#                 self.params.offaxis_center[0]
-#                 + oblique_center[1]
-#                 - self.params.aperturesize
-#                 < 0
-#             ):
-#                 fft = xp.pad(
-#                     fft,
-#                     (
-#                         (0, 0),
-#                         (
-#                             -self.params.offaxis_center[0]
-#                             - oblique_center[1]
-#                             + self.params.aperturesize,
-#                             0,
-#                         ),
-#                     ),
-#                     "constant",
-#                 )
-#                 ref_fft = xp.pad(
-#                     ref_fft,
-#                     (
-#                         (0, 0),
-#                         (
-#                             -self.params.offaxis_center[0]
-#                             - oblique_center[1]
-#                             + self.params.aperturesize,
-#                             0,
-#                         ),
-#                     ),
-#                     "constant",
-#                 )
-#             if (
-#                 self.params.offaxis_center[0]
-#                 + oblique_center[1]
-#                 + self.params.aperturesize
-#                 + 1
-#                 > self.params.img_shape[1]
-#             ):
-#                 fft = xp.pad(
-#                     fft,
-#                     (
-#                         (0, 0),
-#                         (
-#                             0,
-#                             self.params.offaxis_center[0]
-#                             + oblique_center[1]
-#                             + self.params.aperturesize
-#                             + 1
-#                             - self.params.img_shape[1],
-#                         ),
-#                     ),
-#                     "constant",
-#                 )
-#                 ref_fft = xp.pad(
-#                     ref_fft,
-#                     (
-#                         (0, 0),
-#                         (
-#                             0,
-#                             self.params.offaxis_center[0]
-#                             + oblique_center[1]
-#                             + self.params.aperturesize
-#                             + 1
-#                             - self.params.img_shape[1],
-#                         ),
-#                     ),
-#                     "constant",
-#                 )
-
-#             qpi_array = xp.fft.ifft2(xp.fft.ifftshift(fft))
-#             ref_qpi_array = xp.fft.ifft2(xp.fft.ifftshift(ref_fft))
-#             qpi_divided = qpi_array / ref_qpi_array
-
-#             # normalize
-#             phase_backgound = xp.mean(
-#                 xp.angle(
-#                     qpi_divided[
-#                         background_region[0][0] : background_region[0][1],
-#                         background_region[1][0] : background_region[1][1],
-#                     ]
-#                 )
-#             )
-#             qpi_divided = qpi_divided * xp.exp(-1j * phase_backgound)
-
-#             amplitude_background = xp.mean(
-#                 xp.abs(
-#                     qpi_divided[
-#                         background_region[0][0] : background_region[0][1],
-#                         background_region[1][0] : background_region[1][1],
-#                     ]
-#                 )
-#             )
-#             qpi_divided = qpi_divided / amplitude_background
-
-#             fft_divided = xp.fft.fftshift(xp.fft.fft2(qpi_divided))
-
-#             disk_synthesized = make_disk(
-#                 (
-#                     synthesized_center[0] - oblique_center[1],
-#                     synthesized_center[1] - oblique_center[0],
-#                 ),
-#                 self.params.aperturesize // 2,
-#                 synthesized_fft.shape,
-#             )
-
-#             fft_divided = fft_divided * disk_synthesized
-
-#             kz_i = xp.sqrt(
-#                 self.params.ki_mag**2
-#                 - oblique_center[0] ** 2
-#                 - oblique_center[1] ** 2
-#             )
-#             fft_3d, array_weight = map_to_3d(
-#                 fft_divided,
-#                 synthesized_fft.shape,
-#                 oblique_center,
-#                 synthesized_center,
-#                 self.params.aperturesize,
-#                 kz_i,
-#             )
-
-#             synthesized_fft = synthesized_fft + fft_3d
-#             synthesized_weight = synthesized_weight + array_weight
-
-#         synthesized_weight -= synthesized_weight != 1
-#         synthesized_fft = synthesized_fft / synthesized_weight
-#         synthesized_array = xp.fft.ifftn(xp.fft.ifftshift(synthesized_fft))
-
-#         synthesized_odt = xp.angle(synthesized_array)
-
-#         if _cp:
-#             synthesized_odt = xp.asnumpy(synthesized_odt)
-#             synthesized_fft = xp.asnumpy(synthesized_fft)
-
-#         return synthesized_odt, synthesized_fft

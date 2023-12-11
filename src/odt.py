@@ -110,18 +110,26 @@ class ODTSynthesizer(Synthesizer):
 
         return synthesized_array, synthesized_fft
 
-    def iterative_ODT(self, epsilon=1e-6, max_N=1000):
+    def iterative_ODT(self, epsilon=1e-6, max_N=100):
         ref_array, ref_fft = self.ODT_synthesize()
         current_array = ref_array.copy()
+        current_odt = xp.angle(current_array)
         delta = xp.inf
         iteration = 0
         while (delta > epsilon) and (iteration < max_N):
-            current_array[np.angle(current_array) < 0] *= np.exp(
-                -1j * np.angle(current_array)
-            )
-            current_fft = xp.fft.fftshift(xp.fft.fftn(current_odt))
+            current_odt[current_odt < 0] = 0
+            current_array = xp.abs(current_array) * xp.exp(1j * current_odt)
+            current_fft = xp.fft.fftshift(xp.fft.fftn(current_array))
             current_fft[ref_fft != 0] = ref_fft[ref_fft != 0]
-            current_odt = xp.angle(xp.fft.ifftn(xp.fft.ifftshift(current_fft)))
+            current_array = xp.fft.ifftn(xp.fft.ifftshift(current_fft))
+
+            # delta = xp.sum(xp.angle(current_array) - current_odt) #TODO: consider better delta
+            iteration += 1
+            current_odt = xp.angle(current_array)
+
+            print(f"delta: {delta}, iteration: {iteration}")
+
+        return current_array, current_fft
 
 
 def map_to_3d(array, shape, oblique_center, synthesized_center, aperturesize, kz):
@@ -159,5 +167,7 @@ def make_semisphere_surface(center, radius, array_shape):
         indexing="xy",
     )
     sphere = (xx - center[0]) ** 2 + (yy - center[1]) ** 2 + (zz - center[2]) ** 2
-    sphere = (xp.abs(sphere - radius**2) < 1e1) & (zz > center[2])
+    sphere = (xp.abs(sphere - radius**2) < 6) & (
+        zz > center[2]
+    )  # TODO: 6 is a magic number
     return sphere

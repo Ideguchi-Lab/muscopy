@@ -35,15 +35,14 @@ params.calc_params()
 params.print_all_parameters()
 
 # make answer 3D refractive map
-rindex = (
-    generate_3D_sphere(
-        shape=params.aperturesize * 2,
-        radius=params.aperturesize / 5.0,
-        center=(params.aperturesize, params.aperturesize, params.aperturesize),
-    )
-    * 2
+sphere = generate_3D_sphere(
+    shape=params.aperturesize * 2 + 1,
+    radius=params.aperturesize / 5.0,
+    center=(params.aperturesize, params.aperturesize, params.aperturesize),
 )
-complex_field = xp.ones(rindex.shape, dtype=xp.complex128) * xp.exp(1j * rindex)
+rindex = sphere * 2
+amp_map = xp.ones(sphere.shape) + sphere * 0.1
+complex_field = amp_map * xp.exp(1j * rindex)
 
 # convert to fft space
 array_3d_fft = xp.fft.fftshift(xp.fft.fftn(complex_field))
@@ -51,30 +50,37 @@ array_3d_fft = xp.fft.fftshift(xp.fft.fftn(complex_field))
 # %%
 # generate hologram
 step_angle = 360 / 10
-NA_illumi = 1
+NA_illumi = 1.0
 
 generate_test_data(array_3d_fft, params, step_angle, NA_illumi)
 print("generated test data!")
 
-# %%
-# visualize 3D refractive index
-if _cp:
-    rindex_to_show = xp.asnumpy(rindex)
-else:
-    rindex_to_show = rindex
-slice_visualizer = SlicingVisualizer(rindex_to_show)
-slice_visualizer.initialize_window()
-slice_visualizer.run()
+# # %%
+# # debug for test data
+# t_data = np.load("odt_test_data/000.npy")
+# t_data_fft = np.fft.fftshift(np.fft.fftn(t_data))
 
-# %%
-# visualize 3D fft spectrum
-if _cp:
-    array_3d_fft_to_show = xp.asnumpy(xp.log(xp.abs(array_3d_fft)))
-else:
-    array_3d_fft_to_show = xp.log(xp.abs(array_3d_fft))
-slice_visualizer = SlicingVisualizer(array_3d_fft_to_show)
-slice_visualizer.initialize_window()
-slice_visualizer.run()
+# plt.imshow(np.log(np.abs(t_data_fft)))
+# plt.scatter(*params.offaxis_center, s=1)
+# # plt.scatter(params.offaxis_center[1], params.offaxis_center[0], s=1)
+
+# # %%
+# # visualize 3D refractive index
+# if _cp:
+#     rindex_to_show = xp.asnumpy(rindex)
+# else:
+#     rindex_to_show = rindex
+# slice_visualizer = SlicingVisualizer(rindex_to_show)
+# slice_visualizer.run()
+
+# # %%
+# # visualize 3D fft spectrum
+# if _cp:
+#     array_3d_fft_to_show = xp.asnumpy(xp.log(xp.abs(array_3d_fft)))
+# else:
+#     array_3d_fft_to_show = xp.log(xp.abs(array_3d_fft))
+# slice_visualizer = SlicingVisualizer(array_3d_fft_to_show)
+# slice_visualizer.run()
 
 # %%
 # execute synthetic aperture
@@ -117,19 +123,41 @@ synthesized_array, odt_fft = odt_synthesizer.ODT_synthesize()
 
 if _cp:
     odt_synthesized = xp.asnumpy(xp.angle(synthesized_array))
-    odt_fft = xp.asnumpy(np.log(np.abs(odt_fft)))
+    odt_fft = xp.asnumpy(np.log(np.abs(odt_fft) + 1))
 else:
     odt_synthesized = np.angle(synthesized_array)
-    odt_fft = np.log(np.abs(odt_fft))
+    odt_fft = np.log(np.abs(odt_fft) + 1)
 
 # %%
 # plot
 slice_visualizer = SlicingVisualizer(odt_synthesized)
-slice_visualizer.initialize_window()
 slice_visualizer.run()
 
 # %%
 # plot
 slice_visualizer = SlicingVisualizer(odt_fft)
-slice_visualizer.initialize_window()
+slice_visualizer.run()
+
+# %%
+# iterative ODT
+odt_synthesizer = ODTSynthesizer()
+odt_synthesizer.set_parameters(params)
+# odt_synthesizer.set_data(test_data, ref_data)
+odt_synthesizer.set_data(test_data)
+synthesized_array, odt_fft = odt_synthesizer.iterative_ODT(epsilon=1e0, max_N=100)
+
+if _cp:
+    odt_synthesized = xp.asnumpy(xp.angle(synthesized_array))
+    odt_fft = xp.asnumpy(np.log(np.abs(odt_fft) + 1))
+else:
+    odt_synthesized = np.angle(synthesized_array)
+    odt_fft = np.log(np.abs(odt_fft) + 1)
+# %%
+# plot
+slice_visualizer = SlicingVisualizer(odt_synthesized)
+slice_visualizer.run()
+
+# %%
+# plot
+slice_visualizer = SlicingVisualizer(odt_fft)
 slice_visualizer.run()

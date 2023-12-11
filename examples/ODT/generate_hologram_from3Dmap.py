@@ -85,7 +85,7 @@ def extract3Dto2D(
             Kz + array_3d_fft.shape[2] // 2,
         ]
 
-    return array_2d_fft
+    return array_2d_fft.T
 
 
 # def map_2d_to_3d(array_fft_2d: xp.ndarray, array_fft_3d: xp.ndarray, params: ODTParameters, oblique_center: tuple[int, int])->xp.ndarray:

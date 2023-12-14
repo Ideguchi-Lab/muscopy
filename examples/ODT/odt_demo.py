@@ -40,7 +40,7 @@ sphere = generate_3D_sphere(
     radius=params.aperturesize / 5.0,
     center=(params.aperturesize, params.aperturesize, params.aperturesize),
 )
-rindex = sphere * 2
+rindex = sphere * 0.01 * 100
 amp_map = xp.ones(sphere.shape) + sphere * 0.1
 complex_field = amp_map * xp.exp(1j * rindex)
 
@@ -119,13 +119,13 @@ odt_synthesizer = ODTSynthesizer()
 odt_synthesizer.set_parameters(params)
 # odt_synthesizer.set_data(test_data, ref_data)
 odt_synthesizer.set_data(test_data)
-synthesized_array, odt_fft = odt_synthesizer.ODT_synthesize()
+synthesized_array, odt_fft = odt_synthesizer.ODT_synthesize("Rytov")
 
 if _cp:
-    odt_synthesized = xp.asnumpy(xp.angle(synthesized_array))
+    odt_synthesized = xp.asnumpy(xp.real(synthesized_array))
     odt_fft = xp.asnumpy(np.log(np.abs(odt_fft) + 1))
 else:
-    odt_synthesized = np.angle(synthesized_array)
+    odt_synthesized = np.real(synthesized_array)
     odt_fft = np.log(np.abs(odt_fft) + 1)
 
 # %%
@@ -144,13 +144,13 @@ odt_synthesizer = ODTSynthesizer()
 odt_synthesizer.set_parameters(params)
 # odt_synthesizer.set_data(test_data, ref_data)
 odt_synthesizer.set_data(test_data)
-synthesized_array, odt_fft = odt_synthesizer.iterative_ODT(epsilon=1e0, max_N=100)
+synthesized_array, odt_fft = odt_synthesizer.iterative_ODT(epsilon=1e-6, max_N=1000)
 
 if _cp:
-    odt_synthesized = xp.asnumpy(xp.angle(synthesized_array))
+    odt_synthesized = xp.asnumpy(xp.real(synthesized_array))
     odt_fft = xp.asnumpy(np.log(np.abs(odt_fft) + 1))
 else:
-    odt_synthesized = np.angle(synthesized_array)
+    odt_synthesized = np.real(synthesized_array)
     odt_fft = np.log(np.abs(odt_fft) + 1)
 # %%
 # plot

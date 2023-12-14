@@ -16,6 +16,17 @@ from tqdm import tqdm
 from src.aperture_synthesis import Synthesizer, preprocess_for_synthesis, EDGE_SIZE
 from src.qpi import QPIParameters, make_disk, qpi
 
+EDGE_SIZE = 2  # for avoiding edge artifact in ifft
+
+
+def find_max_args(array):
+    max_value = xp.max(array)
+    max_idx = xp.unravel_index(np.argmax(array), array.shape)
+    max_x = max_idx[0]
+    max_y = max_idx[1]
+
+    return max_x, max_y, max_value
+
 
 class ODTParameters(QPIParameters):
     def __init__(
@@ -36,8 +47,85 @@ class ODTParameters(QPIParameters):
         print(f"{self.ki_mag=}")
 
 
+def reconstruct_E(
+    array: xp.array,
+    ref_array: xp.array,
+    params: ODTParameters,
+    normalize=True,
+    approx="Rytov",
+) -> [xp.array, tuple]:
+    assert approx in ["Rytov", "Born"]
+    global EDGE_SIZE
+
+    array_fft = xp.fft.fftshift(xp.fft.fft2(array))
+    disk = make_disk(params.offaxis_center, params.aperturesize // 2, array_fft.shape)
+    array_fft = array_fft * disk
+    max_x, max_y, _ = find_max_args(np.abs(array_fft))
+    oblique_center = (
+        max_x - params.offaxis_center[1],
+        max_y - params.offaxis_center[0],
+    )
+
+    left_index = max_x - params.aperturesize
+    right_index = max_x + params.aperturesize + 1
+    top_index = max_y - params.aperturesize
+    bottom_index = max_y + params.aperturesize + 1
+
+    array_fft_pad = xp.pad(
+        array_fft,
+        (
+            (params.aperturesize, params.aperturesize),
+            (params.aperturesize, params.aperturesize),
+        ),
+        mode="constant",
+        constant_values=0,
+    )
+
+    array_fft = array_fft_pad[
+        left_index + params.aperturesize : right_index + params.aperturesize,
+        top_index + params.aperturesize : bottom_index + params.aperturesize,
+    ]
+
+    array_cropped = xp.fft.ifft2(xp.fft.ifftshift(array_fft))[EDGE_SIZE:, EDGE_SIZE:]
+
+    ref_array_fft = xp.fft.fftshift(xp.fft.fft2(ref_array))
+    ref_array_fft = ref_array_fft * disk
+    ref_array_fft_pad = xp.pad(
+        ref_array_fft,
+        (
+            (params.aperturesize, params.aperturesize),
+            (params.aperturesize, params.aperturesize),
+        ),
+        mode="constant",
+        constant_values=0,
+    )
+    ref_array_fft = ref_array_fft_pad[
+        left_index + params.aperturesize : right_index + params.aperturesize,
+        top_index + params.aperturesize : bottom_index + params.aperturesize,
+    ]
+    ref_array_cropped = xp.fft.ifft2(xp.fft.ifftshift(ref_array_fft))[
+        EDGE_SIZE:, EDGE_SIZE:
+    ]
+
+    if approx == "Born":
+        array_cropped = array_cropped - ref_array_cropped
+    elif approx == "Rytov":
+        array_cropped = ref_array_cropped * xp.log(array_cropped / ref_array_cropped)
+    else:
+        raise ValueError("approx must be 'Born' or 'Rytov'")
+
+    if normalize:
+        array_cropped = array_cropped / ref_array_cropped
+
+    return array_cropped, oblique_center
+
+
 class ODTSynthesizer(Synthesizer):
-    def ODT_synthesize(self) -> tuple[np.ndarray, np.ndarray]:
+    def ODT_synthesize(
+        self, approx: str, hermite=False
+    ) -> tuple[np.ndarray, np.ndarray]:
+        assert approx in ["Rytov", "Born"]
+        assert self.reference_data is not None
         synthesized_fft = xp.zeros(
             (
                 2 * (self.params.aperturesize) + 1 - EDGE_SIZE,
@@ -56,16 +144,12 @@ class ODTSynthesizer(Synthesizer):
         print("ODT Synthesizing...")
         for i in tqdm(range(len(self.target_data))):
             array = xp.load(self.target_data[i])
-            if self.reference_data is not None:
-                ref_array = xp.load(self.reference_data[i])
-                array_cropped, oblique_center = preprocess_for_synthesis(
-                    array, ref_array, params=self.params
-                )
+            ref_array = xp.load(self.reference_data[i])
+            E_approx, oblique_center = reconstruct_E(
+                array, ref_array, params=self.params, normalize=True, approx=approx
+            )
 
-            else:
-                array_cropped, oblique_center = preprocess_for_synthesis(
-                    array, params=self.params
-                )
+            e_fft = xp.fft.fftshift(xp.fft.fft2(E_approx))
 
             disk_synthesized = make_disk(
                 (
@@ -73,12 +157,12 @@ class ODTSynthesizer(Synthesizer):
                     synthesized_center[1] - oblique_center[0],
                 ),
                 self.params.aperturesize // 2,
-                array_cropped.shape,
+                E_approx.shape,
             )
 
-            fft_cropped = xp.fft.fftshift(xp.fft.fft2(array_cropped))
+            e_fft_cropped = e_fft * disk_synthesized
 
-            fft_cropped = fft_cropped * disk_synthesized
+            scatter_potential_fft = 2j * xp.pi * e_fft_cropped
 
             kz = np.sqrt(
                 self.params.ki_mag**2
@@ -94,12 +178,12 @@ class ODTSynthesizer(Synthesizer):
                 sphere_center, self.params.ki_mag, synthesized_fft.shape
             )
             # fft_cropped_tiled = xp.tile(fft_cropped, (1, 1, synthesized_fft.shape[2]))
-            fft_cropped_tiled = xp.stack(
-                [fft_cropped] * synthesized_fft.shape[2], axis=-1
+            scatter_potential_fft_tiled = xp.stack(
+                [scatter_potential_fft] * synthesized_fft.shape[2], axis=-1
             )
-            fft_cropped_tiled = fft_cropped_tiled * sphere_mask
-            synthesized_fft = synthesized_fft + fft_cropped_tiled
-            synthesized_weight += fft_cropped_tiled != 0
+            scatter_potential_fft_tiled = scatter_potential_fft_tiled * sphere_mask
+            synthesized_fft = synthesized_fft + scatter_potential_fft_tiled
+            synthesized_weight += scatter_potential_fft_tiled != 0
 
         synthesized_fft /= synthesized_weight
         synthesized_array = xp.fft.ifftn(xp.fft.ifftshift(synthesized_fft))
@@ -110,22 +194,21 @@ class ODTSynthesizer(Synthesizer):
 
         return synthesized_array, synthesized_fft
 
-    def iterative_ODT(self, epsilon=1e-6, max_N=100):
-        ref_array, ref_fft = self.ODT_synthesize()
+    def iterative_ODT(self, approx, epsilon=1e-6, max_N=100):
+        ref_array, ref_fft = self.ODT_synthesize(approx)
         current_array = ref_array.copy()
-        current_odt = xp.angle(current_array)
+        former_array = current_array.copy()
         delta = xp.inf
         iteration = 0
         while (delta > epsilon) and (iteration < max_N):
-            current_odt[current_odt < 0] = 0
-            current_array = xp.abs(current_array) * xp.exp(1j * current_odt)
+            current_array[xp.real(current_array) > 0] = 0
             current_fft = xp.fft.fftshift(xp.fft.fftn(current_array))
             current_fft[ref_fft != 0] = ref_fft[ref_fft != 0]
             current_array = xp.fft.ifftn(xp.fft.ifftshift(current_fft))
 
-            # delta = xp.sum(xp.angle(current_array) - current_odt) #TODO: consider better delta
+            delta = xp.sum(xp.abs(current_array - former_array))
             iteration += 1
-            current_odt = xp.angle(current_array)
+            former_array = current_array.copy()
 
             print(f"delta: {delta}, iteration: {iteration}")
 
@@ -133,17 +216,7 @@ class ODTSynthesizer(Synthesizer):
 
 
 def map_to_3d(array, shape, oblique_center, synthesized_center, aperturesize, kz):
-    array_3d = xp.tile(array, (1, 1, shape[2]))
-    center_sphere = (
-        synthesized_center[0] + oblique_center[0],
-        synthesized_center[1] + oblique_center[1],
-        kz,
-    )
-    radius = aperturesize // 2
-    sphere_mask = make_sphere_surface(center_sphere, radius, shape)
-    array_3d = array_3d * sphere_mask
-    array_weight = array_3d != 0
-    return array_3d, array_weight
+    pass
 
 
 def make_semisphere_surface(center, radius, array_shape):
@@ -167,7 +240,9 @@ def make_semisphere_surface(center, radius, array_shape):
         indexing="xy",
     )
     sphere = (xx - center[0]) ** 2 + (yy - center[1]) ** 2 + (zz - center[2]) ** 2
+    kz_value = (zz - array_shape[2] // 2) + radius
     sphere = (xp.abs(sphere - radius**2) < 6) & (
         zz > center[2]
     )  # TODO: 6 is a magic number
+    sphere *= kz_value
     return sphere

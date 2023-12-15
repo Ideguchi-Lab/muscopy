@@ -195,15 +195,15 @@ class ODTSynthesizer(Synthesizer):
         return synthesized_array, synthesized_fft
 
     def iterative_ODT(self, approx, epsilon=1e-6, max_N=100):
-        ref_array, ref_fft = self.ODT_synthesize(approx)
-        current_array = ref_array.copy()
+        array3d, array3d_fft = self.ODT_synthesize(approx)
+        current_array = array3d.copy()
         former_array = current_array.copy()
         delta = xp.inf
         iteration = 0
         while (delta > epsilon) and (iteration < max_N):
-            current_array[xp.real(current_array) > 0] = 0
+            current_array[xp.real(current_array) < 0] = 0
             current_fft = xp.fft.fftshift(xp.fft.fftn(current_array))
-            current_fft[ref_fft != 0] = ref_fft[ref_fft != 0]
+            current_fft[array3d_fft != 0] = array3d_fft[array3d_fft != 0]
             current_array = xp.fft.ifftn(xp.fft.ifftshift(current_fft))
 
             delta = xp.sum(xp.abs(current_array - former_array))
@@ -246,3 +246,10 @@ def make_semisphere_surface(center, radius, array_shape):
     )  # TODO: 6 is a magic number
     sphere *= kz_value
     return sphere
+
+
+def calc_refractive_index_square(array3d, params):
+    r_3d_square = params.n_sol**2(
+        xp.ones(array3d.shape) - array3d / params.ki_mag**2
+    )
+    return r_3d_square

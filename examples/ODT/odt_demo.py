@@ -24,7 +24,7 @@ from generate_hologram_from3Dmap import generate_3D_sphere, generate_test_data
 
 from src.dir_parser import numpy_parser
 from src.aperture_synthesis import Synthesizer as QPISynthesizer
-from src.odt import ODTParameters, ODTSynthesizer
+from src.odt import ODTParameters, ODTSynthesizer, calc_refractive_index_square
 
 
 # %%
@@ -34,35 +34,53 @@ params = ODTParameters(
 params.calc_params()
 params.print_all_parameters()
 
+sample_index = 1.35
+
 # make answer 3D refractive map
 sphere = generate_3D_sphere(
     shape=params.aperturesize * 2 + 1,
     radius=params.aperturesize / 5.0,
     center=(params.aperturesize, params.aperturesize, params.aperturesize),
 )
-rindex = sphere * 0.01 * 100
-amp_map = xp.ones(sphere.shape) + sphere * 0.1
-complex_field = amp_map * xp.exp(1j * rindex)
+ref_rindex = xp.ones(sphere.shape) * params.n_sol
+rindex = ref_rindex + sphere * (sample_index - params.n_sol)
+scatter_potential = -1 * params.ki_mag**2 * (rindex**2 / ref_rindex**2 - 1)
+scatter_fft = xp.fft.fftshift(xp.fft.fftn(scatter_potential))
+ref_scatter_potential = -params.ki_mag**2 * (ref_rindex**2 / ref_rindex**2 - 1)
+ref_scatter_fft = xp.fft.fftshift(xp.fft.fftn(ref_scatter_potential))
 
-# convert to fft space
-array_3d_fft = xp.fft.fftshift(xp.fft.fftn(complex_field))
+xx, yy, zz = xp.meshgrid(
+    xp.arange(params.aperturesize * 2 + 1),
+    xp.arange(params.aperturesize * 2 + 1),
+    xp.arange(params.aperturesize * 2 + 1),
+    indexing="ij",
+)
+kz_array = zz - params.aperturesize + params.ki_mag
+scatter_fft = scatter_fft / kz_array
+ref_scatter_fft = ref_scatter_fft / kz_array
 
 # %%
 # generate hologram
 step_angle = 360 / 10
 NA_illumi = 1.0
+approx = "Born"
 
-generate_test_data(array_3d_fft, params, step_angle, NA_illumi)
+generate_test_data(
+    scatter_fft, params, step_angle, NA_illumi, "odt_test_data/sample", approx=approx
+)
+generate_test_data(
+    ref_scatter_fft, params, step_angle, NA_illumi, "odt_test_data/ref", approx=approx
+)
 print("generated test data!")
 
-# # %%
-# # debug for test data
-# t_data = np.load("odt_test_data/000.npy")
-# t_data_fft = np.fft.fftshift(np.fft.fftn(t_data))
+# %%
+# debug for test data
+t_data = np.load("odt_test_data/sample/180.npy")
+t_data_fft = np.fft.fftshift(np.fft.fftn(t_data))
 
-# plt.imshow(np.log(np.abs(t_data_fft)))
-# plt.scatter(*params.offaxis_center, s=1)
-# # plt.scatter(params.offaxis_center[1], params.offaxis_center[0], s=1)
+plt.imshow(np.log(np.abs(t_data_fft)))
+plt.scatter(*params.offaxis_center, s=1)
+# plt.scatter(params.offaxis_center[1], params.offaxis_center[0], s=1)
 
 # # %%
 # # visualize 3D refractive index
@@ -84,7 +102,8 @@ print("generated test data!")
 
 # %%
 # execute synthetic aperture
-test_data = numpy_parser("odt_test_data")
+test_data = numpy_parser("odt_test_data/sample")
+ref_data = numpy_parser("odt_test_data/ref")
 # test_data = numpy_parser("../data/aperture_sample_beads")
 # ref_data = numpy_parser("../data/aperture_ref_beads")
 qpi_synthesizer = QPISynthesizer()
@@ -118,8 +137,12 @@ plt.savefig("synthesized_qpi_fft.png", dpi=300)
 odt_synthesizer = ODTSynthesizer()
 odt_synthesizer.set_parameters(params)
 # odt_synthesizer.set_data(test_data, ref_data)
-odt_synthesizer.set_data(test_data)
+odt_synthesizer.set_data(test_data, ref_data)
 synthesized_array, odt_fft = odt_synthesizer.ODT_synthesize("Rytov")
+
+synthesized_array = (
+    xp.abs(calc_refractive_index_square(synthesized_array, params)) ** 0.5
+)
 
 if _cp:
     odt_synthesized = xp.asnumpy(xp.real(synthesized_array))
@@ -143,8 +166,12 @@ slice_visualizer.run()
 odt_synthesizer = ODTSynthesizer()
 odt_synthesizer.set_parameters(params)
 # odt_synthesizer.set_data(test_data, ref_data)
-odt_synthesizer.set_data(test_data)
-synthesized_array, odt_fft = odt_synthesizer.iterative_ODT(epsilon=1e-6, max_N=1000)
+odt_synthesizer.set_data(test_data, ref_data)
+synthesized_array, odt_fft = odt_synthesizer.iterative_ODT(epsilon=1e-6, max_N=100)
+
+synthesized_array = (
+    xp.abs(calc_refractive_index_square(synthesized_array, params)) ** 0.5
+)
 
 if _cp:
     odt_synthesized = xp.asnumpy(xp.real(synthesized_array))

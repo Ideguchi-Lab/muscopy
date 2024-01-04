@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 import sys
+import typing
 
 sys.path.append("../..")
 from src.odt import ODTParameters
@@ -21,7 +22,9 @@ except ImportError:
 # %%
 
 
-def generate_3D_sphere(shape, radius, center=None):
+def generate_3D_sphere(
+    shape: tuple | int, radius: float, center: tuple | None = None
+) -> xp.ndarray:
     """Generate 3D sphere. The sphere is filled with 1, otherwise 0.
 
     Args:
@@ -118,6 +121,17 @@ def extract3Dto2D_minimum(
             )
         )
         # print(Kz)
+        # array_2d_fft[i, j] = array_3d_fft[
+        #     i
+        #     - params.aperturesize // 2
+        #     - oblique_shift[0]
+        #     + array_3d_fft.shape[0] // 2,
+        #     j
+        #     - params.aperturesize // 2
+        #     - oblique_shift[1]
+        #     + array_3d_fft.shape[1] // 2,
+        #     Kz + array_3d_fft.shape[2] // 2,
+        # ]
         array_2d_fft[i, j] = array_3d_fft[
             i
             - params.aperturesize // 2
@@ -131,6 +145,7 @@ def extract3Dto2D_minimum(
         ]
 
     return array_2d_fft.T
+    # return array_2d_fft
 
 
 # def map_2d_to_3d(array_fft_2d: xp.ndarray, array_fft_3d: xp.ndarray, params: ODTParameters, oblique_center: tuple[int, int])->xp.ndarray:
@@ -155,6 +170,12 @@ def generate_test_data(
     E_initial = xp.ones(
         (2 * params.aperturesize + 1, 2 * params.aperturesize + 1), dtype=xp.complex128
     )
+    # include noise
+    E_initial = (
+        E_initial
+        + xp.random.normal(0, 0.01, E_initial.shape)
+        + xp.random.normal(0, 0.01, E_initial.shape) * 1j
+    )
     if os.path.exists(path):
         import shutil
 
@@ -176,15 +197,15 @@ def generate_test_data(
         )
         fft_extent[
             params.aperturesize
-            - oblique_shift[0]
+            - oblique_shift[1]
             - params.aperturesize // 2 : params.aperturesize
-            - oblique_shift[0]
+            - oblique_shift[1]
             + params.aperturesize // 2
             + 1,
             params.aperturesize
-            - oblique_shift[1]
+            - oblique_shift[0]
             - params.aperturesize // 2 : params.aperturesize
-            - oblique_shift[1]
+            - oblique_shift[0]
             + params.aperturesize // 2
             + 1,
         ] = test_data_fft_cropped
@@ -217,18 +238,20 @@ def generate_test_data(
             + 1,
         ] = E_test_fft[
             params.aperturesize
-            - oblique_shift[0]
+            - oblique_shift[1]
             - params.aperturesize // 2 : params.aperturesize
-            - oblique_shift[0]
+            - oblique_shift[1]
             + params.aperturesize // 2
             + 1,
             params.aperturesize
-            - oblique_shift[1]
+            - oblique_shift[0]
             - params.aperturesize // 2 : params.aperturesize
-            - oblique_shift[1]
+            - oblique_shift[0]
             + params.aperturesize // 2
             + 1,
         ]
+
+        test_data_fft = test_data_fft.T
 
         test_data = xp.fft.ifft2(xp.fft.ifftshift(test_data_fft))
         test_data[:2, :] = 0

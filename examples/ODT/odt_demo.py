@@ -34,12 +34,12 @@ params = ODTParameters(
 params.calc_params()
 params.print_all_parameters()
 
-sample_index = 1.35
+sample_index = 1.4
 
 # make answer 3D refractive map
 sphere = generate_3D_sphere(
     shape=params.aperturesize * 2 + 1,
-    radius=params.aperturesize / 5.0,
+    radius=5,
     center=(params.aperturesize, params.aperturesize, params.aperturesize),
 )
 ref_rindex = xp.ones(sphere.shape) * params.n_sol
@@ -56,31 +56,33 @@ xx, yy, zz = xp.meshgrid(
     indexing="ij",
 )
 kz_array = zz - params.aperturesize + params.ki_mag
-scatter_fft = scatter_fft / kz_array
-ref_scatter_fft = ref_scatter_fft / kz_array
+approx_field_fft = scatter_fft / kz_array / 2j
+ref_approx_field_fft = ref_scatter_fft / kz_array / 2j
 
 # %%
 # generate hologram
-step_angle = 360 / 10
+step_angle = 360 / 20
 NA_illumi = 1.0
-approx = "Born"
+# approx = "Born"
+approx = "Rytov"
 
 generate_test_data(
-    scatter_fft, params, step_angle, NA_illumi, "odt_test_data/sample", approx=approx
+    approx_field_fft,
+    params,
+    step_angle,
+    NA_illumi,
+    "odt_test_data/sample",
+    approx=approx,
 )
 generate_test_data(
-    ref_scatter_fft, params, step_angle, NA_illumi, "odt_test_data/ref", approx=approx
+    ref_approx_field_fft,
+    params,
+    step_angle,
+    NA_illumi,
+    "odt_test_data/ref",
+    approx=approx,
 )
 print("generated test data!")
-
-# %%
-# debug for test data
-t_data = np.load("odt_test_data/sample/180.npy")
-t_data_fft = np.fft.fftshift(np.fft.fftn(t_data))
-
-plt.imshow(np.log(np.abs(t_data_fft)))
-plt.scatter(*params.offaxis_center, s=1)
-# plt.scatter(params.offaxis_center[1], params.offaxis_center[0], s=1)
 
 # # %%
 # # visualize 3D refractive index
@@ -122,7 +124,8 @@ ax = fig.add_subplot(111)
 ax.imshow(qpi_synthesized)
 # plt.colorbar()
 # plt.show()
-
+print("max phase: ", np.max(qpi_synthesized))
+print("min phase: ", np.min(qpi_synthesized))
 plt.savefig("synthesized_qpi.png")
 
 plt.close()
@@ -138,7 +141,7 @@ odt_synthesizer = ODTSynthesizer()
 odt_synthesizer.set_parameters(params)
 # odt_synthesizer.set_data(test_data, ref_data)
 odt_synthesizer.set_data(test_data, ref_data)
-synthesized_array, odt_fft = odt_synthesizer.ODT_synthesize("Rytov")
+synthesized_array, odt_fft = odt_synthesizer.ODT_synthesize(approx=approx)
 
 synthesized_array = (
     xp.abs(calc_refractive_index_square(synthesized_array, params)) ** 0.5
@@ -188,3 +191,5 @@ slice_visualizer.run()
 # plot
 slice_visualizer = SlicingVisualizer(odt_fft)
 slice_visualizer.run()
+
+# %%

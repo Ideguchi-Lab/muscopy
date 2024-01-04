@@ -212,11 +212,14 @@ class Synthesizer:
             synthesized_fft = xp.asnumpy(synthesized_fft)
             synthesized_qpi = xp.asnumpy(synthesized_qpi)
 
-        synthesized_qpi = unwrap_phase(synthesized_qpi)
+        # synthesized_qpi = unwrap_phase(synthesized_qpi)
 
         if save_multiangle:
-            if not os.path.exists("multiangle_qpi"):
-                os.mkdir("multiangle_qpi")
+            if os.path.exists("multiangle_qpi"):
+                import shutil
+
+                shutil.rmtree("multiangle_qpi")
+            os.mkdir("multiangle_qpi")
             for i in range(len(self.target_data)):
                 # save as png
                 if _cp:

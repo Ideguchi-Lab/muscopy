@@ -57,6 +57,10 @@ def reconstruct_E(
     assert approx in ["Rytov", "Born"]
     global EDGE_SIZE
 
+    E_initial = xp.ones(
+        (2 * params.aperturesize + 1, 2 * params.aperturesize + 1), dtype=xp.complex128
+    )
+
     array_fft = xp.fft.fftshift(xp.fft.fft2(array))
     disk = make_disk(params.offaxis_center, params.aperturesize // 2, array_fft.shape)
     array_fft = array_fft * disk
@@ -108,16 +112,16 @@ def reconstruct_E(
     ]
 
     if approx == "Born":
-        array_cropped = array_cropped - ref_array_cropped
+        E_array = array_cropped - ref_array_cropped
     elif approx == "Rytov":
-        array_cropped = ref_array_cropped * xp.log(array_cropped / ref_array_cropped)
+        E_array = ref_array_cropped * xp.log(array_cropped / ref_array_cropped)
     else:
         raise ValueError("approx must be 'Born' or 'Rytov'")
 
-    if normalize:
-        array_cropped = array_cropped / ref_array_cropped
+    # if normalize:
+    #     array_cropped = array_cropped / ref_array_cropped
 
-    return array_cropped, oblique_center
+    return E_array, oblique_center
 
 
 class ODTSynthesizer(Synthesizer):
@@ -162,17 +166,31 @@ class ODTSynthesizer(Synthesizer):
 
             e_fft_cropped = e_fft * disk_synthesized
 
-            scatter_potential_fft = 2j * xp.pi * e_fft_cropped
-
-            kz = np.sqrt(
+            # make kz disk for scattering potential
+            kz_i = np.sqrt(
                 self.params.ki_mag**2
                 - oblique_center[0] ** 2
                 - oblique_center[1] ** 2
             )
+
+            xx, yy = xp.meshgrid(
+                xp.arange(2 * self.params.aperturesize + 1 - EDGE_SIZE),
+                xp.arange(2 * self.params.aperturesize + 1 - EDGE_SIZE),
+                indexing="ij",
+            )
+            disk = (xx - synthesized_center[0] - oblique_center[1]) ** 2 + (
+                yy - synthesized_center[1] - oblique_center[0]
+            ) ** 2
+            disk[disk > (self.params.aperturesize // 2) ** 2] = 0
+            kz_disk = xp.sqrt((self.params.aperturesize // 2) ** 2 - disk) + kz_i
+            kz_disk[disk > (self.params.aperturesize // 2) ** 2] = 0
+
+            scatter_potential_fft = 2j * kz_disk * e_fft_cropped
+
             sphere_center = (
                 synthesized_center[0] - oblique_center[1],
                 synthesized_center[1] - oblique_center[0],
-                synthesized_center[2] - kz,
+                synthesized_center[2] - kz_i,
             )
             sphere_mask = make_semisphere_surface(
                 sphere_center, self.params.ki_mag, synthesized_fft.shape
@@ -185,6 +203,33 @@ class ODTSynthesizer(Synthesizer):
             synthesized_fft = synthesized_fft + scatter_potential_fft_tiled
             synthesized_weight += scatter_potential_fft_tiled != 0
 
+            if hermite:
+                conjugate_scatter_potential_fft = xp.flipud(
+                    xp.fliplr(scatter_potential_fft.conjugate())
+                )
+                conjugate_sphere_center = (
+                    synthesized_center[0] + oblique_center[1],
+                    synthesized_center[1] + oblique_center[0],
+                    synthesized_center[2] + kz_i,
+                )
+                conjugate_sphere_mask = make_semisphere_surface(
+                    conjugate_sphere_center,
+                    self.params.ki_mag,
+                    synthesized_fft.shape,
+                    upper=False,
+                )
+                conjugate_scatter_potential_fft_tiled = xp.stack(
+                    [conjugate_scatter_potential_fft] * synthesized_fft.shape[2],
+                    axis=-1,
+                )
+                conjugate_scatter_potential_fft_tiled = (
+                    conjugate_scatter_potential_fft_tiled * conjugate_sphere_mask
+                )
+                synthesized_fft = (
+                    synthesized_fft + conjugate_scatter_potential_fft_tiled
+                )
+                synthesized_weight += conjugate_scatter_potential_fft_tiled != 0
+
         synthesized_fft /= synthesized_weight
         synthesized_array = xp.fft.ifftn(xp.fft.ifftshift(synthesized_fft))
 
@@ -196,12 +241,13 @@ class ODTSynthesizer(Synthesizer):
 
     def iterative_ODT(self, approx, epsilon=1e-6, max_N=100):
         array3d, array3d_fft = self.ODT_synthesize(approx)
-        current_array = array3d.copy()
+        odt_array = xp.abs(calc_refractive_index_square(array3d, self.params)) ** 0.5
+        current_array = odt_array.copy()
         former_array = current_array.copy()
         delta = xp.inf
         iteration = 0
         while (delta > epsilon) and (iteration < max_N):
-            current_array[xp.real(current_array) < 0] = 0
+            current_array[current_array < 0] = 0
             current_fft = xp.fft.fftshift(xp.fft.fftn(current_array))
             current_fft[array3d_fft != 0] = array3d_fft[array3d_fft != 0]
             current_array = xp.fft.ifftn(xp.fft.ifftshift(current_fft))
@@ -219,7 +265,7 @@ def map_to_3d(array, shape, oblique_center, synthesized_center, aperturesize, kz
     pass
 
 
-def make_semisphere_surface(center, radius, array_shape):
+def make_semisphere_surface(center, radius, array_shape, upper=True):
     """Returns sphere surface filled with 1.
 
     Args:
@@ -240,16 +286,17 @@ def make_semisphere_surface(center, radius, array_shape):
         indexing="xy",
     )
     sphere = (xx - center[0]) ** 2 + (yy - center[1]) ** 2 + (zz - center[2]) ** 2
-    kz_value = (zz - array_shape[2] // 2) + radius
-    sphere = (xp.abs(sphere - radius**2) < 6) & (
-        zz > center[2]
-    )  # TODO: 6 is a magic number
-    sphere *= kz_value
+    if upper:
+        sphere = (xp.abs(sphere - radius**2) < 6) & (
+            zz > center[2]
+        )  # TODO: 6 is a magic number
+    else:
+        sphere = (xp.abs(sphere - radius**2) < 6) & (zz < center[2])
     return sphere
 
 
 def calc_refractive_index_square(array3d, params):
-    r_3d_square = params.n_sol**2(
-        xp.ones(array3d.shape) - array3d / params.ki_mag**2
+    r_3d_square = params.n_sol**2 * (
+        xp.ones(array3d.shape, dtype=xp.complex128) - array3d / params.ki_mag**2
     )
     return r_3d_square

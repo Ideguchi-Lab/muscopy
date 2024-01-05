@@ -34,12 +34,12 @@ params = ODTParameters(
 params.calc_params()
 params.print_all_parameters()
 
-sample_index = 1.4
+sample_index = 1.335
 
 # make answer 3D refractive map
 sphere = generate_3D_sphere(
     shape=params.aperturesize * 2 + 1,
-    radius=5,
+    radius=10,
     center=(params.aperturesize, params.aperturesize, params.aperturesize),
 )
 ref_rindex = xp.ones(sphere.shape) * params.n_sol
@@ -61,7 +61,7 @@ ref_approx_field_fft = ref_scatter_fft / kz_array / 2j
 
 # %%
 # generate hologram
-step_angle = 360 / 20
+step_angle = 360 / 360
 NA_illumi = 1.0
 # approx = "Born"
 approx = "Rytov"
@@ -141,18 +141,18 @@ odt_synthesizer = ODTSynthesizer()
 odt_synthesizer.set_parameters(params)
 # odt_synthesizer.set_data(test_data, ref_data)
 odt_synthesizer.set_data(test_data, ref_data)
-synthesized_array, odt_fft = odt_synthesizer.ODT_synthesize(approx=approx)
+synthesized_array, odt_fft = odt_synthesizer.ODT_synthesize(approx=approx, hermite=True)
 
 synthesized_array = (
     xp.abs(calc_refractive_index_square(synthesized_array, params)) ** 0.5
 )
 
 if _cp:
-    odt_synthesized = xp.asnumpy(xp.real(synthesized_array))
-    odt_fft = xp.asnumpy(np.log(np.abs(odt_fft) + 1))
+    odt_synthesized = xp.asnumpy(synthesized_array)
+    odt_fft = xp.asnumpy(xp.log(xp.abs(odt_fft) + 1))
 else:
-    odt_synthesized = np.real(synthesized_array)
-    odt_fft = np.log(np.abs(odt_fft) + 1)
+    odt_synthesized = xp.real(synthesized_array)
+    odt_fft = xp.asnumpy(xp.log(xp.abs(odt_fft) + 1))
 
 # %%
 # plot
@@ -170,17 +170,19 @@ odt_synthesizer = ODTSynthesizer()
 odt_synthesizer.set_parameters(params)
 # odt_synthesizer.set_data(test_data, ref_data)
 odt_synthesizer.set_data(test_data, ref_data)
-synthesized_array, odt_fft = odt_synthesizer.iterative_ODT(epsilon=1e-6, max_N=100)
+synthesized_array, odt_fft = odt_synthesizer.iterative_ODT(
+    approx=approx, epsilon=1e-6, max_N=1000
+)
 
 synthesized_array = (
     xp.abs(calc_refractive_index_square(synthesized_array, params)) ** 0.5
 )
 
 if _cp:
-    odt_synthesized = xp.asnumpy(xp.real(synthesized_array))
+    odt_synthesized = xp.asnumpy(synthesized_array)
     odt_fft = xp.asnumpy(np.log(np.abs(odt_fft) + 1))
 else:
-    odt_synthesized = np.real(synthesized_array)
+    odt_synthesized = synthesized_array
     odt_fft = np.log(np.abs(odt_fft) + 1)
 # %%
 # plot

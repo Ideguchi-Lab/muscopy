@@ -78,8 +78,8 @@ test_data_fft_cropped = extract3Dto2D_minimum(
 to_show = xp.asnumpy(xp.log(xp.abs(test_data_fft_cropped)))
 plt.imshow(to_show)
 plt.scatter(
-    params.aperturesize // 2 + oblique_shift[0],
     params.aperturesize // 2 + oblique_shift[1],
+    params.aperturesize // 2 + oblique_shift[0],
     s=100,
     c="red",
 )
@@ -90,15 +90,15 @@ fft_extent = xp.zeros(
 )
 fft_extent[
     params.aperturesize
-    - oblique_shift[1]
+    - oblique_shift[0]
     - params.aperturesize // 2 : params.aperturesize
-    - oblique_shift[1]
+    - oblique_shift[0]
     + params.aperturesize // 2
     + 1,
     params.aperturesize
-    - oblique_shift[0]
+    - oblique_shift[1]
     - params.aperturesize // 2 : params.aperturesize
-    - oblique_shift[0]
+    - oblique_shift[1]
     + params.aperturesize // 2
     + 1,
 ] = test_data_fft_cropped

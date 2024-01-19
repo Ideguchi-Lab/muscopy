@@ -3,10 +3,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 import sys
-import typing
 
 sys.path.append("../..")
-from src.odt import ODTParameters
+from src.odt import ODTParameters, find_max_args
 from src.qpi import make_disk
 
 try:
@@ -45,51 +44,6 @@ def generate_3D_sphere(
     sphere = (xx - center[0]) ** 2 + (yy - center[1]) ** 2 + (zz - center[2]) ** 2
     sphere = sphere < radius**2
     return sphere
-
-
-def extract3Dto2D(
-    array_3d_fft: xp.ndarray,
-    params: ODTParameters,
-    illumi_angle=0,
-    NA_illumi=1.0,
-) -> xp.ndarray:
-    array_2d_fft = xp.zeros(params.img_shape)
-    ki = round(NA_illumi / params.wav / params.freq_per_pixel) + 1
-    oblique_shift = (
-        int(ki * xp.cos(illumi_angle / 360 * 2 * xp.pi)),
-        int(ki * xp.sin(illumi_angle / 360 * 2 * xp.pi)),
-    )
-
-    xx, yy = xp.meshgrid(
-        xp.arange(params.img_shape[0]), xp.arange(params.img_shape[1]), indexing="ij"
-    )
-    circle = (xx - params.offaxis_center[0]) ** 2 + (yy - params.offaxis_center[1]) ** 2
-    circle = circle < (params.aperturesize // 2) ** 2
-
-    for i, j in zip(*xp.where(circle)):
-        Kz = int(
-            xp.sqrt(
-                params.ki_mag**2
-                - (i - params.offaxis_center[0]) ** 2
-                - (j - params.offaxis_center[1]) ** 2
-            )
-            - xp.sqrt(
-                params.ki_mag**2 - oblique_shift[0] ** 2 - oblique_shift[1] ** 2
-            )
-        )
-        array_2d_fft[i, j] = array_3d_fft[
-            i
-            - params.offaxis_center[0]
-            - oblique_shift[0]
-            + array_3d_fft.shape[0] // 2,
-            j
-            - params.offaxis_center[1]
-            - oblique_shift[1]
-            + array_3d_fft.shape[1] // 2,
-            Kz + array_3d_fft.shape[2] // 2,
-        ]
-
-    return array_2d_fft.T
 
 
 def extract3Dto2D_minimum(
@@ -135,17 +89,16 @@ def extract3Dto2D_minimum(
         array_2d_fft[i, j] = array_3d_fft[
             i
             - params.aperturesize // 2
-            - oblique_shift[0]
+            + oblique_shift[0]
             + array_3d_fft.shape[0] // 2,
             j
             - params.aperturesize // 2
-            - oblique_shift[1]
+            + oblique_shift[1]
             + array_3d_fft.shape[1] // 2,
             Kz + array_3d_fft.shape[2] // 2,
         ]
 
-    return array_2d_fft.T
-    # return array_2d_fft
+    return array_2d_fft
 
 
 # def map_2d_to_3d(array_fft_2d: xp.ndarray, array_fft_3d: xp.ndarray, params: ODTParameters, oblique_center: tuple[int, int])->xp.ndarray:
@@ -182,7 +135,7 @@ def generate_test_data(
         shutil.rmtree(path)
     os.mkdir(path)
 
-    ki = round(NA_illumi / params.wav / params.freq_per_pixel) + 1
+    ki = round(NA_illumi / params.wav / params.freq_per_pixel)  # + 1 why +1?
     for i in range(num):
         oblique_shift = (
             int(ki * xp.cos(illumi_angle_step * i / 360 * 2 * xp.pi)),
@@ -197,15 +150,15 @@ def generate_test_data(
         )
         fft_extent[
             params.aperturesize
-            - oblique_shift[1]
+            + oblique_shift[0]
             - params.aperturesize // 2 : params.aperturesize
-            - oblique_shift[1]
+            + oblique_shift[0]
             + params.aperturesize // 2
             + 1,
             params.aperturesize
-            - oblique_shift[0]
+            + oblique_shift[1]
             - params.aperturesize // 2 : params.aperturesize
-            - oblique_shift[0]
+            + oblique_shift[1]
             + params.aperturesize // 2
             + 1,
         ] = test_data_fft_cropped
@@ -219,8 +172,8 @@ def generate_test_data(
         E_test_fft = xp.fft.fftshift(xp.fft.fft2(E_test))
         low_pass = make_disk(
             (
-                params.aperturesize - oblique_shift[0],
-                params.aperturesize - oblique_shift[1],
+                params.aperturesize + oblique_shift[0],
+                params.aperturesize + oblique_shift[1],
             ),
             params.aperturesize // 2,
             E_initial.shape,
@@ -238,20 +191,20 @@ def generate_test_data(
             + 1,
         ] = E_test_fft[
             params.aperturesize
-            - oblique_shift[1]
+            + oblique_shift[0]
             - params.aperturesize // 2 : params.aperturesize
-            - oblique_shift[1]
+            + oblique_shift[0]
             + params.aperturesize // 2
             + 1,
             params.aperturesize
-            - oblique_shift[0]
+            + oblique_shift[1]
             - params.aperturesize // 2 : params.aperturesize
-            - oblique_shift[0]
+            + oblique_shift[1]
             + params.aperturesize // 2
             + 1,
         ]
 
-        test_data_fft = test_data_fft.T
+        # test_data_fft = test_data_fft.T
 
         test_data = xp.fft.ifft2(xp.fft.ifftshift(test_data_fft))
         test_data[:2, :] = 0
@@ -262,3 +215,46 @@ def generate_test_data(
 
 
 # %%
+def extract3Dto2D(
+    array_3d_fft: xp.ndarray,
+    params: ODTParameters,
+    illumi_angle=0,
+    NA_illumi=1.0,
+) -> xp.ndarray:
+    array_2d_fft = xp.zeros(params.img_shape)
+    ki = round(NA_illumi / params.wav / params.freq_per_pixel) + 1
+    oblique_shift = (
+        int(ki * xp.cos(illumi_angle / 360 * 2 * xp.pi)),
+        int(ki * xp.sin(illumi_angle / 360 * 2 * xp.pi)),
+    )
+
+    xx, yy = xp.meshgrid(
+        xp.arange(params.img_shape[0]), xp.arange(params.img_shape[1]), indexing="ij"
+    )
+    circle = (xx - params.offaxis_center[0]) ** 2 + (yy - params.offaxis_center[1]) ** 2
+    circle = circle < (params.aperturesize // 2) ** 2
+
+    for i, j in zip(*xp.where(circle)):
+        Kz = int(
+            xp.sqrt(
+                params.ki_mag**2
+                - (i - params.offaxis_center[0]) ** 2
+                - (j - params.offaxis_center[1]) ** 2
+            )
+            - xp.sqrt(
+                params.ki_mag**2 - oblique_shift[0] ** 2 - oblique_shift[1] ** 2
+            )
+        )
+        array_2d_fft[i, j] = array_3d_fft[
+            i
+            - params.offaxis_center[0]
+            - oblique_shift[0]
+            + array_3d_fft.shape[0] // 2,
+            j
+            - params.offaxis_center[1]
+            - oblique_shift[1]
+            + array_3d_fft.shape[1] // 2,
+            Kz + array_3d_fft.shape[2] // 2,
+        ]
+
+    return array_2d_fft.T

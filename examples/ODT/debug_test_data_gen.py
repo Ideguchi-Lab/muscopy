@@ -2,7 +2,7 @@
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
-from ilabvis import SlicingVisualizer
+from ilabvis import SlicingVisualizer, CursorVisualizer
 
 try:
     import cupy as xp
@@ -50,7 +50,7 @@ xx, yy, zz = xp.meshgrid(
     xp.arange(params.aperturesize * 2 + 1),
     xp.arange(params.aperturesize * 2 + 1),
     xp.arange(params.aperturesize * 2 + 1),
-    indexing="ij",
+    indexing="xy",
 )
 kz_array = zz - params.aperturesize + params.ki_mag
 approx_field_fft = scatter_fft / kz_array / 2j
@@ -62,28 +62,30 @@ E_initial = xp.ones(
     (2 * params.aperturesize + 1, 2 * params.aperturesize + 1), dtype=xp.complex128
 )
 
-NA_illumi = 1.0
-i = 10
-illumi_angle_step = 30
+# NA_illumi = 1.0
+NA_illumi = 0
+# i = 10
+i = 1
+# illumi_angle_step = 30
+illumi_angle_step = 360
 array_3d_fft = approx_field_fft
-ki = round(NA_illumi / params.wav / params.freq_per_pixel) + 1
+ki = round(NA_illumi / params.wav / params.freq_per_pixel)  # + 1 why +1?
 oblique_shift = (
     int(ki * xp.cos(illumi_angle_step * i / 360 * 2 * xp.pi)),
     int(ki * xp.sin(illumi_angle_step * i / 360 * 2 * xp.pi)),
 )
+print(f"{oblique_shift=}")
 test_data_fft_cropped = extract3Dto2D_minimum(
     array_3d_fft, params, oblique_shift=oblique_shift
 )
 
-to_show = xp.asnumpy(xp.log(xp.abs(test_data_fft_cropped)))
-plt.imshow(to_show)
-plt.scatter(
-    params.aperturesize // 2 + oblique_shift[1],
-    params.aperturesize // 2 + oblique_shift[0],
-    s=100,
-    c="red",
-)
 # %%
+fft_to_show = xp.asnumpy((xp.abs(test_data_fft_cropped)))
+cursorvis = CursorVisualizer(fft_to_show)
+cursorvis.run()
+
+# %%
+
 fft_extent = xp.zeros(
     (2 * params.aperturesize + 1, 2 * params.aperturesize + 1),
     dtype=xp.complex128,

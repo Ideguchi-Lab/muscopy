@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import sys
 
@@ -11,6 +13,7 @@ except ImportError:
     _cp = False
 
 import numpy as np
+from numpy.typing import NDArray
 from tqdm import tqdm
 
 from src.aperture_synthesis import Synthesizer, preprocess_for_synthesis, EDGE_SIZE
@@ -19,7 +22,16 @@ from src.qpi import QPIParameters, make_disk, qpi
 EDGE_SIZE = 2  # for avoiding edge artifact in ifft
 
 
-def find_max_args(array):
+def find_max_args(array: NDArray):
+    """Find max x, y coordinates and value of the given array.
+    Given matrix data type must be real-value type.
+
+    Args:
+        array (NDArray): input array
+
+    Returns:
+        tuple:  x, y coordinates and value of the max value
+    """
     max_value = xp.max(array)
     max_idx = xp.unravel_index(np.argmax(array), array.shape)
     max_x = max_idx[0]
@@ -48,12 +60,28 @@ class ODTParameters(QPIParameters):
 
 
 def reconstruct_E(
-    array: xp.array,
-    ref_array: xp.array,
+    array: NDArray,
+    ref_array: NDArray,
     params: ODTParameters,
-    normalize=True,
-    approx="Rytov",
-) -> [xp.array, tuple]:
+    normalize: bool = True,
+    approx: str = "Rytov",
+) -> tuple[NDArray, tuple]:
+    """Reconstruct Electric field based on the given approximation
+
+    Args:
+        array (NDArray): acquired hologram
+        ref_array (NDArray): acquired reference hologram
+        params (ODTParameters): parameters for the ODT system
+        normalize (bool, optional): noramalize the amplitude of the field. Defaults to True.
+        approx (str, optional): Approximation for scattering. Defaults to "Rytov". "Rytov" and "Born" are available.
+
+    Raises:
+        ValueError: approx must be 'Born' or 'Rytov'
+
+    Returns:
+        NDArray: reconstructed electric field
+        tuple: center of the reconstructed field
+    """
     assert approx in ["Rytov", "Born"]
     global EDGE_SIZE
 
@@ -61,13 +89,14 @@ def reconstruct_E(
         (2 * params.aperturesize + 1, 2 * params.aperturesize + 1), dtype=xp.complex128
     )
 
+    # get off-axis interference term
     array_fft = xp.fft.fftshift(xp.fft.fft2(array))
     disk = make_disk(params.offaxis_center, params.aperturesize // 2, array_fft.shape)
     array_fft = array_fft * disk
     max_x, max_y, _ = find_max_args(np.abs(array_fft))
     oblique_center = (
-        max_x - params.offaxis_center[1],
-        max_y - params.offaxis_center[0],
+        max_x - params.offaxis_center[0],
+        max_y - params.offaxis_center[1],
     )
 
     left_index = max_x - params.aperturesize
@@ -157,8 +186,8 @@ class ODTSynthesizer(Synthesizer):
 
             disk_synthesized = make_disk(
                 (
-                    synthesized_center[0] - oblique_center[1],
-                    synthesized_center[1] - oblique_center[0],
+                    synthesized_center[0] - oblique_center[0],
+                    synthesized_center[1] - oblique_center[1],
                 ),
                 self.params.aperturesize // 2,
                 E_approx.shape,
@@ -178,8 +207,8 @@ class ODTSynthesizer(Synthesizer):
                 xp.arange(2 * self.params.aperturesize + 1 - EDGE_SIZE),
                 indexing="ij",
             )
-            disk = (xx - synthesized_center[0] - oblique_center[1]) ** 2 + (
-                yy - synthesized_center[1] - oblique_center[0]
+            disk = (xx - synthesized_center[0] - oblique_center[0]) ** 2 + (
+                yy - synthesized_center[1] - oblique_center[1]
             ) ** 2
             disk[disk > (self.params.aperturesize // 2) ** 2] = 0
             kz_disk = xp.sqrt((self.params.aperturesize // 2) ** 2 - disk) + kz_i
@@ -187,21 +216,38 @@ class ODTSynthesizer(Synthesizer):
 
             scatter_potential_fft = 2j * kz_disk * e_fft_cropped
 
-            sphere_center = (
-                synthesized_center[0] - oblique_center[1],
-                synthesized_center[1] - oblique_center[0],
-                synthesized_center[2] - kz_i,
+            # sphere_center = (
+            #     synthesized_center[0] - oblique_center[1],
+            #     synthesized_center[1] - oblique_center[0],
+            #     synthesized_center[2] - kz_i,
+            # )
+            # sphere_mask = make_semisphere_surface(
+            #     sphere_center, self.params.ki_mag, synthesized_fft.shape
+            # )
+            # # fft_cropped_tiled = xp.tile(fft_cropped, (1, 1, synthesized_fft.shape[2]))
+            # scatter_potential_fft_tiled = xp.stack(
+            #     [scatter_potential_fft] * synthesized_fft.shape[2], axis=-1
+            # )
+            # scatter_potential_fft_tiled = scatter_potential_fft_tiled * sphere_mask
+
+            # synthesized_fft = synthesized_fft + scatter_potential_fft_tiled
+            # synthesized_weight += scatter_potential_fft_tiled != 0
+
+            o_center = (
+                synthesized_center[0] - oblique_center[0],
+                synthesized_center[1] - oblique_center[1],
             )
-            sphere_mask = make_semisphere_surface(
-                sphere_center, self.params.ki_mag, synthesized_fft.shape
+
+            scatter_potential_fft3d = map_aperture_to_3Dkspace(
+                scatter_potential_fft,
+                synthesized_fft.shape,
+                o_center,
+                self.params.aperturesize,
+                self.params.ki_mag,
             )
-            # fft_cropped_tiled = xp.tile(fft_cropped, (1, 1, synthesized_fft.shape[2]))
-            scatter_potential_fft_tiled = xp.stack(
-                [scatter_potential_fft] * synthesized_fft.shape[2], axis=-1
-            )
-            scatter_potential_fft_tiled = scatter_potential_fft_tiled * sphere_mask
-            synthesized_fft = synthesized_fft + scatter_potential_fft_tiled
-            synthesized_weight += scatter_potential_fft_tiled != 0
+
+            synthesized_fft = synthesized_fft + scatter_potential_fft3d
+            synthesized_weight += scatter_potential_fft3d != 0
 
             if hermite:
                 conjugate_scatter_potential_fft = xp.flipud(
@@ -261,8 +307,58 @@ class ODTSynthesizer(Synthesizer):
         return current_array, current_fft
 
 
-def map_to_3d(array, shape, oblique_center, synthesized_center, aperturesize, kz):
-    pass
+def map_aperture_to_3Dkspace(
+    array: NDArray,
+    shape: tuple[int, int, int],
+    oblique_center: tuple[int, int],
+    aperturesize: int,
+    km: float,
+):
+    """map 2d array to 3d array(ODT)
+
+    Args:
+        array (NDArray): 2D array to be projected. array size should be 2*aperturesize+1 square.
+        shape (NDArray): shape of the output 3d array. xy shape must be consistent with the input array
+        oblique_center (tuple): center position of the input circle
+        aperturesize (int): aperture size of the input circle
+        km (float): magnitude of the wave vector
+    """
+    # make kz index 2darray
+    xx, yy = xp.meshgrid(
+        xp.arange(2 * aperturesize + 1),
+        xp.arange(2 * aperturesize + 1),
+        indexing="ij",
+    )
+
+    kz_i = xp.sqrt(
+        km * 2 - oblique_center[0] ** 2 - oblique_center[1] ** 2
+    )  # TODO: we can optimize it with ki_mag
+
+    kz_index_array = xp.sqrt(
+        km**2 - (xx - oblique_center[0]) ** 2 - (yy - oblique_center[1]) ** 2
+    )
+
+    # inside the aperture
+    mask = (xx - oblique_center[0]) ** 2 + (yy - oblique_center[1]) ** 2 < (
+        aperturesize // 2
+    ) ** 2
+
+    # KZ_value_array = kz_index_array - kz_i
+
+    KZ_index_array = kz_index_array - kz_i
+    KZ_index_array = KZ_index_array * mask
+    KZ_index_array = KZ_index_array.astype(int)
+
+    # TODO: speed up later
+    index_array = xp.zeros(shape, dtype=xp.complex128)
+    for i in range(shape[0]):
+        for j in range(shape[1]):
+            # index_array[i, j, KZ_index_array[i, j]] = KZ_value_array[i, j]
+            index_array[i, j, KZ_index_array[i, j]] = 1
+
+    array_tiled = xp.stack([array] * shape[2], axis=-1)
+    array_projected = array_tiled * index_array
+    return array_projected
 
 
 def make_semisphere_surface(center, radius, array_shape, upper=True):
@@ -283,7 +379,7 @@ def make_semisphere_surface(center, radius, array_shape, upper=True):
         xp.arange(array_shape[0]),
         xp.arange(array_shape[1]),
         xp.arange(array_shape[2]),
-        indexing="xy",
+        indexing="ij",
     )
     sphere = (xx - center[0]) ** 2 + (yy - center[1]) ** 2 + (zz - center[2]) ** 2
     if upper:

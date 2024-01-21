@@ -20,7 +20,11 @@ sys.path.append(".")
 sys.path.append("..")
 sys.path.append("../..")
 
-from generate_hologram_from3Dmap import generate_3D_sphere, generate_test_data
+from generate_hologram_from3Dmap import (
+    generate_3D_sphere,
+    generate_test_data,
+    extract3Dto2D_minimum,
+)
 
 from src.dir_parser import numpy_parser
 from src.aperture_synthesis import Synthesizer as QPISynthesizer
@@ -61,6 +65,18 @@ xx, yy, zz = xp.meshgrid(
 kz_array = zz - params.aperturesize + params.ki_mag
 approx_field_fft = scatter_fft / kz_array / 2j
 ref_approx_field_fft = ref_scatter_fft / kz_array / 2j
+
+# %%
+# debug for index map
+oblique_shift = (0, 0)
+# radius = 33
+
+map = extract3Dto2D_minimum(ref_rindex, params, oblique_shift, return_index_map=True)
+if _cp:
+    map = xp.asnumpy(map)
+
+slice_visualizer = SlicingVisualizer(map)
+slice_visualizer.run()
 
 # %%
 # generate hologram

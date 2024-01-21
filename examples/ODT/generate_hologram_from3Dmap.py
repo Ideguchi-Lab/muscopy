@@ -50,6 +50,7 @@ def extract3Dto2D_minimum(
     array_3d_fft: xp.ndarray,
     params: ODTParameters,
     oblique_shift: tuple[int, int],
+    return_index_map=False,
 ) -> xp.ndarray:
     array_2d_fft = xp.zeros(
         (params.aperturesize, params.aperturesize), dtype=xp.complex128
@@ -62,6 +63,11 @@ def extract3Dto2D_minimum(
     )
     circle = (xx - params.aperturesize // 2) ** 2 + (yy - params.aperturesize // 2) ** 2
     circle = circle < (params.aperturesize // 2) ** 2
+    if return_index_map:
+        index_map = xp.zeros(
+            array_3d_fft.shape,
+            dtype=xp.int32,
+        )
 
     for i, j in zip(*xp.where(circle)):
         Kz = int(
@@ -97,6 +103,20 @@ def extract3Dto2D_minimum(
             + array_3d_fft.shape[1] // 2,
             Kz + array_3d_fft.shape[2] // 2,
         ]
+        if return_index_map:
+            index_map[
+                i
+                - params.aperturesize // 2
+                + oblique_shift[0]
+                + array_3d_fft.shape[0] // 2,
+                j
+                - params.aperturesize // 2
+                + oblique_shift[1]
+                + array_3d_fft.shape[1] // 2,
+                Kz + array_3d_fft.shape[2] // 2,
+            ] = 1
+    if return_index_map:
+        return index_map
 
     return array_2d_fft
 

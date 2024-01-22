@@ -51,8 +51,8 @@ def preprocess_for_synthesis(array, ref_array=None, params=None):
     array_fft = array_fft * disk
     max_x, max_y, _ = find_max_args(np.abs(array_fft))
     oblique_center = (
-        max_x - params.offaxis_center[1],
-        max_y - params.offaxis_center[0],
+        max_x - params.offaxis_center[0],
+        max_y - params.offaxis_center[1],
     )
 
     left_index = max_x - params.aperturesize
@@ -188,8 +188,8 @@ class Synthesizer:
                 )
             disk_synthesized = make_disk(
                 (
-                    synthesized_center[0] - oblique_center[1],
-                    synthesized_center[1] - oblique_center[0],
+                    synthesized_center[0] - oblique_center[0],
+                    synthesized_center[1] - oblique_center[1],
                 ),
                 self.params.aperturesize // 2,
                 array_cropped.shape,

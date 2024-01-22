@@ -329,7 +329,8 @@ def map_aperture_to_3Dkspace(
         xp.arange(2 * aperturesize + 1),
         indexing="ij",
     )
-
+    print(f"{km=}")
+    print(f"{oblique_center=}")
     kz_i = xp.sqrt(
         km * 2 - oblique_center[0] ** 2 - oblique_center[1] ** 2
     )  # TODO: we can optimize it with ki_mag
@@ -348,6 +349,8 @@ def map_aperture_to_3Dkspace(
     KZ_index_array = kz_index_array - kz_i
     KZ_index_array = KZ_index_array * mask
     KZ_index_array = KZ_index_array.astype(int)
+    print(f"{kz_i=}")
+    print(xp.count_nonzero(KZ_index_array > 0))
 
     # TODO: speed up later
     index_array = xp.zeros(shape, dtype=xp.complex128)

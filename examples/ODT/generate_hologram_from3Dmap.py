@@ -69,42 +69,34 @@ def extract3Dto2D_minimum(
             dtype=xp.int32,
         )
 
-    for i, j in zip(*xp.where(circle)):
-        Kz = int(
-            xp.sqrt(
-                params.ki_mag**2
-                - (i - params.aperturesize // 2) ** 2
-                - (j - params.aperturesize // 2) ** 2
+    # for i, j in zip(*xp.where(circle)):
+    for i in range(2 * params.aperturesize + 1):
+        for j in range(2 * params.aperturesize + 1):
+            if circle[i, j] == 0:
+                continue
+            Kz = int(
+                xp.sqrt(
+                    params.ki_mag**2
+                    - (i - params.aperturesize // 2) ** 2
+                    - (j - params.aperturesize // 2) ** 2
+                )
+                - xp.sqrt(
+                    params.ki_mag**2 - oblique_shift[0] ** 2 - oblique_shift[1] ** 2
+                )
             )
-            - xp.sqrt(
-                params.ki_mag**2 - oblique_shift[0] ** 2 - oblique_shift[1] ** 2
-            )
-        )
-        # print(Kz)
-        # array_2d_fft[i, j] = array_3d_fft[
-        #     i
-        #     - params.aperturesize // 2
-        #     - oblique_shift[0]
-        #     + array_3d_fft.shape[0] // 2,
-        #     j
-        #     - params.aperturesize // 2
-        #     - oblique_shift[1]
-        #     + array_3d_fft.shape[1] // 2,
-        #     Kz + array_3d_fft.shape[2] // 2,
-        # ]
-        array_2d_fft[i, j] = array_3d_fft[
-            i
-            - params.aperturesize // 2
-            + oblique_shift[0]
-            + array_3d_fft.shape[0] // 2,
-            j
-            - params.aperturesize // 2
-            + oblique_shift[1]
-            + array_3d_fft.shape[1] // 2,
-            Kz + array_3d_fft.shape[2] // 2,
-        ]
-        if return_index_map:
-            index_map[
+            # print(Kz)
+            # array_2d_fft[i, j] = array_3d_fft[
+            #     i
+            #     - params.aperturesize // 2
+            #     - oblique_shift[0]
+            #     + array_3d_fft.shape[0] // 2,
+            #     j
+            #     - params.aperturesize // 2
+            #     - oblique_shift[1]
+            #     + array_3d_fft.shape[1] // 2,
+            #     Kz + array_3d_fft.shape[2] // 2,
+            # ]
+            array_2d_fft[i, j] = array_3d_fft[
                 i
                 - params.aperturesize // 2
                 + oblique_shift[0]
@@ -114,7 +106,19 @@ def extract3Dto2D_minimum(
                 + oblique_shift[1]
                 + array_3d_fft.shape[1] // 2,
                 Kz + array_3d_fft.shape[2] // 2,
-            ] = 1
+            ]
+            if return_index_map:
+                index_map[
+                    i
+                    - params.aperturesize // 2
+                    + oblique_shift[0]
+                    + array_3d_fft.shape[0] // 2,
+                    j
+                    - params.aperturesize // 2
+                    + oblique_shift[1]
+                    + array_3d_fft.shape[1] // 2,
+                    Kz + array_3d_fft.shape[2] // 2,
+                ] = 1
     if return_index_map:
         return index_map
 

@@ -33,7 +33,7 @@ from src.odt import ODTParameters, ODTSynthesizer, calc_refractive_index_square
 
 # %%
 params = ODTParameters(
-    532e-9, 1.2, (1401, 1401), (700, 700), (3.45 * 1e-6) * 3 / 200 / 5, (623, 612), 1.33
+    532e-9, 1.2, (1400, 1400), (700, 700), (3.45 * 1e-6) * 3 / 200 / 5, (612, 623), 1.33
 )
 params.calc_params()
 params.print_all_parameters()
@@ -66,17 +66,17 @@ kz_array = zz - params.aperturesize + params.ki_mag
 approx_field_fft = scatter_fft / kz_array / 2j
 ref_approx_field_fft = ref_scatter_fft / kz_array / 2j
 
-# %%
-# debug for index map
-oblique_shift = (0, 0)
-# radius = 33
+# # %%
+# # debug for index map
+# oblique_shift = (0, 0)
+# # radius = 33
 
-map = extract3Dto2D_minimum(ref_rindex, params, oblique_shift, return_index_map=True)
-if _cp:
-    map = xp.asnumpy(map)
+# map = extract3Dto2D_minimum(ref_rindex, params, oblique_shift, return_index_map=True)
+# if _cp:
+#     map = xp.asnumpy(map)
 
-slice_visualizer = SlicingVisualizer(map)
-slice_visualizer.run()
+# slice_visualizer = SlicingVisualizer(map)
+# slice_visualizer.run()
 
 # %%
 # generate hologram
@@ -85,31 +85,31 @@ NA_illumi = 1.0
 # approx = "Born"
 approx = "Rytov"
 
-generate_test_data(
-    approx_field_fft,
-    params,
-    step_angle,
-    NA_illumi,
-    "odt_test_data/sample",
-    approx=approx,
-)
-generate_test_data(
-    ref_approx_field_fft,
-    params,
-    step_angle,
-    NA_illumi,
-    "odt_test_data/ref",
-    approx=approx,
-)
+# generate_test_data(
+#     approx_field_fft,
+#     params,
+#     step_angle,
+#     NA_illumi,
+#     "odt_test_data/sample",
+#     approx=approx,
+# )
+# generate_test_data(
+#     ref_approx_field_fft,
+#     params,
+#     step_angle,
+#     NA_illumi,
+#     "odt_test_data/ref",
+#     approx=approx,
+# )
 print("generated test data!")
 
-# %%
-# cursor visualizer
-data2d = np.load("odt_test_data/sample/000.npy")
-print(f"shape: {data2d.shape}")
-spectrum = np.fft.fftshift(np.fft.fft2(data2d))
-cursor_visualizer = CursorVisualizer(np.log(np.abs(spectrum)))
-cursor_visualizer.run()
+# # %%
+# # cursor visualizer
+# data2d = np.load("odt_test_data/sample/000.npy")
+# print(f"shape: {data2d.shape}")
+# spectrum = np.fft.fftshift(np.fft.fft2(data2d))
+# cursor_visualizer = CursorVisualizer(np.log(np.abs(spectrum)))
+# cursor_visualizer.run()
 
 # # %%
 # # visualize 3D refractive index
@@ -132,14 +132,14 @@ cursor_visualizer.run()
 
 # %%
 # execute synthetic aperture
-test_data = numpy_parser("odt_test_data/sample")
-ref_data = numpy_parser("odt_test_data/ref")
-# test_data = numpy_parser("../data/aperture_sample_beads")
-# ref_data = numpy_parser("../data/aperture_ref_beads")
+# test_data = numpy_parser("odt_test_data/sample")
+# ref_data = numpy_parser("odt_test_data/ref")
+test_data = numpy_parser("../data/aperture_sample_beads")
+ref_data = numpy_parser("../data/aperture_ref_beads")
 qpi_synthesizer = QPISynthesizer()
 qpi_synthesizer.set_parameters(params)
-qpi_synthesizer.set_data(test_data)
-# qpi_synthesizer.set_data(test_data, ref_data)
+# qpi_synthesizer.set_data(test_data)
+qpi_synthesizer.set_data(test_data, ref_data)
 qpi_synthesized, qpi_fft = qpi_synthesizer.synthesize(save_multiangle=True)
 
 if _cp:
@@ -165,8 +165,8 @@ plt.savefig("synthesized_qpi_fft.png", dpi=300)
 
 
 # %%
-test_data = numpy_parser("odt_test_data/sample")
-ref_data = numpy_parser("odt_test_data/ref")
+# test_data = numpy_parser("odt_test_data/sample")
+# ref_data = numpy_parser("odt_test_data/ref")
 odt_synthesizer = ODTSynthesizer()
 odt_synthesizer.set_parameters(params)
 # odt_synthesizer.set_data(test_data, ref_data)

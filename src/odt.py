@@ -280,6 +280,7 @@ class ODTSynthesizer(Synthesizer):
             #     )
             #     synthesized_weight += conjugate_scatter_potential_fft_tiled != 0
 
+        synthesized_weight -= synthesized_weight != 1
         synthesized_fft /= synthesized_weight  # TODO
         synthesized_array = xp.fft.ifftn(xp.fft.ifftshift(synthesized_fft))
 
@@ -340,7 +341,7 @@ def map_aperture_to_3Dkspace(
     # print(f"{oblique_center=}")
 
     kz_i = xp.sqrt(params.ki_mag**2 - oblique_center[0] ** 2 - oblique_center[1] ** 2)
-    print(f"{kz_i=}")
+    # print(f"{kz_i=}")
     # print(oblique_center)
 
     # inside the aperture
@@ -377,7 +378,7 @@ def map_aperture_to_3Dkspace(
     #         + 10,
     #     ]
     # )
-    print(KZ_index_array[params.aperturesize, params.aperturesize])
+    # print(KZ_index_array[params.aperturesize, params.aperturesize])
 
     # TODO: speed up later
     index_array = xp.zeros(shape, dtype=xp.complex128)

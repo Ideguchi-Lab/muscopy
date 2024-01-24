@@ -187,8 +187,8 @@ def generate_test_data(
             + 1,
         ] = test_data_fft_cropped
         test_data_extent = xp.fft.ifft2(xp.fft.ifftshift(fft_extent))
-        test_data_extent[:1, :] = 0
-        test_data_extent[:, :1] = 0
+        test_data_extent[:2, :] = 0
+        test_data_extent[:, :2] = 0
         if approx == "Rytov":
             E_test = E_initial * xp.exp(test_data_extent / E_initial)
         elif approx == "Born":
@@ -228,14 +228,14 @@ def generate_test_data(
             + 1,
         ]
 
-        # test_data_fft = test_data_fft.T
+        xp.save(f"{path}/{int(illumi_angle_step * i):03}.npy", test_data_fft)
 
-        test_data = xp.fft.ifft2(xp.fft.ifftshift(test_data_fft))
-        test_data[:2, :] = 0
-        test_data[:, :2] = 0
+        # test_data = xp.fft.ifft2(xp.fft.ifftshift(test_data_fft))
+        # test_data[:2, :] = 0
+        # test_data[:, :2] = 0
 
         # save
-        xp.save(f"{path}/{int(illumi_angle_step * i):03}.npy", test_data)
+        # xp.save(f"{path}/{int(illumi_angle_step * i):03}.npy", test_data)
 
 
 # %%

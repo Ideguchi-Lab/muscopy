@@ -28,7 +28,7 @@ def find_max_args(array):
     return max_x, max_y, max_value
 
 
-def preprocess_for_synthesis(array, ref_array=None, params=None):
+def preprocess_for_synthesis(array, ref_array=None, params=None, load_fft=False):
     global EDGE_SIZE
     REF_REGIONS = [
         [[2, 20], [2, 20]],
@@ -45,8 +45,10 @@ def preprocess_for_synthesis(array, ref_array=None, params=None):
             [params.aperturesize - 20 - EDGE_SIZE, params.aperturesize - 2 - EDGE_SIZE],
         ],
     ]
-
-    array_fft = xp.fft.fftshift(xp.fft.fft2(array))
+    if load_fft:
+        array_fft = array
+    else:
+        array_fft = xp.fft.fftshift(xp.fft.fft2(array))
     disk = make_disk(params.offaxis_center, params.aperturesize // 2, array_fft.shape)
     array_fft = array_fft * disk
     max_x, max_y, _ = find_max_args(np.abs(array_fft))
@@ -78,7 +80,10 @@ def preprocess_for_synthesis(array, ref_array=None, params=None):
     array_cropped = xp.fft.ifft2(xp.fft.ifftshift(array_fft))[EDGE_SIZE:, EDGE_SIZE:]
 
     if not ref_array is None:
-        ref_array_fft = xp.fft.fftshift(xp.fft.fft2(ref_array))
+        if load_fft:
+            ref_array_fft = ref_array
+        else:
+            ref_array_fft = xp.fft.fftshift(xp.fft.fft2(ref_array))
         ref_array_fft = ref_array_fft * disk
         ref_array_fft_pad = xp.pad(
             ref_array_fft,
@@ -155,7 +160,7 @@ class Synthesizer:
             for line in f:
                 self.oblique_centers.append(tuple(map(int, line.split(","))))
 
-    def synthesize(self, save_multiangle=False):
+    def synthesize(self, save_multiangle=False, load_fft=False):
         synthesized_fft = xp.zeros(
             (
                 2 * (self.params.aperturesize) + 1 - EDGE_SIZE,
@@ -179,12 +184,12 @@ class Synthesizer:
                 ref_array = xp.load(self.reference_data[i])
 
                 array_cropped, oblique_center = preprocess_for_synthesis(
-                    array, ref_array, params=self.params
+                    array, ref_array, params=self.params, load_fft=load_fft
                 )
 
             else:
                 array_cropped, oblique_center = preprocess_for_synthesis(
-                    array, params=self.params
+                    array, params=self.params, load_fft=load_fft
                 )
             disk_synthesized = make_disk(
                 (

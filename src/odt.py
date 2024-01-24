@@ -42,21 +42,34 @@ def find_max_args(array: NDArray):
 
 class ODTParameters(QPIParameters):
     def __init__(
-        self, wavelength, NA, img_shape, img_center, pixelsize, offaxis_center, n_sol
+        self,
+        wavelength,
+        NA,
+        img_shape,
+        img_center,
+        pixelsize,
+        offaxis_center,
+        n_sol,
+        NA_illumi=None,
     ):
         super().__init__(
             wavelength, NA, img_shape, img_center, pixelsize, offaxis_center
         )
         self.n_sol = n_sol
+        self.NA_illumi = NA_illumi
 
     def calc_params(self):
         super().calc_params()
         self.ki_mag = self.n_sol / self.wav / self.freq_per_pixel
 
+        if self.NA_illumi is not None:
+            self.ki_lateral_mag = self.ki_mag * self.NA_illumi / self.NA
+
     def print_all_parameters(self):
         super().print_all_parameters()
         print(f"{self.n_sol=}")
         print(f"{self.ki_mag=}")
+        print(f"{self.ki_lateral_mag=}")
 
 
 def reconstruct_E(

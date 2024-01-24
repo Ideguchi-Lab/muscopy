@@ -19,7 +19,7 @@ from tqdm import tqdm
 from src.aperture_synthesis import Synthesizer, preprocess_for_synthesis, EDGE_SIZE
 from src.qpi import QPIParameters, make_disk, qpi
 
-EDGE_SIZE = 2  # for avoiding edge artifact in ifft
+EDGE_SIZE = 0  # for avoiding edge artifact in ifft
 
 
 def find_max_args(array: NDArray):
@@ -78,6 +78,7 @@ def reconstruct_E(
     params: ODTParameters,
     normalize: bool = True,
     approx: str = "Rytov",
+    load_fft: bool = False,
 ) -> tuple[NDArray, tuple]:
     """Reconstruct Electric field based on the given approximation
 
@@ -103,7 +104,10 @@ def reconstruct_E(
     )
 
     # get off-axis interference term
-    array_fft = xp.fft.fftshift(xp.fft.fft2(array))
+    if load_fft:
+        array_fft = array
+    else:
+        array_fft = xp.fft.fftshift(xp.fft.fft2(array))
     disk = make_disk(params.offaxis_center, params.aperturesize // 2, array_fft.shape)
     array_fft = array_fft * disk
     max_x, max_y, _ = find_max_args(np.abs(array_fft))
@@ -134,7 +138,10 @@ def reconstruct_E(
 
     array_cropped = xp.fft.ifft2(xp.fft.ifftshift(array_fft))[EDGE_SIZE:, EDGE_SIZE:]
 
-    ref_array_fft = xp.fft.fftshift(xp.fft.fft2(ref_array))
+    if load_fft:
+        ref_array_fft = ref_array
+    else:
+        ref_array_fft = xp.fft.fftshift(xp.fft.fft2(ref_array))
     ref_array_fft = ref_array_fft * disk
     ref_array_fft_pad = xp.pad(
         ref_array_fft,
@@ -168,7 +175,7 @@ def reconstruct_E(
 
 class ODTSynthesizer(Synthesizer):
     def ODT_synthesize(
-        self, approx: str, hermite=False
+        self, approx: str, hermite=False, load_fft=False
     ) -> tuple[np.ndarray, np.ndarray]:
         assert approx in ["Rytov", "Born"]
         assert self.reference_data is not None
@@ -192,7 +199,12 @@ class ODTSynthesizer(Synthesizer):
             array = xp.load(self.target_data[i])
             ref_array = xp.load(self.reference_data[i])
             E_approx, oblique_center = reconstruct_E(
-                array, ref_array, params=self.params, normalize=True, approx=approx
+                array,
+                ref_array,
+                params=self.params,
+                normalize=True,
+                approx=approx,
+                load_fft=load_fft,
             )
 
             e_fft = xp.fft.fftshift(xp.fft.fft2(E_approx))
@@ -227,89 +239,71 @@ class ODTSynthesizer(Synthesizer):
             kz_disk = xp.sqrt((self.params.aperturesize // 2) ** 2 - disk) + kz_i
             kz_disk[disk > (self.params.aperturesize // 2) ** 2] = 0
 
+            # scatter_potential_fft = 2j * xp.pi * kz_disk * e_fft_cropped
             scatter_potential_fft = 2j * kz_disk * e_fft_cropped
-
-            # sphere_center = (
-            #     synthesized_center[0] - oblique_center[1],
-            #     synthesized_center[1] - oblique_center[0],
-            #     synthesized_center[2] - kz_i,
-            # )
-            # sphere_mask = make_semisphere_surface(
-            #     sphere_center, self.params.ki_mag, synthesized_fft.shape
-            # )
-            # # fft_cropped_tiled = xp.tile(fft_cropped, (1, 1, synthesized_fft.shape[2]))
-            # scatter_potential_fft_tiled = xp.stack(
-            #     [scatter_potential_fft] * synthesized_fft.shape[2], axis=-1
-            # )
-            # scatter_potential_fft_tiled = scatter_potential_fft_tiled * sphere_mask
-
-            # synthesized_fft = synthesized_fft + scatter_potential_fft_tiled
-            # synthesized_weight += scatter_potential_fft_tiled != 0
-
-            o_center = (
-                synthesized_center[0] - oblique_center[0],
-                synthesized_center[1] - oblique_center[1],
-            )
 
             scatter_potential_fft3d = map_aperture_to_3Dkspace(
                 scatter_potential_fft,
                 synthesized_fft.shape,
-                o_center,
+                oblique_center,
                 self.params.aperturesize,
-                self.params.ki_mag,
+                self.params,
             )
 
             synthesized_fft = synthesized_fft + scatter_potential_fft3d
             synthesized_weight += scatter_potential_fft3d != 0
 
-            if hermite:
-                conjugate_scatter_potential_fft = xp.flipud(
-                    xp.fliplr(scatter_potential_fft.conjugate())
-                )
-                conjugate_sphere_center = (
-                    synthesized_center[0] + oblique_center[1],
-                    synthesized_center[1] + oblique_center[0],
-                    synthesized_center[2] + kz_i,
-                )
-                conjugate_sphere_mask = make_semisphere_surface(
-                    conjugate_sphere_center,
-                    self.params.ki_mag,
-                    synthesized_fft.shape,
-                    upper=False,
-                )
-                conjugate_scatter_potential_fft_tiled = xp.stack(
-                    [conjugate_scatter_potential_fft] * synthesized_fft.shape[2],
-                    axis=-1,
-                )
-                conjugate_scatter_potential_fft_tiled = (
-                    conjugate_scatter_potential_fft_tiled * conjugate_sphere_mask
-                )
-                synthesized_fft = (
-                    synthesized_fft + conjugate_scatter_potential_fft_tiled
-                )
-                synthesized_weight += conjugate_scatter_potential_fft_tiled != 0
+            # if hermite:
+            #     conjugate_scatter_potential_fft = xp.flipud(
+            #         xp.fliplr(scatter_potential_fft.conjugate())
+            #     )
+            #     conjugate_sphere_center = (
+            #         synthesized_center[0] + oblique_center[0],
+            #         synthesized_center[1] + oblique_center[1],
+            #         synthesized_center[2] + kz_i,
+            #     )
+            #     conjugate_sphere_mask = make_semisphere_surface(
+            #         conjugate_sphere_center,
+            #         self.params.ki_mag,
+            #         synthesized_fft.shape,
+            #         upper=False,
+            #     )
+            #     conjugate_scatter_potential_fft_tiled = xp.stack(
+            #         [conjugate_scatter_potential_fft] * synthesized_fft.shape[2],
+            #         axis=-1,
+            #     )
+            #     conjugate_scatter_potential_fft_tiled = (
+            #         conjugate_scatter_potential_fft_tiled * conjugate_sphere_mask
+            #     )
+            #     synthesized_fft = (
+            #         synthesized_fft + conjugate_scatter_potential_fft_tiled
+            #     )
+            #     synthesized_weight += conjugate_scatter_potential_fft_tiled != 0
 
-        synthesized_fft /= synthesized_weight
+        synthesized_fft /= synthesized_weight  # TODO
         synthesized_array = xp.fft.ifftn(xp.fft.ifftshift(synthesized_fft))
-
-        # if _cp:
-        #     synthesized_array = xp.asnumpy(synthesized_array)
-        #     synthesized_fft = xp.asnumpy(synthesized_fft)
 
         return synthesized_array, synthesized_fft
 
-    def iterative_ODT(self, approx, epsilon=1e-6, max_N=100):
-        array3d, array3d_fft = self.ODT_synthesize(approx)
-        odt_array = xp.abs(calc_refractive_index_square(array3d, self.params)) ** 0.5
-        current_array = odt_array.copy()
+    def iterative_ODT(
+        self, approx, epsilon=1e-6, max_N=100, hermite=False, load_fft=False
+    ):
+        # principle: Fr < 0
+        array3d, array3d_fft = self.ODT_synthesize(approx, hermite, load_fft)
+        # odt_array = xp.abs(calc_refractive_index_square(array3d, self.params)) ** 0.5
+        current_array = array3d.copy()
         former_array = current_array.copy()
         delta = xp.inf
         iteration = 0
         while (delta > epsilon) and (iteration < max_N):
-            current_array[current_array < 0] = 0
+            current_array[current_array > 0] = 0
             current_fft = xp.fft.fftshift(xp.fft.fftn(current_array))
             current_fft[array3d_fft != 0] = array3d_fft[array3d_fft != 0]
-            current_array = xp.fft.ifftn(xp.fft.ifftshift(current_fft))
+            current_array = xp.real(xp.fft.ifftn(xp.fft.ifftshift(current_fft)))
+
+            # calc_phase_diff = xp.angle(current_array / former_array)
+            # mean_phase_diff = xp.mean(calc_phase_diff)
+            # current_array = current_array * xp.exp(-1j * mean_phase_diff)
 
             delta = xp.sum(xp.abs(current_array - former_array))
             iteration += 1
@@ -325,7 +319,7 @@ def map_aperture_to_3Dkspace(
     shape: tuple[int, int, int],
     oblique_center: tuple[int, int],
     aperturesize: int,
-    km: float,
+    params: ODTParameters,
 ):
     """map 2d array to 3d array(ODT)
 
@@ -342,35 +336,55 @@ def map_aperture_to_3Dkspace(
         xp.arange(2 * aperturesize + 1),
         indexing="ij",
     )
-    print(f"{km=}")
-    print(f"{oblique_center=}")
-    kz_i = xp.sqrt(
-        km * 2 - oblique_center[0] ** 2 - oblique_center[1] ** 2
-    )  # TODO: we can optimize it with ki_mag
+    # print(f"{km=}")
+    # print(f"{oblique_center=}")
 
-    kz_index_array = xp.sqrt(
-        km**2 - (xx - oblique_center[0]) ** 2 - (yy - oblique_center[1]) ** 2
-    )
+    kz_i = xp.sqrt(params.ki_mag**2 - oblique_center[0] ** 2 - oblique_center[1] ** 2)
+    print(f"{kz_i=}")
+    # print(oblique_center)
 
     # inside the aperture
-    mask = (xx - oblique_center[0]) ** 2 + (yy - oblique_center[1]) ** 2 < (
-        aperturesize // 2
-    ) ** 2
+    mask = (
+        (xx - params.aperturesize + oblique_center[0]) ** 2
+        + (yy - params.aperturesize + oblique_center[1]) ** 2
+    ) < (aperturesize // 2) ** 2
 
+    kz_index_square = (
+        params.ki_mag**2
+        - (xx - params.aperturesize + oblique_center[0]) ** 2
+        - (yy - params.aperturesize + oblique_center[1]) ** 2
+    ) * mask
+
+    kz_index_array = xp.sqrt(kz_index_square)
     # KZ_value_array = kz_index_array - kz_i
 
     KZ_index_array = kz_index_array - kz_i
     KZ_index_array = KZ_index_array * mask
     KZ_index_array = KZ_index_array.astype(int)
-    print(f"{kz_i=}")
-    print(xp.count_nonzero(KZ_index_array > 0))
+    # print(f"{kz_i=}")
+    # print(xp.count_nonzero(KZ_index_array > 0))
+    # print(
+    #     KZ_index_array[
+    #         params.aperturesize
+    #         + oblique_center[0]
+    #         - 10 : params.aperturesize
+    #         + oblique_center[0]
+    #         + 10,
+    #         params.aperturesize
+    #         + oblique_center[1]
+    #         - 10 : params.aperturesize
+    #         + oblique_center[1]
+    #         + 10,
+    #     ]
+    # )
+    print(KZ_index_array[params.aperturesize, params.aperturesize])
 
     # TODO: speed up later
     index_array = xp.zeros(shape, dtype=xp.complex128)
     for i in range(shape[0]):
         for j in range(shape[1]):
             # index_array[i, j, KZ_index_array[i, j]] = KZ_value_array[i, j]
-            index_array[i, j, KZ_index_array[i, j]] = 1
+            index_array[i, j, KZ_index_array[i, j] + params.aperturesize] = 1
 
     array_tiled = xp.stack([array] * shape[2], axis=-1)
     array_projected = array_tiled * index_array

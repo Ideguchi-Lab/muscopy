@@ -292,7 +292,6 @@ class ODTSynthesizer(Synthesizer):
     ):
         # principle: Fr < 0
         array3d, array3d_fft = self.ODT_synthesize(approx, hermite, load_fft)
-        # odt_array = xp.abs(calc_refractive_index_square(array3d, self.params)) ** 0.5
         current_array = array3d.copy()
         former_array = current_array.copy()
         delta = xp.inf
@@ -302,10 +301,6 @@ class ODTSynthesizer(Synthesizer):
             current_fft = xp.fft.fftshift(xp.fft.fftn(current_array))
             current_fft[array3d_fft != 0] = array3d_fft[array3d_fft != 0]
             current_array = xp.real(xp.fft.ifftn(xp.fft.ifftshift(current_fft)))
-
-            # calc_phase_diff = xp.angle(current_array / former_array)
-            # mean_phase_diff = xp.mean(calc_phase_diff)
-            # current_array = current_array * xp.exp(-1j * mean_phase_diff)
 
             delta = xp.sum(xp.abs(current_array - former_array))
             iteration += 1
@@ -338,12 +333,8 @@ def map_aperture_to_3Dkspace(
         xp.arange(2 * aperturesize + 1),
         indexing="ij",
     )
-    # print(f"{km=}")
-    # print(f"{oblique_center=}")
 
     kz_i = xp.sqrt(params.ki_mag**2 - oblique_center[0] ** 2 - oblique_center[1] ** 2)
-    # print(f"{kz_i=}")
-    # print(oblique_center)
 
     # inside the aperture
     mask = (
@@ -358,28 +349,10 @@ def map_aperture_to_3Dkspace(
     ) * mask
 
     kz_index_array = xp.sqrt(kz_index_square)
-    # KZ_value_array = kz_index_array - kz_i
 
     KZ_index_array = kz_index_array - kz_i
     KZ_index_array = KZ_index_array * mask
     KZ_index_array = KZ_index_array.astype(int)
-    # print(f"{kz_i=}")
-    # print(xp.count_nonzero(KZ_index_array > 0))
-    # print(
-    #     KZ_index_array[
-    #         params.aperturesize
-    #         + oblique_center[0]
-    #         - 10 : params.aperturesize
-    #         + oblique_center[0]
-    #         + 10,
-    #         params.aperturesize
-    #         + oblique_center[1]
-    #         - 10 : params.aperturesize
-    #         + oblique_center[1]
-    #         + 10,
-    #     ]
-    # )
-    # print(KZ_index_array[params.aperturesize, params.aperturesize])
 
     # TODO: speed up later
     index_array = xp.zeros(shape, dtype=xp.complex128)
@@ -391,36 +364,6 @@ def map_aperture_to_3Dkspace(
     array_tiled = xp.stack([array] * shape[2], axis=-1)
     array_projected = array_tiled * index_array
     return array_projected
-
-
-# def make_semisphere_surface(center, radius, array_shape, upper=True):
-#     """Returns sphere surface filled with 1.
-
-#     Args:
-#         center (tuple): center of the sphere surface
-#         radius (int): radius of the sphere
-#         array_shape (tuple): shape of the output 3d array
-
-#     Returns:
-#         xp.array: array whose sphere surface is filled with 1, otherwise 0.
-#     """
-
-#     if isinstance(array_shape, int):
-#         array_shape = (array_shape, array_shape, array_shape)
-#     xx, yy, zz = xp.meshgrid(
-#         xp.arange(array_shape[0]),
-#         xp.arange(array_shape[1]),
-#         xp.arange(array_shape[2]),
-#         indexing="ij",
-#     )
-#     sphere = (xx - center[0]) ** 2 + (yy - center[1]) ** 2 + (zz - center[2]) ** 2
-#     if upper:
-#         sphere = (xp.abs(sphere - radius**2) < 6) & (
-#             zz > center[2]
-#         )  # TODO: 6 is a magic number
-#     else:
-#         sphere = (xp.abs(sphere - radius**2) < 6) & (zz < center[2])
-#     return sphere
 
 
 def calc_refractive_index_square(array3d, params):

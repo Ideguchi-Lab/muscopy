@@ -84,18 +84,6 @@ def extract3Dto2D_minimum(
                     params.ki_mag**2 - oblique_shift[0] ** 2 - oblique_shift[1] ** 2
                 )
             )
-            # print(Kz)
-            # array_2d_fft[i, j] = array_3d_fft[
-            #     i
-            #     - params.aperturesize // 2
-            #     - oblique_shift[0]
-            #     + array_3d_fft.shape[0] // 2,
-            #     j
-            #     - params.aperturesize // 2
-            #     - oblique_shift[1]
-            #     + array_3d_fft.shape[1] // 2,
-            #     Kz + array_3d_fft.shape[2] // 2,
-            # ]
             array_2d_fft[i, j] = array_3d_fft[
                 i
                 - params.aperturesize // 2
@@ -123,15 +111,6 @@ def extract3Dto2D_minimum(
         return index_map
 
     return array_2d_fft
-
-
-# def map_2d_to_3d(array_fft_2d: xp.ndarray, array_fft_3d: xp.ndarray, params: ODTParameters, oblique_center: tuple[int, int])->xp.ndarray:
-#     xx, yy = xp.meshgrid(xp.arange(params.img_shape[0]), xp.arange(params.img_shape[1]), indexing="ij")
-#     circle = (xx - params.offaxis_center[0]) ** 2 + (yy - params.offaxis_center[1]) ** 2
-#     circle = circle < (params.aperturesize // 2) ** 2
-
-#     for i, j in zip(*xp.where(circle)):
-#         Kz = int(xp.sqrt(params.ki_mag**2 - (i - params.offaxis_center[0]) ** 2 - (j - params.offaxis_center[1]) ** 2) - xp.sqrt(params.ki_mag**2 - ))
 
 
 def generate_test_data(
@@ -236,49 +215,3 @@ def generate_test_data(
 
         # save
         # xp.save(f"{path}/{int(illumi_angle_step * i):03}.npy", test_data)
-
-
-# # %%
-# def extract3Dto2D(
-#     array_3d_fft: xp.ndarray,
-#     params: ODTParameters,
-#     illumi_angle=0,
-#     NA_illumi=1.0,
-# ) -> xp.ndarray:
-#     array_2d_fft = xp.zeros(params.img_shape)
-#     ki = round(NA_illumi / params.wav / params.freq_per_pixel) + 1
-#     oblique_shift = (
-#         int(ki * xp.cos(illumi_angle / 360 * 2 * xp.pi)),
-#         int(ki * xp.sin(illumi_angle / 360 * 2 * xp.pi)),
-#     )
-
-#     xx, yy = xp.meshgrid(
-#         xp.arange(params.img_shape[0]), xp.arange(params.img_shape[1]), indexing="ij"
-#     )
-#     circle = (xx - params.offaxis_center[0]) ** 2 + (yy - params.offaxis_center[1]) ** 2
-#     circle = circle < (params.aperturesize // 2) ** 2
-
-#     for i, j in zip(*xp.where(circle)):
-#         Kz = int(
-#             xp.sqrt(
-#                 params.ki_mag**2
-#                 - (i - params.offaxis_center[0]) ** 2
-#                 - (j - params.offaxis_center[1]) ** 2
-#             )
-#             - xp.sqrt(
-#                 params.ki_mag**2 - oblique_shift[0] ** 2 - oblique_shift[1] ** 2
-#             )
-#         )
-#         array_2d_fft[i, j] = array_3d_fft[
-#             i
-#             - params.offaxis_center[0]
-#             - oblique_shift[0]
-#             + array_3d_fft.shape[0] // 2,
-#             j
-#             - params.offaxis_center[1]
-#             - oblique_shift[1]
-#             + array_3d_fft.shape[1] // 2,
-#             Kz + array_3d_fft.shape[2] // 2,
-#         ]
-
-#     return array_2d_fft.T

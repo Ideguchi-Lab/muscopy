@@ -33,7 +33,7 @@ from src.odt import ODTParameters, ODTSynthesizer, calc_refractive_index_square
 
 # %%
 NA_i = 1.0
-step_angle = 360 / 10
+step_angle = 360 / 30
 params = ODTParameters(
     532e-9,
     1.2,
@@ -78,9 +78,21 @@ xx, yy, zz = xp.meshgrid(
 )
 kz_i = xp.sqrt(params.ki_mag**2 - params.ki_lateral_mag**2)
 kz_array = zz - params.aperturesize + kz_i
+
+# kz_array = xp.ones(sphere.shape)
 # kz_array = zz - params.aperturesize
-approx_field_fft = scatter_fft / kz_array / 2j / xp.pi / 10
-ref_approx_field_fft = ref_scatter_fft / kz_array / 2j / xp.pi / 10
+approx_field_fft = scatter_fft / kz_array / 2j / xp.pi
+ref_approx_field_fft = ref_scatter_fft / kz_array / 2j / xp.pi
+
+# # %%
+# rindex_fft = xp.fft.fftshift(xp.fft.fftn(rindex))
+# rindex = xp.fft.ifftn(xp.fft.ifftshift(rindex_fft))
+# if _cp:
+#     rindex_to_show = xp.asnumpy(rindex)
+# else:
+#     rindex_to_show = rindex
+# slice_visualizer = SlicingVisualizer(rindex_to_show)
+# slice_visualizer.run()
 
 # # %%
 # # slice view
@@ -153,25 +165,25 @@ ref_approx_field_fft = ref_scatter_fft / kz_array / 2j / xp.pi / 10
 # generate hologram
 step_angle = step_angle
 NA_illumi = NA_i
-approx = "Born"
+# approx = "Born"
 approx = "Rytov"
 
-# generate_test_data(
-#     approx_field_fft,
-#     params,
-#     step_angle,
-#     NA_illumi,
-#     "odt_test_data/sample",
-#     approx=approx,
-# )
-# generate_test_data(
-#     ref_approx_field_fft,
-#     params,
-#     step_angle,
-#     NA_illumi,
-#     "odt_test_data/ref",
-#     approx=approx,
-# )
+generate_test_data(
+    approx_field_fft,
+    params,
+    step_angle,
+    NA_illumi,
+    "odt_test_data/sample",
+    approx=approx,
+)
+generate_test_data(
+    ref_approx_field_fft,
+    params,
+    step_angle,
+    NA_illumi,
+    "odt_test_data/ref",
+    approx=approx,
+)
 print("generated test data!")
 
 # # %%
@@ -262,7 +274,7 @@ synthesized_array, odt_fft = odt_synthesizer.ODT_synthesize(
 )
 
 synthesized_array = (
-    xp.abs(calc_refractive_index_square(synthesized_array, params)) ** 0.5
+    xp.real(calc_refractive_index_square(synthesized_array, params)) ** 0.5
 )
 
 if _cp:
@@ -282,34 +294,34 @@ slice_visualizer.run()
 slice_visualizer = SlicingVisualizer(odt_fft)
 slice_visualizer.run()
 
-# %%
-# iterative ODT
-odt_synthesizer = ODTSynthesizer()
-odt_synthesizer.set_parameters(params)
+# # %%
+# # iterative ODT
+# odt_synthesizer = ODTSynthesizer()
+# odt_synthesizer.set_parameters(params)
+# # odt_synthesizer.set_data(test_data, ref_data)
 # odt_synthesizer.set_data(test_data, ref_data)
-odt_synthesizer.set_data(test_data, ref_data)
-synthesized_array, odt_fft = odt_synthesizer.iterative_ODT(
-    approx=approx, epsilon=1e-6, max_N=10000, hermite=False, load_fft=True
-)
+# synthesized_array, odt_fft = odt_synthesizer.iterative_ODT(
+#     approx=approx, epsilon=1e-6, max_N=10000, hermite=False, load_fft=True
+# )
 
-synthesized_array = (
-    xp.abs(calc_refractive_index_square(synthesized_array, params)) ** 0.5
-)
+# synthesized_array = (
+#     xp.abs(calc_refractive_index_square(synthesized_array, params)) ** 0.5
+# )
 
-if _cp:
-    odt_synthesized = xp.asnumpy(synthesized_array)
-    odt_fft = xp.asnumpy(np.log(np.abs(odt_fft) + 1))
-else:
-    odt_synthesized = synthesized_array
-    odt_fft = np.log(np.abs(odt_fft) + 1)
-# %%
-# plot
-slice_visualizer = SlicingVisualizer(odt_synthesized)
-slice_visualizer.run()
+# if _cp:
+#     odt_synthesized = xp.asnumpy(synthesized_array)
+#     odt_fft = xp.asnumpy(np.log(np.abs(odt_fft) + 1))
+# else:
+#     odt_synthesized = synthesized_array
+#     odt_fft = np.log(np.abs(odt_fft) + 1)
+# # %%
+# # plot
+# slice_visualizer = SlicingVisualizer(odt_synthesized)
+# slice_visualizer.run()
 
-# %%
-# plot
-slice_visualizer = SlicingVisualizer(odt_fft)
-slice_visualizer.run()
+# # %%
+# # plot
+# slice_visualizer = SlicingVisualizer(odt_fft)
+# slice_visualizer.run()
 
-# %%
+# # %%

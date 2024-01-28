@@ -115,6 +115,7 @@ def reconstruct_E(
         max_x - params.offaxis_center[0],
         max_y - params.offaxis_center[1],
     )
+    # print(f"{oblique_center=}")
 
     left_index = max_x - params.aperturesize
     right_index = max_x + params.aperturesize + 1
@@ -281,7 +282,7 @@ class ODTSynthesizer(Synthesizer):
             #     synthesized_weight += conjugate_scatter_potential_fft_tiled != 0
 
         synthesized_weight -= synthesized_weight != 1
-        synthesized_fft /= synthesized_weight  # TODO
+        synthesized_fft /= synthesized_weight
         synthesized_array = xp.fft.ifftn(xp.fft.ifftshift(synthesized_fft))
 
         return synthesized_array, synthesized_fft
@@ -392,34 +393,34 @@ def map_aperture_to_3Dkspace(
     return array_projected
 
 
-def make_semisphere_surface(center, radius, array_shape, upper=True):
-    """Returns sphere surface filled with 1.
+# def make_semisphere_surface(center, radius, array_shape, upper=True):
+#     """Returns sphere surface filled with 1.
 
-    Args:
-        center (tuple): center of the sphere surface
-        radius (int): radius of the sphere
-        array_shape (tuple): shape of the output 3d array
+#     Args:
+#         center (tuple): center of the sphere surface
+#         radius (int): radius of the sphere
+#         array_shape (tuple): shape of the output 3d array
 
-    Returns:
-        xp.array: array whose sphere surface is filled with 1, otherwise 0.
-    """
+#     Returns:
+#         xp.array: array whose sphere surface is filled with 1, otherwise 0.
+#     """
 
-    if isinstance(array_shape, int):
-        array_shape = (array_shape, array_shape, array_shape)
-    xx, yy, zz = xp.meshgrid(
-        xp.arange(array_shape[0]),
-        xp.arange(array_shape[1]),
-        xp.arange(array_shape[2]),
-        indexing="ij",
-    )
-    sphere = (xx - center[0]) ** 2 + (yy - center[1]) ** 2 + (zz - center[2]) ** 2
-    if upper:
-        sphere = (xp.abs(sphere - radius**2) < 6) & (
-            zz > center[2]
-        )  # TODO: 6 is a magic number
-    else:
-        sphere = (xp.abs(sphere - radius**2) < 6) & (zz < center[2])
-    return sphere
+#     if isinstance(array_shape, int):
+#         array_shape = (array_shape, array_shape, array_shape)
+#     xx, yy, zz = xp.meshgrid(
+#         xp.arange(array_shape[0]),
+#         xp.arange(array_shape[1]),
+#         xp.arange(array_shape[2]),
+#         indexing="ij",
+#     )
+#     sphere = (xx - center[0]) ** 2 + (yy - center[1]) ** 2 + (zz - center[2]) ** 2
+#     if upper:
+#         sphere = (xp.abs(sphere - radius**2) < 6) & (
+#             zz > center[2]
+#         )  # TODO: 6 is a magic number
+#     else:
+#         sphere = (xp.abs(sphere - radius**2) < 6) & (zz < center[2])
+#     return sphere
 
 
 def calc_refractive_index_square(array3d, params):

@@ -33,7 +33,7 @@ from src.odt import ODTParameters, ODTSynthesizer, calc_refractive_index_square
 
 # %%
 NA_i = 1.0
-step_angle = 360 / 30
+step_angle = 360 / 10
 params = ODTParameters(
     532e-9,
     1.2,
@@ -54,7 +54,7 @@ radius = 5
 sphere = generate_3D_sphere(
     shape=params.aperturesize * 2 + 1,
     radius=radius,
-    center=(params.aperturesize, params.aperturesize, params.aperturesize),
+    center=(30, 30, params.aperturesize),
 )
 
 # create target and reference refractive index map
@@ -62,9 +62,9 @@ ref_rindex = xp.ones(sphere.shape) * params.n_sol
 rindex = ref_rindex + sphere * (sample_index - params.n_sol)
 # then calculate scattering potential based on refractive index
 scatter_potential = -1 * params.ki_mag**2 * (rindex**2 / ref_rindex**2 - 1)
-scatter_fft = xp.fft.fftshift(xp.fft.fftn(scatter_potential))
+scatter_fft = xp.fft.fftshift(xp.fft.fftn((scatter_potential)))
 ref_scatter_potential = -params.ki_mag**2 * (ref_rindex**2 / ref_rindex**2 - 1)
-ref_scatter_fft = xp.fft.fftshift(xp.fft.fftn(ref_scatter_potential))
+ref_scatter_fft = xp.fft.fftshift(xp.fft.fftn((ref_scatter_potential)))
 
 # # inverse z axis of scatter_Fft
 # scatter_fft = xp.flip(scatter_fft, axis=2)
@@ -81,8 +81,21 @@ kz_array = zz - params.aperturesize + kz_i
 
 # kz_array = xp.ones(sphere.shape)
 # kz_array = zz - params.aperturesize
-approx_field_fft = scatter_fft / kz_array / 2j / xp.pi
-ref_approx_field_fft = ref_scatter_fft / kz_array / 2j / xp.pi
+# approx_field_fft = scatter_fft / kz_array / 2j / xp.pi
+# ref_approx_field_fft = ref_scatter_fft / kz_array / 2j / xp.pi
+approx_field_fft = scatter_fft / kz_array / 2j
+ref_approx_field_fft = ref_scatter_fft / kz_array / 2j
+
+# # %%
+# rindex_to_show = xp.asnumpy(xp.real(xp.fft.ifftshift(rindex)))
+# slice_visualizer = SlicingVisualizer(rindex_to_show)
+# slice_visualizer.run()
+
+
+# # %%
+# approx_field_fft_to_show = xp.asnumpy(xp.abs(approx_field_fft))
+# slice_visualizer = SlicingVisualizer(approx_field_fft_to_show)
+# slice_visualizer.run()
 
 # # %%
 # rindex_fft = xp.fft.fftshift(xp.fft.fftn(rindex))
@@ -150,7 +163,7 @@ ref_approx_field_fft = ref_scatter_fft / kz_array / 2j / xp.pi
 #     ret_index = xp.array(ret_index)
 # ret_fft = scatter_fft * ret_index
 
-# ret_array = xp.fft.ifftn(xp.fft.ifftshift(ret_fft))
+# ret_array = xp.fft.fftshift(xp.fft.ifftn(xp.fft.ifftshift(ret_fft)))
 
 # ret_ref = xp.abs(calc_refractive_index_square(ret_array, params)) ** 0.5
 # if _cp:

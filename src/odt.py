@@ -115,7 +115,6 @@ def reconstruct_E(
         max_x - params.offaxis_center[0],
         max_y - params.offaxis_center[1],
     )
-    # print(f"{oblique_center=}")
 
     left_index = max_x - params.aperturesize
     right_index = max_x + params.aperturesize + 1
@@ -285,6 +284,8 @@ class ODTSynthesizer(Synthesizer):
         synthesized_fft /= synthesized_weight
         synthesized_array = xp.fft.ifftn(xp.fft.ifftshift(synthesized_fft))
 
+        synthesized_array = xp.fft.fftshift(synthesized_array)
+
         return synthesized_array, synthesized_fft
 
     def iterative_ODT(
@@ -292,6 +293,7 @@ class ODTSynthesizer(Synthesizer):
     ):
         # principle: Fr < 0
         array3d, array3d_fft = self.ODT_synthesize(approx, hermite, load_fft)
+        array3d = xp.fft.ifftshift(array3d)
         current_array = array3d.copy()
         former_array = current_array.copy()
         delta = xp.inf

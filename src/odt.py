@@ -138,6 +138,9 @@ def reconstruct_E(
 
     array_cropped = xp.fft.ifft2(xp.fft.ifftshift(array_fft))[EDGE_SIZE:, EDGE_SIZE:]
 
+    array_cropped[0:2, :] = 0
+    array_cropped[:, 0:2] = 0
+
     if load_fft:
         ref_array_fft = ref_array
     else:
@@ -160,6 +163,8 @@ def reconstruct_E(
         EDGE_SIZE:, EDGE_SIZE:
     ]
 
+    ref_array_cropped[0:2, :] = 0
+    ref_array_cropped[:, 0:2] = 0
     if approx == "Born":
         E_array = array_cropped - ref_array_cropped
     elif approx == "Rytov":
@@ -284,7 +289,7 @@ class ODTSynthesizer(Synthesizer):
         synthesized_fft /= synthesized_weight
         synthesized_array = xp.fft.ifftn(xp.fft.ifftshift(synthesized_fft))
 
-        synthesized_array = xp.fft.fftshift(synthesized_array)
+        synthesized_array = xp.fft.fftshift(synthesized_array, axes=(2))
 
         return synthesized_array, synthesized_fft
 
@@ -309,6 +314,8 @@ class ODTSynthesizer(Synthesizer):
             former_array = current_array.copy()
 
             print(f"delta: {delta}, iteration: {iteration}")
+
+        current_array = xp.fft.fftshift(current_array, axes=(2))
 
         return current_array, current_fft
 

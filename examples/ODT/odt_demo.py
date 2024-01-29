@@ -54,17 +54,33 @@ radius = 5
 sphere = generate_3D_sphere(
     shape=params.aperturesize * 2 + 1,
     radius=radius,
-    center=(30, 30, params.aperturesize),
+    center=(params.aperturesize, params.aperturesize, params.aperturesize),
 )
 
 # create target and reference refractive index map
-ref_rindex = xp.ones(sphere.shape) * params.n_sol
+ref_rindex = (
+    xp.ones(sphere.shape)
+    * params.n_sol
+    # + xp.random.rand(sphere.shape[0], sphere.shape[1], sphere.shape[2]) * 0.01
+)
 rindex = ref_rindex + sphere * (sample_index - params.n_sol)
 # then calculate scattering potential based on refractive index
 scatter_potential = -1 * params.ki_mag**2 * (rindex**2 / ref_rindex**2 - 1)
-scatter_fft = xp.fft.fftshift(xp.fft.fftn((scatter_potential)))
+scatter_fft = xp.fft.fftshift(
+    xp.fft.fftn((xp.fft.ifftshift(scatter_potential, axes=(2))))
+)
+scatter_fft[0:2, :, :] = 0
+scatter_fft[:, :, 0:2] = 0
+scatter_fft[:, 0:2, :] = 0
+# scatter_fft = xp.fft.fftshift(xp.fft.fftn(scatter_potential))
 ref_scatter_potential = -params.ki_mag**2 * (ref_rindex**2 / ref_rindex**2 - 1)
-ref_scatter_fft = xp.fft.fftshift(xp.fft.fftn((ref_scatter_potential)))
+ref_scatter_fft = xp.fft.fftshift(
+    xp.fft.fftn((xp.fft.ifftshift(ref_scatter_potential, axes=(2))))
+)
+ref_scatter_fft[0:2, :, :] = 0
+ref_scatter_fft[:, 0:2, :] = 0
+ref_scatter_fft[:, :, 0:2] = 0
+# ref_scatter_fft = xp.fft.fftshift(xp.fft.fftn(ref_scatter_potential))
 
 # # inverse z axis of scatter_Fft
 # scatter_fft = xp.flip(scatter_fft, axis=2)
@@ -87,7 +103,7 @@ approx_field_fft = scatter_fft / kz_array / 2j
 ref_approx_field_fft = ref_scatter_fft / kz_array / 2j
 
 # # %%
-# rindex_to_show = xp.asnumpy(xp.real(xp.fft.ifftshift(rindex)))
+# rindex_to_show = xp.asnumpy((xp.fft.ifftshift(rindex, axes=(2))))
 # slice_visualizer = SlicingVisualizer(rindex_to_show)
 # slice_visualizer.run()
 
@@ -98,8 +114,9 @@ ref_approx_field_fft = ref_scatter_fft / kz_array / 2j
 # slice_visualizer.run()
 
 # # %%
-# rindex_fft = xp.fft.fftshift(xp.fft.fftn(rindex))
-# rindex = xp.fft.ifftn(xp.fft.ifftshift(rindex_fft))
+# print("identity check")
+# rindex_fft = xp.fft.fftshift(xp.fft.fftn(xp.fft.ifftshift(rindex, axes=(2))))
+# rindex = xp.abs(xp.fft.fftshift(xp.fft.ifftn(xp.fft.ifftshift(rindex_fft)), axes=(2)))
 # if _cp:
 #     rindex_to_show = xp.asnumpy(rindex)
 # else:
@@ -178,8 +195,8 @@ ref_approx_field_fft = ref_scatter_fft / kz_array / 2j
 # generate hologram
 step_angle = step_angle
 NA_illumi = NA_i
-# approx = "Born"
-approx = "Rytov"
+approx = "Born"
+# approx = "Rytov"
 
 generate_test_data(
     approx_field_fft,
@@ -228,16 +245,16 @@ print("generated test data!")
 
 # %%
 # execute synthetic aperture
-test_data = numpy_parser("odt_test_data/sample")
-ref_data = numpy_parser("odt_test_data/ref")
-# test_data = numpy_parser("../data/aperture_sample_beads")
-# ref_data = numpy_parser("../data/aperture_ref_beads")
+# test_data = numpy_parser("odt_test_data/sample")
+# ref_data = numpy_parser("odt_test_data/ref")
+test_data = numpy_parser("../data/aperture_sample_beads")
+ref_data = numpy_parser("../data/aperture_ref_beads")
 qpi_synthesizer = QPISynthesizer()
 qpi_synthesizer.set_parameters(params)
 # qpi_synthesizer.set_data(test_data)
 qpi_synthesizer.set_data(test_data, ref_data)
 qpi_synthesized, qpi_fft = qpi_synthesizer.synthesize(
-    save_multiangle=True, load_fft=True
+    save_multiangle=True, load_fft=False
 )
 
 if _cp:
@@ -283,7 +300,7 @@ odt_synthesizer.set_parameters(params)
 # odt_synthesizer.set_data(test_data, ref_data)
 odt_synthesizer.set_data(test_data, ref_data)
 synthesized_array, odt_fft = odt_synthesizer.ODT_synthesize(
-    approx=approx, hermite=False, load_fft=True
+    approx=approx, hermite=False, load_fft=False
 )
 
 synthesized_array = (
@@ -314,7 +331,7 @@ slice_visualizer.run()
 # # odt_synthesizer.set_data(test_data, ref_data)
 # odt_synthesizer.set_data(test_data, ref_data)
 # synthesized_array, odt_fft = odt_synthesizer.iterative_ODT(
-#     approx=approx, epsilon=1e-6, max_N=10000, hermite=False, load_fft=True
+#     approx=approx, epsilon=1e-6, max_N=100, hermite=False, load_fft=True
 # )
 
 # synthesized_array = (
@@ -337,4 +354,4 @@ slice_visualizer.run()
 # slice_visualizer = SlicingVisualizer(odt_fft)
 # slice_visualizer.run()
 
-# # %%
+# # # %%

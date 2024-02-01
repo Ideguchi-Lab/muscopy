@@ -62,6 +62,8 @@ class ODTParameters(QPIParameters):
         super().calc_params()
         self.ki_mag = self.n_sol / self.wav / self.freq_per_pixel
 
+        self.k_unit = 2 * np.pi * self.freq_per_pixel
+
         if self.NA_illumi is not None:
             self.ki_lateral_mag = self.ki_mag * self.NA_illumi / self.NA
 
@@ -70,6 +72,7 @@ class ODTParameters(QPIParameters):
         print(f"{self.n_sol=}")
         print(f"{self.ki_mag=}")
         print(f"{self.ki_lateral_mag=}")
+        print(f"{self.k_unit=}")
 
 
 def reconstruct_E(
@@ -138,8 +141,8 @@ def reconstruct_E(
 
     array_cropped = xp.fft.ifft2(xp.fft.ifftshift(array_fft))[EDGE_SIZE:, EDGE_SIZE:]
 
-    array_cropped[0:2, :] = 0
-    array_cropped[:, 0:2] = 0
+    array_cropped[0:2, :] = 1e-6
+    array_cropped[:, 0:2] = 1e-6
 
     if load_fft:
         ref_array_fft = ref_array
@@ -163,14 +166,35 @@ def reconstruct_E(
         EDGE_SIZE:, EDGE_SIZE:
     ]
 
-    ref_array_cropped[0:2, :] = 0
-    ref_array_cropped[:, 0:2] = 0
+    ref_array_cropped[0:2, :] = 1e-6
+    ref_array_cropped[:, 0:2] = 1e-6
+    # print(f"nan(array), {xp.count_nonzero(xp.isnan(array_cropped))}")
+    # print(f"nan(ref), {xp.count_nonzero(xp.isnan(ref_array_cropped))}")
+    # print(f"before approx, {xp.count_nonzero(xp.isnan(array_cropped))}")
     if approx == "Born":
-        E_array = array_cropped - ref_array_cropped
+        E_array = (array_cropped - ref_array_cropped) / ref_array_cropped
     elif approx == "Rytov":
-        E_array = ref_array_cropped * xp.log(array_cropped / ref_array_cropped)
+        # div = array_cropped / ref_array_cropped
+        # print(div.dtype)
+        # print(f"div, {xp.count_nonzero(div==0)}")
+        # print(f"div isinfinite, {xp.count_nonzero(~xp.isfinite(div))}")
+        # div[div == 0] = 0.0001
+        # E_array = ref_array_cropped * xp.log(div)
+        # print(f"zero arr, {xp.count_nonzero(array_cropped==0)}")
+        # print(f"zero ref, {xp.count_nonzero(ref_array_cropped==0)}")
+        log_array = xp.log(array_cropped)
+        # print(f"logarr isnan, {xp.count_nonzero(xp.isnan(log_array))}")
+        # print(f"logarr isinfinite, {xp.count_nonzero(~xp.isfinite(log_array))}")
+        log_ref_array = xp.log(ref_array_cropped)
+        # print(f"logrefarr isnan, {xp.count_nonzero(xp.isnan(log_ref_array))}")
+        # print(f"logrefarr isinfinite, {xp.count_nonzero(~xp.isfinite(log_ref_array))}")
+        logdiv = log_array - log_ref_array
+        # print(f"logdiv isnan, {xp.count_nonzero(xp.isnan(logdiv))}")
+        # print(f"logdiv isinfinite, {xp.count_nonzero(~xp.isfinite(logdiv))}")
+        E_array = logdiv
     else:
         raise ValueError("approx must be 'Born' or 'Rytov'")
+    # print(f"after approx, {xp.count_nonzero(xp.isnan(E_array))}")
 
     # if normalize:
     #     array_cropped = array_cropped / ref_array_cropped
@@ -243,6 +267,7 @@ class ODTSynthesizer(Synthesizer):
             disk[disk > (self.params.aperturesize // 2) ** 2] = 0
             kz_disk = xp.sqrt((self.params.aperturesize // 2) ** 2 - disk) + kz_i
             kz_disk[disk > (self.params.aperturesize // 2) ** 2] = 0
+            kz_disk = kz_disk * self.params.k_unit
 
             # scatter_potential_fft = 2j * xp.pi * kz_disk * e_fft_cropped
             scatter_potential_fft = 2j * kz_disk * e_fft_cropped
@@ -287,7 +312,11 @@ class ODTSynthesizer(Synthesizer):
 
         synthesized_weight -= synthesized_weight != 1
         synthesized_fft /= synthesized_weight
+        # print(f"nan num(fft); {xp.count_nonzero(xp.isnan(synthesized_fft))}")
+
         synthesized_array = xp.fft.ifftn(xp.fft.ifftshift(synthesized_fft))
+
+        # print(f"nan num(space); {xp.count_nonzero(xp.isnan(synthesized_array))}")
 
         synthesized_array = xp.fft.fftshift(synthesized_array, axes=(2))
 
@@ -377,6 +406,8 @@ def map_aperture_to_3Dkspace(
 
 def calc_refractive_index_square(array3d, params):
     r_3d_square = params.n_sol**2 * (
-        xp.ones(array3d.shape, dtype=xp.complex128) - array3d / params.ki_mag**2
+        xp.ones(array3d.shape, dtype=xp.complex128)
+        - array3d / (params.ki_mag * params.k_unit) ** 2
     )
+    print(f"nan num(refractive index); {xp.count_nonzero(xp.isnan(r_3d_square))}")
     return r_3d_square

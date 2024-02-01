@@ -202,6 +202,7 @@ class Synthesizer:
 
             if save_multiangle:
                 self.multiangle_qpi[i] = xp.angle(array_cropped)
+                # self.multiangle_qpi[i] = xp.imag(array_cropped)
 
             fft_cropped = xp.fft.fftshift(xp.fft.fft2(array_cropped))
 
@@ -212,6 +213,7 @@ class Synthesizer:
 
         synthesized_fft /= synthesized_weight
         synthesized_qpi = xp.angle(xp.fft.ifft2(xp.fft.ifftshift(synthesized_fft)))
+        # synthesized_qpi = xp.abs(xp.fft.ifft2(xp.fft.ifftshift(synthesized_fft)))
 
         if _cp:
             synthesized_fft = xp.asnumpy(synthesized_fft)

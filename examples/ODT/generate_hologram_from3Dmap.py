@@ -110,6 +110,10 @@ def extract3Dto2D_minimum(
     if return_index_map:
         return index_map
 
+    # print(f"zero: {xp.count_nonzero(array_2d_fft==0)}")
+    # print(f"nan: {xp.count_nonzero(xp.isnan(array_2d_fft))}")
+    # print(f"inf: {xp.count_nonzero(xp.isinf(array_2d_fft))}")
+
     return array_2d_fft
 
 
@@ -120,6 +124,7 @@ def generate_test_data(
     NA_illumi=1.0,
     path: str = "odt_test_data",
     approx="Rytov",
+    if_save=False,
 ):
     assert approx in ["Rytov", "Born"]
     num = int(360 / illumi_angle_step)
@@ -127,11 +132,11 @@ def generate_test_data(
         (2 * params.aperturesize + 1, 2 * params.aperturesize + 1), dtype=xp.complex128
     )
     # include noise
-    E_initial = (
-        E_initial
-        + xp.random.normal(0, 0.01, E_initial.shape)
-        + xp.random.normal(0, 0.01, E_initial.shape) * 1j
-    )
+    # E_initial = (
+    #     E_initial
+    #     + xp.random.normal(0, 0.01, E_initial.shape)
+    #     + xp.random.normal(0, 0.01, E_initial.shape) * 1j
+    # )
     if os.path.exists(path):
         import shutil
 
@@ -166,12 +171,17 @@ def generate_test_data(
             + 1,
         ] = test_data_fft_cropped
         test_data_extent = xp.fft.ifft2(xp.fft.ifftshift(fft_extent))
-        test_data_extent[:2, :] = 0
-        test_data_extent[:, :2] = 0
+        test_data_extent[:2, :] = 1e-6
+        test_data_extent[:, :2] = 1e-6
         if approx == "Rytov":
             E_test = E_initial * xp.exp(test_data_extent / E_initial)
         elif approx == "Born":
             E_test = E_initial + test_data_extent
+        if if_save:
+            xp.save("./test_data_extent.npy", test_data_extent)
+        # print(f"zero: {xp.count_nonzero(E_test==0)}")
+        # print(f"nan: {xp.count_nonzero(xp.isnan(E_test))}")
+        # print(f"inf: {xp.count_nonzero(xp.isinf(E_test))}")
         E_test_fft = xp.fft.fftshift(xp.fft.fft2(E_test))
         low_pass = make_disk(
             (
@@ -206,6 +216,10 @@ def generate_test_data(
             + params.aperturesize // 2
             + 1,
         ]
+
+        # print(f"zero: {xp.count_nonzero(test_data_fft==0)}")
+        # print(f"nan: {xp.count_nonzero(xp.isnan(test_data_fft))}")
+        # print(f"inf: {xp.count_nonzero(xp.isinf(test_data_fft))}")
 
         xp.save(f"{path}/{int(illumi_angle_step * i):03}.npy", test_data_fft)
 

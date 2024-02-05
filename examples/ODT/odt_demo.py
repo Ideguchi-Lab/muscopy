@@ -24,6 +24,7 @@ from generate_hologram_from3Dmap import (
     generate_3D_sphere,
     generate_test_data,
     extract3Dto2D_minimum,
+    generate_3D_slope,
 )
 
 from src.dir_parser import numpy_parser
@@ -58,19 +59,30 @@ sphere = generate_3D_sphere(
     center=(params.aperturesize, params.aperturesize, params.aperturesize),
 )
 
+slope = generate_3D_slope((params.aperturesize * 2 + 1,) * 3, "x")
+
+slope = slope / slope.shape[0]  # normalize
+
+r_sample = sphere
+# r_sample = slope
+
 # create target and reference refractive index map
 ref_rindex = (
-    xp.ones(sphere.shape)
+    xp.ones(r_sample.shape)
     * params.n_sol
-    # + xp.random.rand(sphere.shape[0], sphere.shape[1], sphere.shape[2]) * 0.01
+    # + xp.random.rand(r_sample.shape[0], r_sample.shape[1], r_sample.shape[2]) * 0.01
 )
-rindex = ref_rindex + sphere * (sample_index - params.n_sol)
+rindex = ref_rindex + r_sample * (sample_index - params.n_sol)
 # then calculate scattering potential based on refractive index
 scatter_potential = (
     -1 * ((params.k_unit * params.ki_mag)) ** 2 * (rindex**2 / ref_rindex**2 - 1)
 )
+# scatter_potential = -1 * params.ki_mag**2 * (rindex**2 / ref_rindex**2 - 1)
+# scatter_fft = (params.pixelsize) ** 3 * xp.fft.fftshift(
+#     xp.fft.fftn((xp.fft.ifftshift(scatter_potential, axes=(2))))
+# )
 scatter_fft = xp.fft.fftshift(
-    xp.fft.fftn((xp.fft.ifftshift(scatter_potential, axes=(2))))
+    xp.fft.fftn(xp.fft.ifftshift(scatter_potential, axes=(2)), norm="ortho")
 )
 # scatter_fft[0:2, :, :] = 0
 # scatter_fft[:, :, 0:2] = 0
@@ -79,8 +91,14 @@ scatter_fft = xp.fft.fftshift(
 ref_scatter_potential = -((params.k_unit * params.ki_mag) ** 2) * (
     ref_rindex**2 / ref_rindex**2 - 1
 )
+# ref_scatter_potential = (
+# -1 * params.ki_mag**2 * (ref_rindex**2 / ref_rindex**2 - 1)
+# )
+# ref_scatter_fft = (params.pixelsize) ** 3 * xp.fft.fftshift(
+#     xp.fft.fftn((xp.fft.ifftshift(ref_scatter_potential, axes=(2))))
+# )
 ref_scatter_fft = xp.fft.fftshift(
-    xp.fft.fftn((xp.fft.ifftshift(ref_scatter_potential, axes=(2))))
+    xp.fft.fftn(xp.fft.ifftshift(ref_scatter_potential, axes=(2)), norm="ortho")
 )
 # ref_scatter_fft[0:2, :, :] = 0
 # ref_scatter_fft[:, 0:2, :] = 0
@@ -199,8 +217,12 @@ if _cp:
     ret_index = xp.array(ret_index)
 ret_fft = scatter_fft * ret_index
 
-ret_array = xp.fft.fftshift(xp.fft.ifftn(xp.fft.ifftshift(ret_fft)), axes=(2))
-
+# ret_array = (params.freq_per_pixel) ** 3 * xp.fft.fftshift(
+#     xp.fft.ifftn(xp.fft.ifftshift(ret_fft)), axes=(2)
+# )
+ret_array = xp.fft.fftshift(
+    xp.fft.ifftn(xp.fft.ifftshift(ret_fft), norm="ortho"), axes=(2)
+)
 ret_ref = xp.real(calc_refractive_index_square(ret_array, params) ** 0.5)
 if _cp:
     ret_ref = xp.asnumpy(ret_ref)

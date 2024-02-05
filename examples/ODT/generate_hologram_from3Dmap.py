@@ -46,6 +46,20 @@ def generate_3D_sphere(
     return sphere
 
 
+def generate_3D_slope(shape: tuple, axis: str) -> xp.ndarray:
+    xx, yy, zz = xp.meshgrid(
+        xp.arange(shape[0]), xp.arange(shape[1]), xp.arange(shape[2]), indexing="ij"
+    )
+    if axis == "x":
+        slope = xx
+    elif axis == "y":
+        slope = yy
+    elif axis == "z":
+        slope = zz
+
+    return slope
+
+
 def extract3Dto2D_minimum(
     array_3d_fft: xp.ndarray,
     params: ODTParameters,
@@ -170,19 +184,23 @@ def generate_test_data(
             + params.aperturesize // 2
             + 1,
         ] = test_data_fft_cropped
-        test_data_extent = xp.fft.ifft2(xp.fft.ifftshift(fft_extent))
+        # test_data_extent = (params.freq_per_pixel) ** 2 * xp.fft.ifft2(
+        #     xp.fft.ifftshift(fft_extent)
+        # )
+        test_data_extent = xp.fft.ifft2(xp.fft.ifftshift(fft_extent), norm="ortho")
         test_data_extent[:2, :] = 1e-6
         test_data_extent[:, :2] = 1e-6
         if approx == "Rytov":
-            E_test = E_initial * xp.exp(test_data_extent / E_initial)
+            E_test = E_initial * xp.exp(test_data_extent)
         elif approx == "Born":
-            E_test = E_initial + test_data_extent
+            E_test = E_initial + E_initial * test_data_extent
         if if_save:
             xp.save("./test_data_extent.npy", test_data_extent)
         # print(f"zero: {xp.count_nonzero(E_test==0)}")
         # print(f"nan: {xp.count_nonzero(xp.isnan(E_test))}")
         # print(f"inf: {xp.count_nonzero(xp.isinf(E_test))}")
-        E_test_fft = xp.fft.fftshift(xp.fft.fft2(E_test))
+        # E_test_fft = (params.pixelsize) ** 2 * xp.fft.fftshift(xp.fft.fft2(E_test))
+        E_test_fft = xp.fft.fftshift(xp.fft.fft2(E_test, norm="ortho"))
         low_pass = make_disk(
             (
                 params.aperturesize + oblique_shift[0],

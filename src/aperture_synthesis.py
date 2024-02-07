@@ -48,7 +48,10 @@ def preprocess_for_synthesis(array, ref_array=None, params=None, load_fft=False)
     if load_fft:
         array_fft = array
     else:
-        array_fft = xp.fft.fftshift(xp.fft.fft2(array))
+        norm_array = array * params.pixelsize
+        norm_array_fft = xp.fft.fftshift(xp.fft.fft2(norm_array, norm="ortho"))
+        array_fft = norm_array_fft / params.k_unit
+
     disk = make_disk(params.offaxis_center, params.aperturesize // 2, array_fft.shape)
     array_fft = array_fft * disk
     max_x, max_y, _ = find_max_args(np.abs(array_fft))
@@ -77,13 +80,21 @@ def preprocess_for_synthesis(array, ref_array=None, params=None, load_fft=False)
         top_index + params.aperturesize : bottom_index + params.aperturesize,
     ]
 
-    array_cropped = xp.fft.ifft2(xp.fft.ifftshift(array_fft))[EDGE_SIZE:, EDGE_SIZE:]
+    norm_array_fft = array_fft * params.k_unit
+    norm_array_cropped = xp.fft.ifft2(xp.fft.ifftshift(norm_array_fft), norm="ortho")[
+        EDGE_SIZE:, EDGE_SIZE:
+    ]
+    array_cropped = norm_array_cropped / params.imgpx_unit
 
     if not ref_array is None:
         if load_fft:
             ref_array_fft = ref_array
         else:
-            ref_array_fft = xp.fft.fftshift(xp.fft.fft2(ref_array))
+            norm_ref_array = ref_array * params.pixelsize
+            norm_ref_array_fft = xp.fft.fftshift(
+                xp.fft.fft2(norm_ref_array, norm="ortho")
+            )
+            ref_array_fft = norm_ref_array_fft / params.k_unit
         ref_array_fft = ref_array_fft * disk
         ref_array_fft_pad = xp.pad(
             ref_array_fft,
@@ -98,9 +109,11 @@ def preprocess_for_synthesis(array, ref_array=None, params=None, load_fft=False)
             left_index + params.aperturesize : right_index + params.aperturesize,
             top_index + params.aperturesize : bottom_index + params.aperturesize,
         ]
-        ref_array_cropped = xp.fft.ifft2(xp.fft.ifftshift(ref_array_fft))[
-            EDGE_SIZE:, EDGE_SIZE:
-        ]
+        norm_ref_array_fft = ref_array_fft * params.k_unit
+        norm_ref_array_cropped = xp.fft.ifft2(
+            xp.fft.ifftshift(norm_ref_array_fft), norm="ortho"
+        )[EDGE_SIZE:, EDGE_SIZE:]
+        ref_array_cropped = norm_ref_array_cropped / params.imgpx_unit
 
     if not ref_array is None:
         array_divided = array_cropped / ref_array_cropped
@@ -204,7 +217,11 @@ class Synthesizer:
                 self.multiangle_qpi[i] = xp.angle(array_cropped)
                 # self.multiangle_qpi[i] = xp.imag(array_cropped)
 
-            fft_cropped = xp.fft.fftshift(xp.fft.fft2(array_cropped))
+            norm_array_cropped = array_cropped * self.params.imgpx_unit
+            norm_fft_cropped = xp.fft.fftshift(
+                xp.fft.fft2(norm_array_cropped, norm="ortho")
+            )
+            fft_cropped = norm_fft_cropped / self.params.k_unit
 
             fft_cropped = fft_cropped * disk_synthesized
 
@@ -212,7 +229,12 @@ class Synthesizer:
             synthesized_weight += disk_synthesized != 0
 
         synthesized_fft /= synthesized_weight
-        synthesized_qpi = xp.angle(xp.fft.ifft2(xp.fft.ifftshift(synthesized_fft)))
+        norm_synthesized_fft = synthesized_fft * self.params.k_unit
+        norm_synthesized_array = xp.fft.ifft2(
+            xp.fft.ifftshift(norm_synthesized_fft), norm="ortho"
+        )
+        synthesized_array = norm_synthesized_array / self.params.imgpx_unit
+        synthesized_qpi = xp.angle(synthesized_array)
         # synthesized_qpi = xp.abs(xp.fft.ifft2(xp.fft.ifftshift(synthesized_fft)))
 
         if _cp:

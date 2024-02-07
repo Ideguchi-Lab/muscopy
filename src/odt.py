@@ -63,6 +63,7 @@ class ODTParameters(QPIParameters):
         self.ki_mag = self.n_sol / self.wav / self.freq_per_pixel
 
         self.k_unit = 2 * np.pi * self.freq_per_pixel
+        # self.k_unit = self.freq_per_pixel
         self.imgpx_unit = (
             self.pixelsize * self.img_shape[0] / (2 * self.aperturesize + 1)
         )
@@ -116,7 +117,9 @@ def reconstruct_E(
         array_fft = array
     else:
         # array_fft = (params.pixelsize) ** 2 * xp.fft.fftshift(xp.fft.fft2(array))
-        array_fft = xp.fft.fftshift(xp.fft.fft2(array, norm="ortho"))
+        norm_array = array * params.pixelsize
+        norm_array_fft = xp.fft.fftshift(xp.fft.fft2(norm_array, norm="ortho"))
+        array_fft = norm_array_fft / params.k_unit
     disk = make_disk(params.offaxis_center, params.aperturesize // 2, array_fft.shape)
     array_fft = array_fft * disk
     max_x, max_y, _ = find_max_args(np.abs(array_fft))
@@ -149,9 +152,11 @@ def reconstruct_E(
     #     params.freq_per_pixel**2
     #     * xp.fft.ifft2(xp.fft.ifftshift(array_fft))[EDGE_SIZE:, EDGE_SIZE:]
     # )
-    array_cropped = xp.fft.ifft2(xp.fft.ifftshift(array_fft), norm="ortho")[
+    norm_array_fft = array_fft * params.k_unit
+    norm_array_cropped = xp.fft.ifft2(xp.fft.ifftshift(norm_array_fft), norm="ortho")[
         EDGE_SIZE:, EDGE_SIZE:
     ]
+    array_cropped = norm_array_cropped / params.imgpx_unit
 
     array_cropped[0:2, :] = 1e-6
     array_cropped[:, 0:2] = 1e-6
@@ -162,7 +167,9 @@ def reconstruct_E(
         # ref_array_fft = (params.pixelsize**2) * xp.fft.fftshift(
         #     xp.fft.fft2(ref_array)
         # )
-        ref_array_fft = xp.fft.fftshift(xp.fft.fft2(ref_array, norm="ortho"))
+        norm_ref_array = ref_array * params.pixelsize
+        norm_ref_array_fft = xp.fft.fftshift(xp.fft.fft2(norm_ref_array, norm="ortho"))
+        ref_array_fft = norm_ref_array_fft / params.k_unit
     ref_array_fft = ref_array_fft * disk
     ref_array_fft_pad = xp.pad(
         ref_array_fft,
@@ -180,9 +187,11 @@ def reconstruct_E(
     # ref_array_cropped = (params.freq_per_pixel) ** 2 * xp.fft.ifft2(
     # xp.fft.ifftshift(ref_array_fft)
     # )[EDGE_SIZE:, EDGE_SIZE:]
-    ref_array_cropped = xp.fft.ifft2(xp.fft.ifftshift(ref_array_fft), norm="ortho")[
-        EDGE_SIZE:, EDGE_SIZE:
-    ]
+    norm_ref_array_fft = ref_array_fft * params.k_unit
+    norm_ref_array_cropped = xp.fft.ifft2(
+        xp.fft.ifftshift(norm_ref_array_fft), norm="ortho"
+    )[EDGE_SIZE:, EDGE_SIZE:]
+    ref_array_cropped = norm_ref_array_cropped / params.imgpx_unit
 
     ref_array_cropped[0:2, :] = 1e-6
     ref_array_cropped[:, 0:2] = 1e-6
@@ -257,8 +266,9 @@ class ODTSynthesizer(Synthesizer):
             # e_fft = (self.params.pixelsize**2) * xp.fft.fftshift(
             #     xp.fft.fft2(E_approx)
             # )
-            e_fft = xp.fft.fftshift(xp.fft.fft2(E_approx, norm="ortho"))
-
+            norm_E_approx = E_approx * self.params.imgpx_unit
+            norm_e_fft = xp.fft.fftshift(xp.fft.fft2(norm_E_approx, norm="ortho"))
+            e_fft = norm_e_fft / self.params.k_unit
             disk_synthesized = make_disk(
                 (
                     synthesized_center[0] - oblique_center[0],
@@ -338,9 +348,11 @@ class ODTSynthesizer(Synthesizer):
         # synthesized_array = self.params.pixelsize**3 * xp.fft.ifftn(
         #     xp.fft.ifftshift(synthesized_fft)
         # )
-        synthesized_array = xp.fft.ifftn(
-            xp.fft.ifftshift(synthesized_fft), norm="ortho"
+        norm_synthesized_fft = synthesized_fft * self.params.k_unit ** (3 / 2)
+        norm_synthesized_array = xp.fft.ifftn(
+            xp.fft.ifftshift(norm_synthesized_fft), norm="ortho"
         )
+        synthesized_array = norm_synthesized_array / self.params.imgpx_unit ** (3 / 2)
         # print(f"nan num(space); {xp.count_nonzero(xp.isnan(synthesized_array))}")
 
         synthesized_array = xp.fft.fftshift(synthesized_array, axes=(2))
@@ -437,5 +449,5 @@ def calc_refractive_index_square(array3d, params):
     # r_3d_square = params.n_sol**2 * (
     #     xp.ones(array3d.shape, dtype=xp.complex128) - array3d / (params.ki_mag) ** 2
     # )
-    print(f"nan num(refractive index); {xp.count_nonzero(xp.isnan(r_3d_square))}")
+    # print(f"nan num(refractive index); {xp.count_nonzero(xp.isnan(r_3d_square))}")
     return r_3d_square

@@ -43,7 +43,7 @@ params = ODTParameters(
     (3.45 * 1e-6) * 3 / 200 / 5,
     (612, 623),
     1.33,
-    # 1.45,
+    # 1.48,
     NA_i,
 )
 params.calc_params()
@@ -77,32 +77,38 @@ rindex = ref_rindex + r_sample * (sample_index - params.n_sol)
 scatter_potential = (
     -1 * ((params.k_unit * params.ki_mag)) ** 2 * (rindex**2 / ref_rindex**2 - 1)
 )
+
+norm_scatter_potential = scatter_potential * params.imgpx_unit ** (3 / 2)
 # scatter_potential = -1 * params.ki_mag**2 * (rindex**2 / ref_rindex**2 - 1)
 # scatter_fft = (params.pixelsize) ** 3 * xp.fft.fftshift(
 #     xp.fft.fftn((xp.fft.ifftshift(scatter_potential, axes=(2))))
 # )
-scatter_fft = xp.fft.fftshift(
-    xp.fft.fftn(xp.fft.ifftshift(scatter_potential, axes=(2)), norm="ortho")
+norm_scatter_fft = xp.fft.fftshift(
+    xp.fft.fftn(xp.fft.ifftshift(norm_scatter_potential, axes=(2)), norm="ortho")
 )
-# scatter_fft[0:2, :, :] = 0
-# scatter_fft[:, :, 0:2] = 0
-# scatter_fft[:, 0:2, :] = 0
+scatter_fft = norm_scatter_fft / params.k_unit ** (3 / 2)
+scatter_fft[0:2, :, :] = 0
+scatter_fft[:, :, 0:2] = 0
+scatter_fft[:, 0:2, :] = 0
 # scatter_fft = xp.fft.fftshift(xp.fft.fftn(scatter_potential))
 ref_scatter_potential = -((params.k_unit * params.ki_mag) ** 2) * (
     ref_rindex**2 / ref_rindex**2 - 1
 )
+
+norm_ref_scatter_potential = ref_scatter_potential * params.imgpx_unit ** (3 / 2)
 # ref_scatter_potential = (
 # -1 * params.ki_mag**2 * (ref_rindex**2 / ref_rindex**2 - 1)
 # )
 # ref_scatter_fft = (params.pixelsize) ** 3 * xp.fft.fftshift(
 #     xp.fft.fftn((xp.fft.ifftshift(ref_scatter_potential, axes=(2))))
 # )
-ref_scatter_fft = xp.fft.fftshift(
-    xp.fft.fftn(xp.fft.ifftshift(ref_scatter_potential, axes=(2)), norm="ortho")
+norm_ref_scatter_fft = xp.fft.fftshift(
+    xp.fft.fftn(xp.fft.ifftshift(norm_ref_scatter_potential, axes=(2)), norm="ortho")
 )
-# ref_scatter_fft[0:2, :, :] = 0
-# ref_scatter_fft[:, 0:2, :] = 0
-# ref_scatter_fft[:, :, 0:2] = 0
+ref_scatter_fft = norm_ref_scatter_fft / params.k_unit ** (3 / 2)
+ref_scatter_fft[0:2, :, :] = 0
+ref_scatter_fft[:, 0:2, :] = 0
+ref_scatter_fft[:, :, 0:2] = 0
 # ref_scatter_fft = xp.fft.fftshift(xp.fft.fftn(ref_scatter_potential))
 
 # # inverse z axis of scatter_Fft
@@ -217,12 +223,15 @@ if _cp:
     ret_index = xp.array(ret_index)
 ret_fft = scatter_fft * ret_index
 
+norm_ret_fft = ret_fft * params.k_unit ** (3 / 2)
+
 # ret_array = (params.freq_per_pixel) ** 3 * xp.fft.fftshift(
 #     xp.fft.ifftn(xp.fft.ifftshift(ret_fft)), axes=(2)
 # )
-ret_array = xp.fft.fftshift(
-    xp.fft.ifftn(xp.fft.ifftshift(ret_fft), norm="ortho"), axes=(2)
+norm_ret_array = xp.fft.fftshift(
+    xp.fft.ifftn(xp.fft.ifftshift(norm_ret_fft), norm="ortho"), axes=(2)
 )
+ret_array = norm_ret_array / params.imgpx_unit ** (3 / 2)
 ret_ref = xp.real(calc_refractive_index_square(ret_array, params) ** 0.5)
 if _cp:
     ret_ref = xp.asnumpy(ret_ref)
@@ -289,12 +298,12 @@ print("generated test data!")
 
 # %%
 # execute synthetic aperture
-load_fft = True
-test_data = numpy_parser("odt_test_data/sample")
-ref_data = numpy_parser("odt_test_data/ref")
-# load_fft = False
-# test_data = numpy_parser("../data/aperture_sample_beads")
-# ref_data = numpy_parser("../data/aperture_ref_beads")
+# load_fft = True
+# test_data = numpy_parser("odt_test_data/sample")
+# ref_data = numpy_parser("odt_test_data/ref")
+load_fft = False
+test_data = numpy_parser("../data/aperture_sample_beads")
+ref_data = numpy_parser("../data/aperture_ref_beads")
 qpi_synthesizer = QPISynthesizer()
 qpi_synthesizer.set_parameters(params)
 # qpi_synthesizer.set_data(test_data)

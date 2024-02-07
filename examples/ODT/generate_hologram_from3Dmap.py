@@ -187,7 +187,11 @@ def generate_test_data(
         # test_data_extent = (params.freq_per_pixel) ** 2 * xp.fft.ifft2(
         #     xp.fft.ifftshift(fft_extent)
         # )
-        test_data_extent = xp.fft.ifft2(xp.fft.ifftshift(fft_extent), norm="ortho")
+        norm_fft_extent = fft_extent * params.k_unit
+        norm_test_data_extent = xp.fft.ifft2(
+            xp.fft.ifftshift(norm_fft_extent), norm="ortho"
+        )
+        test_data_extent = norm_test_data_extent / params.imgpx_unit
         test_data_extent[:2, :] = 1e-6
         test_data_extent[:, :2] = 1e-6
         if approx == "Rytov":
@@ -200,7 +204,9 @@ def generate_test_data(
         # print(f"nan: {xp.count_nonzero(xp.isnan(E_test))}")
         # print(f"inf: {xp.count_nonzero(xp.isinf(E_test))}")
         # E_test_fft = (params.pixelsize) ** 2 * xp.fft.fftshift(xp.fft.fft2(E_test))
-        E_test_fft = xp.fft.fftshift(xp.fft.fft2(E_test, norm="ortho"))
+        norm_E_test = E_test * params.imgpx_unit
+        norm_E_test_fft = xp.fft.fftshift(xp.fft.fft2(norm_E_test, norm="ortho"))
+        E_test_fft = norm_E_test_fft / params.k_unit
         low_pass = make_disk(
             (
                 params.aperturesize + oblique_shift[0],

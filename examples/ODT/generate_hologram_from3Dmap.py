@@ -1,5 +1,4 @@
 # %%
-import matplotlib.pyplot as plt
 import numpy as np
 import os
 import sys
@@ -75,58 +74,38 @@ def extract3Dto2D_minimum(
         xp.arange(2 * params.aperturesize + 1),
         indexing="ij",
     )
-    circle = (xx - params.aperturesize // 2) ** 2 + (yy - params.aperturesize // 2) ** 2
+    _, _, zz = xp.meshgrid(
+        xp.arange(2 * params.aperturesize + 1),
+        xp.arange(2 * params.aperturesize + 1),
+        xp.arange(2 * params.aperturesize + 1),
+        indexing="ij",
+    )
+    circle = (xx - params.aperturesize - oblique_shift[0]) ** 2 + (
+        yy - params.aperturesize - oblique_shift[1]
+    ) ** 2
     circle = circle < (params.aperturesize // 2) ** 2
-    if return_index_map:
-        index_map = xp.zeros(
-            array_3d_fft.shape,
-            dtype=xp.int32,
-        )
+    Kz_circle = xp.sqrt(
+        params.ki_mag**2
+        - (xx - params.aperturesize - oblique_shift[0]) ** 2
+        - (yy - params.aperturesize - oblique_shift[1]) ** 2
+    ) - xp.sqrt(params.ki_mag**2 - oblique_shift[0] ** 2 - oblique_shift[1] ** 2)
 
-    # for i, j in zip(*xp.where(circle)):
-    for i in range(2 * params.aperturesize + 1):
-        for j in range(2 * params.aperturesize + 1):
-            if circle[i, j] == 0:
-                continue
-            Kz = int(
-                xp.sqrt(
-                    params.ki_mag**2
-                    - (i - params.aperturesize // 2) ** 2
-                    - (j - params.aperturesize // 2) ** 2
-                )
-                - xp.sqrt(
-                    params.ki_mag**2 - oblique_shift[0] ** 2 - oblique_shift[1] ** 2
-                )
-            )
-            array_2d_fft[i, j] = array_3d_fft[
-                i
-                - params.aperturesize // 2
-                + oblique_shift[0]
-                + array_3d_fft.shape[0] // 2,
-                j
-                - params.aperturesize // 2
-                + oblique_shift[1]
-                + array_3d_fft.shape[1] // 2,
-                Kz + array_3d_fft.shape[2] // 2,
-            ]
-            if return_index_map:
-                index_map[
-                    i
-                    - params.aperturesize // 2
-                    + oblique_shift[0]
-                    + array_3d_fft.shape[0] // 2,
-                    j
-                    - params.aperturesize // 2
-                    + oblique_shift[1]
-                    + array_3d_fft.shape[1] // 2,
-                    Kz + array_3d_fft.shape[2] // 2,
-                ] = 1
-    if return_index_map:
-        return index_map
+    Kz_value = (Kz_circle + array_3d_fft.shape[2] // 2) * circle
+    Kz_tile = xp.tile(Kz_value, (array_3d_fft.shape[2], 1, 1))
+    Kz_tile = Kz_tile.transpose(1, 2, 0)
 
-    # print(f"zero: {xp.count_nonzero(array_2d_fft==0)}")
-    # print(f"nan: {xp.count_nonzero(xp.isnan(array_2d_fft))}")
-    # print(f"inf: {xp.count_nonzero(xp.isinf(array_2d_fft))}")
+    Kz_tile = Kz_tile.astype(xp.int64)
+
+    Kz_tile -= Kz_tile == 0  # to avoid 0 index match with zz
+
+    Kz_index = zz == Kz_tile
+
+    if return_index_map:
+        return Kz_index
+
+    array_cropped = array_3d_fft * Kz_index
+
+    array_2d_fft = xp.sum(array_cropped, axis=2)
 
     return array_2d_fft
 
@@ -166,27 +145,7 @@ def generate_test_data(
         test_data_fft_cropped = extract3Dto2D_minimum(
             array_3d_fft, params, oblique_shift=oblique_shift
         )
-        fft_extent = xp.zeros(
-            (2 * params.aperturesize + 1, 2 * params.aperturesize + 1),
-            dtype=xp.complex128,
-        )
-        fft_extent[
-            params.aperturesize
-            + oblique_shift[0]
-            - params.aperturesize // 2 : params.aperturesize
-            + oblique_shift[0]
-            + params.aperturesize // 2
-            + 1,
-            params.aperturesize
-            + oblique_shift[1]
-            - params.aperturesize // 2 : params.aperturesize
-            + oblique_shift[1]
-            + params.aperturesize // 2
-            + 1,
-        ] = test_data_fft_cropped
-        # test_data_extent = (params.freq_per_pixel) ** 2 * xp.fft.ifft2(
-        #     xp.fft.ifftshift(fft_extent)
-        # )
+        fft_extent = test_data_fft_cropped
         norm_fft_extent = fft_extent * params.k_unit
         norm_test_data_extent = xp.fft.ifft2(
             xp.fft.ifftshift(norm_fft_extent), norm="ortho"
@@ -200,10 +159,6 @@ def generate_test_data(
             E_test = E_initial + E_initial * test_data_extent
         if if_save:
             xp.save("./test_data_extent.npy", test_data_extent)
-        # print(f"zero: {xp.count_nonzero(E_test==0)}")
-        # print(f"nan: {xp.count_nonzero(xp.isnan(E_test))}")
-        # print(f"inf: {xp.count_nonzero(xp.isinf(E_test))}")
-        # E_test_fft = (params.pixelsize) ** 2 * xp.fft.fftshift(xp.fft.fft2(E_test))
         norm_E_test = E_test * params.imgpx_unit
         norm_E_test_fft = xp.fft.fftshift(xp.fft.fft2(norm_E_test, norm="ortho"))
         E_test_fft = norm_E_test_fft / params.k_unit
@@ -240,10 +195,6 @@ def generate_test_data(
             + params.aperturesize // 2
             + 1,
         ]
-
-        # print(f"zero: {xp.count_nonzero(test_data_fft==0)}")
-        # print(f"nan: {xp.count_nonzero(xp.isnan(test_data_fft))}")
-        # print(f"inf: {xp.count_nonzero(xp.isinf(test_data_fft))}")
 
         xp.save(f"{path}/{int(illumi_angle_step * i):03}.npy", test_data_fft)
 

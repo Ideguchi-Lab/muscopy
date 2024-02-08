@@ -16,7 +16,8 @@ import numpy as np
 from numpy.typing import NDArray
 from tqdm import tqdm
 
-from src.aperture_synthesis import Synthesizer, preprocess_for_synthesis, EDGE_SIZE
+from src.aperture_synthesis import (EDGE_SIZE, Synthesizer,
+                                    preprocess_for_synthesis)
 from src.qpi import QPIParameters, make_disk, qpi
 
 EDGE_SIZE = 0  # for avoiding edge artifact in ifft
@@ -52,9 +53,7 @@ class ODTParameters(QPIParameters):
         n_sol,
         NA_illumi=None,
     ):
-        super().__init__(
-            wavelength, NA, img_shape, img_center, pixelsize, offaxis_center
-        )
+        super().__init__(wavelength, NA, img_shape, img_center, pixelsize, offaxis_center)
         self.n_sol = n_sol
         self.NA_illumi = NA_illumi
 
@@ -64,9 +63,7 @@ class ODTParameters(QPIParameters):
 
         self.k_unit = 2 * np.pi * self.freq_per_pixel
         # self.k_unit = self.freq_per_pixel
-        self.imgpx_unit = (
-            self.pixelsize * self.img_shape[0] / (2 * self.aperturesize + 1)
-        )
+        self.imgpx_unit = self.pixelsize * self.img_shape[0] / (2 * self.aperturesize + 1)
         # self.imgpx_unit = 1 / self.k_unit
 
         if self.NA_illumi is not None:
@@ -108,15 +105,12 @@ def reconstruct_E(
     assert approx in ["Rytov", "Born"]
     global EDGE_SIZE
 
-    E_initial = xp.ones(
-        (2 * params.aperturesize + 1, 2 * params.aperturesize + 1), dtype=xp.complex128
-    )
+    E_initial = xp.ones((2 * params.aperturesize + 1, 2 * params.aperturesize + 1), dtype=xp.complex128)
 
     # get off-axis interference term
     if load_fft:
         array_fft = array
     else:
-        # array_fft = (params.pixelsize) ** 2 * xp.fft.fftshift(xp.fft.fft2(array))
         norm_array = array * params.pixelsize
         norm_array_fft = xp.fft.fftshift(xp.fft.fft2(norm_array, norm="ortho"))
         array_fft = norm_array_fft / params.k_unit
@@ -148,14 +142,8 @@ def reconstruct_E(
         top_index + params.aperturesize : bottom_index + params.aperturesize,
     ]
 
-    # array_cropped = (
-    #     params.freq_per_pixel**2
-    #     * xp.fft.ifft2(xp.fft.ifftshift(array_fft))[EDGE_SIZE:, EDGE_SIZE:]
-    # )
     norm_array_fft = array_fft * params.k_unit
-    norm_array_cropped = xp.fft.ifft2(xp.fft.ifftshift(norm_array_fft), norm="ortho")[
-        EDGE_SIZE:, EDGE_SIZE:
-    ]
+    norm_array_cropped = xp.fft.ifft2(xp.fft.ifftshift(norm_array_fft), norm="ortho")[EDGE_SIZE:, EDGE_SIZE:]
     array_cropped = norm_array_cropped / params.imgpx_unit
 
     array_cropped[0:2, :] = 1e-6
@@ -164,9 +152,6 @@ def reconstruct_E(
     if load_fft:
         ref_array_fft = ref_array
     else:
-        # ref_array_fft = (params.pixelsize**2) * xp.fft.fftshift(
-        #     xp.fft.fft2(ref_array)
-        # )
         norm_ref_array = ref_array * params.pixelsize
         norm_ref_array_fft = xp.fft.fftshift(xp.fft.fft2(norm_ref_array, norm="ortho"))
         ref_array_fft = norm_ref_array_fft / params.k_unit
@@ -184,40 +169,18 @@ def reconstruct_E(
         left_index + params.aperturesize : right_index + params.aperturesize,
         top_index + params.aperturesize : bottom_index + params.aperturesize,
     ]
-    # ref_array_cropped = (params.freq_per_pixel) ** 2 * xp.fft.ifft2(
-    # xp.fft.ifftshift(ref_array_fft)
-    # )[EDGE_SIZE:, EDGE_SIZE:]
     norm_ref_array_fft = ref_array_fft * params.k_unit
-    norm_ref_array_cropped = xp.fft.ifft2(
-        xp.fft.ifftshift(norm_ref_array_fft), norm="ortho"
-    )[EDGE_SIZE:, EDGE_SIZE:]
+    norm_ref_array_cropped = xp.fft.ifft2(xp.fft.ifftshift(norm_ref_array_fft), norm="ortho")[EDGE_SIZE:, EDGE_SIZE:]
     ref_array_cropped = norm_ref_array_cropped / params.imgpx_unit
 
     ref_array_cropped[0:2, :] = 1e-6
     ref_array_cropped[:, 0:2] = 1e-6
-    # print(f"nan(array), {xp.count_nonzero(xp.isnan(array_cropped))}")
-    # print(f"nan(ref), {xp.count_nonzero(xp.isnan(ref_array_cropped))}")
-    # print(f"before approx, {xp.count_nonzero(xp.isnan(array_cropped))}")
     if approx == "Born":
         E_array = (array_cropped - ref_array_cropped) / ref_array_cropped
     elif approx == "Rytov":
-        # div = array_cropped / ref_array_cropped
-        # print(div.dtype)
-        # print(f"div, {xp.count_nonzero(div==0)}")
-        # print(f"div isinfinite, {xp.count_nonzero(~xp.isfinite(div))}")
-        # div[div == 0] = 0.0001
-        # E_array = ref_array_cropped * xp.log(div)
-        # print(f"zero arr, {xp.count_nonzero(array_cropped==0)}")
-        # print(f"zero ref, {xp.count_nonzero(ref_array_cropped==0)}")
         log_array = xp.log(array_cropped)
-        # print(f"logarr isnan, {xp.count_nonzero(xp.isnan(log_array))}")
-        # print(f"logarr isinfinite, {xp.count_nonzero(~xp.isfinite(log_array))}")
         log_ref_array = xp.log(ref_array_cropped)
-        # print(f"logrefarr isnan, {xp.count_nonzero(xp.isnan(log_ref_array))}")
-        # print(f"logrefarr isinfinite, {xp.count_nonzero(~xp.isfinite(log_ref_array))}")
         logdiv = log_array - log_ref_array
-        # print(f"logdiv isnan, {xp.count_nonzero(xp.isnan(logdiv))}")
-        # print(f"logdiv isinfinite, {xp.count_nonzero(~xp.isfinite(logdiv))}")
         E_array = logdiv
     else:
         raise ValueError("approx must be 'Born' or 'Rytov'")
@@ -230,9 +193,7 @@ def reconstruct_E(
 
 
 class ODTSynthesizer(Synthesizer):
-    def ODT_synthesize(
-        self, approx: str, hermite=False, load_fft=False
-    ) -> tuple[np.ndarray, np.ndarray]:
+    def ODT_synthesize(self, approx: str, hermite=False, load_fft=False) -> tuple[np.ndarray, np.ndarray]:
         assert approx in ["Rytov", "Born"]
         assert self.reference_data is not None
         synthesized_fft = xp.zeros(
@@ -263,9 +224,6 @@ class ODTSynthesizer(Synthesizer):
                 load_fft=load_fft,
             )
 
-            # e_fft = (self.params.pixelsize**2) * xp.fft.fftshift(
-            #     xp.fft.fft2(E_approx)
-            # )
             norm_E_approx = E_approx * self.params.imgpx_unit
             norm_e_fft = xp.fft.fftshift(xp.fft.fft2(norm_E_approx, norm="ortho"))
             e_fft = norm_e_fft / self.params.k_unit
@@ -281,11 +239,7 @@ class ODTSynthesizer(Synthesizer):
             e_fft_cropped = e_fft * disk_synthesized
 
             # make kz disk for scattering potential
-            kz_i = np.sqrt(
-                self.params.ki_mag**2
-                - oblique_center[0] ** 2
-                - oblique_center[1] ** 2
-            )
+            kz_i = np.sqrt(self.params.ki_mag**2 - oblique_center[0] ** 2 - oblique_center[1] ** 2)
 
             xx, yy = xp.meshgrid(
                 xp.arange(2 * self.params.aperturesize + 1 - EDGE_SIZE),
@@ -300,7 +254,6 @@ class ODTSynthesizer(Synthesizer):
             kz_disk[disk > (self.params.aperturesize // 2) ** 2] = 0
             kz_disk = kz_disk * self.params.k_unit
 
-            # scatter_potential_fft = 2j * xp.pi * kz_disk * e_fft_cropped
             scatter_potential_fft = 2j * kz_disk * e_fft_cropped
 
             scatter_potential_fft3d = map_aperture_to_3Dkspace(
@@ -343,25 +296,16 @@ class ODTSynthesizer(Synthesizer):
 
         synthesized_weight -= synthesized_weight != 1
         synthesized_fft /= synthesized_weight
-        # print(f"nan num(fft); {xp.count_nonzero(xp.isnan(synthesized_fft))}")
 
-        # synthesized_array = self.params.pixelsize**3 * xp.fft.ifftn(
-        #     xp.fft.ifftshift(synthesized_fft)
-        # )
         norm_synthesized_fft = synthesized_fft * self.params.k_unit ** (3 / 2)
-        norm_synthesized_array = xp.fft.ifftn(
-            xp.fft.ifftshift(norm_synthesized_fft), norm="ortho"
-        )
+        norm_synthesized_array = xp.fft.ifftn(xp.fft.ifftshift(norm_synthesized_fft), norm="ortho")
         synthesized_array = norm_synthesized_array / self.params.imgpx_unit ** (3 / 2)
-        # print(f"nan num(space); {xp.count_nonzero(xp.isnan(synthesized_array))}")
 
         synthesized_array = xp.fft.fftshift(synthesized_array, axes=(2))
 
         return synthesized_array, synthesized_fft
 
-    def iterative_ODT(
-        self, approx, epsilon=1e-6, max_N=100, hermite=False, load_fft=False
-    ):
+    def iterative_ODT(self, approx, epsilon=1e-6, max_N=100, hermite=False, load_fft=False):
         # principle: Fr < 0
         array3d, array3d_fft = self.ODT_synthesize(approx, hermite, load_fft)
         array3d = xp.fft.ifftshift(array3d)
@@ -402,49 +346,44 @@ def map_aperture_to_3Dkspace(
         aperturesize (int): aperture size of the input circle
         km (float): magnitude of the wave vector
     """
-    # make kz index 2darray
+    oblique_shift = oblique_center
     xx, yy = xp.meshgrid(
-        xp.arange(2 * aperturesize + 1),
-        xp.arange(2 * aperturesize + 1),
+        xp.arange(2 * params.aperturesize + 1),
+        xp.arange(2 * params.aperturesize + 1),
         indexing="ij",
     )
-
-    kz_i = xp.sqrt(params.ki_mag**2 - oblique_center[0] ** 2 - oblique_center[1] ** 2)
-
-    # inside the aperture
-    mask = (
-        (xx - params.aperturesize + oblique_center[0]) ** 2
-        + (yy - params.aperturesize + oblique_center[1]) ** 2
-    ) < (aperturesize // 2) ** 2
-
-    kz_index_square = (
+    _, _, zz = xp.meshgrid(
+        xp.arange(2 * params.aperturesize + 1),
+        xp.arange(2 * params.aperturesize + 1),
+        xp.arange(2 * params.aperturesize + 1),
+        indexing="ij",
+    )
+    circle = (xx - params.aperturesize + oblique_shift[0]) ** 2 + (yy - params.aperturesize + oblique_shift[1]) ** 2
+    circle = circle < (params.aperturesize // 2) ** 2
+    Kz_circle = xp.sqrt(
         params.ki_mag**2
-        - (xx - params.aperturesize + oblique_center[0]) ** 2
-        - (yy - params.aperturesize + oblique_center[1]) ** 2
-    ) * mask
+        - (xx - params.aperturesize + oblique_shift[0]) ** 2
+        - (yy - params.aperturesize + oblique_shift[1]) ** 2
+    ) - xp.sqrt(params.ki_mag**2 - oblique_shift[0] ** 2 - oblique_shift[1] ** 2)
 
-    kz_index_array = xp.sqrt(kz_index_square)
+    Kz_value = (Kz_circle + params.aperturesize) * circle
+    Kz_tile = xp.tile(Kz_value, (2 * params.aperturesize + 1, 1, 1))
+    Kz_tile = Kz_tile.transpose(1, 2, 0)
 
-    KZ_index_array = kz_index_array - kz_i
-    KZ_index_array = KZ_index_array * mask
-    KZ_index_array = KZ_index_array.astype(int)
+    Kz_tile = Kz_tile.astype(xp.int64)
 
-    # TODO: speed up later
-    index_array = xp.zeros(shape, dtype=xp.complex128)
-    for i in range(shape[0]):
-        for j in range(shape[1]):
-            # index_array[i, j, KZ_index_array[i, j]] = KZ_value_array[i, j]
-            index_array[i, j, KZ_index_array[i, j] + params.aperturesize] = 1
+    Kz_tile -= Kz_tile == 0  # to avoid 0 index match with zz
+
+    Kz_index = zz == Kz_tile
 
     array_tiled = xp.stack([array] * shape[2], axis=-1)
-    array_projected = array_tiled * index_array
+    array_projected = array_tiled * Kz_index
     return array_projected
 
 
 def calc_refractive_index_square(array3d, params):
     r_3d_square = params.n_sol**2 * (
-        xp.ones(array3d.shape, dtype=xp.complex128)
-        - array3d / (params.ki_mag * params.k_unit) ** 2
+        xp.ones(array3d.shape, dtype=xp.complex128) - array3d / (params.ki_mag * params.k_unit) ** 2
     )
     # r_3d_square = params.n_sol**2 * (
     #     xp.ones(array3d.shape, dtype=xp.complex128) - array3d / (params.ki_mag) ** 2

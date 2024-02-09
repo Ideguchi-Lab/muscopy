@@ -16,8 +16,7 @@ import numpy as np
 from numpy.typing import NDArray
 from tqdm import tqdm
 
-from src.aperture_synthesis import (EDGE_SIZE, Synthesizer,
-                                    preprocess_for_synthesis)
+from src.aperture_synthesis import EDGE_SIZE, Synthesizer, preprocess_for_synthesis
 from src.qpi import QPIParameters, make_disk, qpi
 
 EDGE_SIZE = 0  # for avoiding edge artifact in ifft
@@ -53,7 +52,9 @@ class ODTParameters(QPIParameters):
         n_sol,
         NA_illumi=None,
     ):
-        super().__init__(wavelength, NA, img_shape, img_center, pixelsize, offaxis_center)
+        super().__init__(
+            wavelength, NA, img_shape, img_center, pixelsize, offaxis_center
+        )
         self.n_sol = n_sol
         self.NA_illumi = NA_illumi
 
@@ -63,11 +64,18 @@ class ODTParameters(QPIParameters):
 
         self.k_unit = 2 * np.pi * self.freq_per_pixel
         # self.k_unit = self.freq_per_pixel
-        self.imgpx_unit = self.pixelsize * self.img_shape[0] / (2 * self.aperturesize + 1)
+        self.imgpx_unit = (
+            self.pixelsize * self.img_shape[0] / (2 * self.aperturesize + 1)
+        )
         # self.imgpx_unit = 1 / self.k_unit
 
         if self.NA_illumi is not None:
-            self.ki_lateral_mag = self.ki_mag * self.NA_illumi / self.NA
+            # self.ki_lateral_mag = self.ki_mag * self.NA_illumi / self.NA
+            self.ki_lateral_mag = self.ki_mag * self.NA_illumi / self.n_sol
+
+        self.kz_extent = int(
+            self.ki_mag * (1 - (1 - self.NA_illumi**2 / self.n_sol**2) ** 0.5)
+        )
 
     def print_all_parameters(self):
         super().print_all_parameters()
@@ -76,6 +84,7 @@ class ODTParameters(QPIParameters):
         print(f"{self.ki_lateral_mag=}")
         print(f"{self.k_unit=}")
         print(f"{self.imgpx_unit=}")
+        print(f"{self.kz_extent=}")
 
 
 def reconstruct_E(
@@ -105,7 +114,9 @@ def reconstruct_E(
     assert approx in ["Rytov", "Born"]
     global EDGE_SIZE
 
-    E_initial = xp.ones((2 * params.aperturesize + 1, 2 * params.aperturesize + 1), dtype=xp.complex128)
+    E_initial = xp.ones(
+        (2 * params.aperturesize + 1, 2 * params.aperturesize + 1), dtype=xp.complex128
+    )
 
     # get off-axis interference term
     if load_fft:
@@ -143,11 +154,11 @@ def reconstruct_E(
     ]
 
     norm_array_fft = array_fft * params.k_unit
-    norm_array_cropped = xp.fft.ifft2(xp.fft.ifftshift(norm_array_fft), norm="ortho")[EDGE_SIZE:, EDGE_SIZE:]
+    norm_array_cropped = xp.fft.ifft2(xp.fft.ifftshift(norm_array_fft), norm="ortho")
     array_cropped = norm_array_cropped / params.imgpx_unit
 
-    array_cropped[0:2, :] = 1e-6
-    array_cropped[:, 0:2] = 1e-6
+    # array_cropped[0:EDGE_SIZE, :] = 1e-6
+    # array_cropped[:, 0:EDGE_SIZE] = 1e-6
 
     if load_fft:
         ref_array_fft = ref_array
@@ -170,11 +181,13 @@ def reconstruct_E(
         top_index + params.aperturesize : bottom_index + params.aperturesize,
     ]
     norm_ref_array_fft = ref_array_fft * params.k_unit
-    norm_ref_array_cropped = xp.fft.ifft2(xp.fft.ifftshift(norm_ref_array_fft), norm="ortho")[EDGE_SIZE:, EDGE_SIZE:]
+    norm_ref_array_cropped = xp.fft.ifft2(
+        xp.fft.ifftshift(norm_ref_array_fft), norm="ortho"
+    )
     ref_array_cropped = norm_ref_array_cropped / params.imgpx_unit
 
-    ref_array_cropped[0:2, :] = 1e-6
-    ref_array_cropped[:, 0:2] = 1e-6
+    # ref_array_cropped[0:EDGE_SIZE, :] = 1e-6
+    # ref_array_cropped[:, 0:EDGE_SIZE] = 1e-6
     if approx == "Born":
         E_array = (array_cropped - ref_array_cropped) / ref_array_cropped
     elif approx == "Rytov":
@@ -193,21 +206,23 @@ def reconstruct_E(
 
 
 class ODTSynthesizer(Synthesizer):
-    def ODT_synthesize(self, approx: str, hermite=False, load_fft=False) -> tuple[np.ndarray, np.ndarray]:
+    def ODT_synthesize(
+        self, approx: str, hermite=False, load_fft=False
+    ) -> tuple[np.ndarray, np.ndarray]:
         assert approx in ["Rytov", "Born"]
         assert self.reference_data is not None
         synthesized_fft = xp.zeros(
             (
-                2 * (self.params.aperturesize) + 1 - EDGE_SIZE,
-                2 * (self.params.aperturesize) + 1 - EDGE_SIZE,
-                2 * (self.params.aperturesize) + 1 - EDGE_SIZE,
+                2 * (self.params.aperturesize) + 1,
+                2 * (self.params.aperturesize) + 1,
+                2 * self.params.kz_extent + 1,
             ),
             dtype=xp.complex128,
         )
         synthesized_center = (
-            self.params.aperturesize - EDGE_SIZE // 2,
-            self.params.aperturesize - EDGE_SIZE // 2,
-            self.params.aperturesize - EDGE_SIZE // 2,
+            self.params.aperturesize,
+            self.params.aperturesize,
+            self.params.kz_extent,
         )
         synthesized_weight = xp.ones(synthesized_fft.shape)
 
@@ -239,18 +254,24 @@ class ODTSynthesizer(Synthesizer):
             e_fft_cropped = e_fft * disk_synthesized
 
             # make kz disk for scattering potential
-            kz_i = np.sqrt(self.params.ki_mag**2 - oblique_center[0] ** 2 - oblique_center[1] ** 2)
+            kz_i = np.sqrt(
+                self.params.ki_mag**2 - oblique_center[0] ** 2 - oblique_center[1] ** 2
+            )
 
             xx, yy = xp.meshgrid(
-                xp.arange(2 * self.params.aperturesize + 1 - EDGE_SIZE),
-                xp.arange(2 * self.params.aperturesize + 1 - EDGE_SIZE),
+                xp.arange(2 * self.params.aperturesize + 1),
+                xp.arange(2 * self.params.aperturesize + 1),
                 indexing="ij",
             )
             disk = (xx - synthesized_center[0] - oblique_center[0]) ** 2 + (
                 yy - synthesized_center[1] - oblique_center[1]
             ) ** 2
             disk[disk > (self.params.aperturesize // 2) ** 2] = 0
-            kz_disk = xp.sqrt((self.params.aperturesize // 2) ** 2 - disk) + kz_i
+            kz_disk = (
+                xp.sqrt((self.params.aperturesize // 2) ** 2 - disk)
+                + kz_i
+                - synthesized_center[2]
+            )
             kz_disk[disk > (self.params.aperturesize // 2) ** 2] = 0
             kz_disk = kz_disk * self.params.k_unit
 
@@ -298,26 +319,37 @@ class ODTSynthesizer(Synthesizer):
         synthesized_fft /= synthesized_weight
 
         norm_synthesized_fft = synthesized_fft * self.params.k_unit ** (3 / 2)
-        norm_synthesized_array = xp.fft.ifftn(xp.fft.ifftshift(norm_synthesized_fft), norm="ortho")
+        norm_synthesized_array = xp.fft.ifftn(
+            xp.fft.ifftshift(norm_synthesized_fft), norm="ortho"
+        )
         synthesized_array = norm_synthesized_array / self.params.imgpx_unit ** (3 / 2)
 
         synthesized_array = xp.fft.fftshift(synthesized_array, axes=(2))
 
         return synthesized_array, synthesized_fft
 
-    def iterative_ODT(self, approx, epsilon=1e-6, max_N=100, hermite=False, load_fft=False):
+    def iterative_ODT(
+        self, approx, epsilon=1e-6, max_N=100, hermite=False, load_fft=False
+    ):
         # principle: Fr < 0
         array3d, array3d_fft = self.ODT_synthesize(approx, hermite, load_fft)
-        array3d = xp.fft.ifftshift(array3d)
         current_array = array3d.copy()
         former_array = current_array.copy()
         delta = xp.inf
         iteration = 0
         while (delta > epsilon) and (iteration < max_N):
             current_array[current_array > 0] = 0
-            current_fft = xp.fft.fftshift(xp.fft.fftn(current_array))
+            norm_current_array = current_array * self.params.imgpx_unit ** (3 / 2)
+            norm_current_fft = xp.fft.fftshift(
+                xp.fft.fftn(norm_current_array, norm="ortho")
+            )
+            current_fft = norm_current_fft / self.params.k_unit ** (3 / 2)
             current_fft[array3d_fft != 0] = array3d_fft[array3d_fft != 0]
-            current_array = xp.real(xp.fft.ifftn(xp.fft.ifftshift(current_fft)))
+            norm_current_fft = current_fft * self.params.k_unit ** (3 / 2)
+            norm_current_array = xp.real(
+                xp.fft.ifftn(xp.fft.ifftshift(norm_current_fft), norm="ortho")
+            )
+            current_array = norm_current_array / self.params.imgpx_unit ** (3 / 2)
 
             delta = xp.sum(xp.abs(current_array - former_array))
             iteration += 1
@@ -348,17 +380,19 @@ def map_aperture_to_3Dkspace(
     """
     oblique_shift = oblique_center
     xx, yy = xp.meshgrid(
-        xp.arange(2 * params.aperturesize + 1),
-        xp.arange(2 * params.aperturesize + 1),
+        xp.arange(shape[0]),
+        xp.arange(shape[1]),
         indexing="ij",
     )
     _, _, zz = xp.meshgrid(
-        xp.arange(2 * params.aperturesize + 1),
-        xp.arange(2 * params.aperturesize + 1),
-        xp.arange(2 * params.aperturesize + 1),
+        xp.arange(shape[0]),
+        xp.arange(shape[1]),
+        xp.arange(shape[2]),
         indexing="ij",
     )
-    circle = (xx - params.aperturesize + oblique_shift[0]) ** 2 + (yy - params.aperturesize + oblique_shift[1]) ** 2
+    circle = (xx - params.aperturesize + oblique_shift[0]) ** 2 + (
+        yy - params.aperturesize + oblique_shift[1]
+    ) ** 2
     circle = circle < (params.aperturesize // 2) ** 2
     Kz_circle = xp.sqrt(
         params.ki_mag**2
@@ -366,8 +400,8 @@ def map_aperture_to_3Dkspace(
         - (yy - params.aperturesize + oblique_shift[1]) ** 2
     ) - xp.sqrt(params.ki_mag**2 - oblique_shift[0] ** 2 - oblique_shift[1] ** 2)
 
-    Kz_value = (Kz_circle + params.aperturesize) * circle
-    Kz_tile = xp.tile(Kz_value, (2 * params.aperturesize + 1, 1, 1))
+    Kz_value = (Kz_circle + shape[2] // 2) * circle
+    Kz_tile = xp.tile(Kz_value, (shape[2], 1, 1))
     Kz_tile = Kz_tile.transpose(1, 2, 0)
 
     Kz_tile = Kz_tile.astype(xp.int64)
@@ -383,7 +417,8 @@ def map_aperture_to_3Dkspace(
 
 def calc_refractive_index_square(array3d, params):
     r_3d_square = params.n_sol**2 * (
-        xp.ones(array3d.shape, dtype=xp.complex128) - array3d / (params.ki_mag * params.k_unit) ** 2
+        xp.ones(array3d.shape, dtype=xp.complex128)
+        - array3d / (params.ki_mag * params.k_unit) ** 2
     )
     # r_3d_square = params.n_sol**2 * (
     #     xp.ones(array3d.shape, dtype=xp.complex128) - array3d / (params.ki_mag) ** 2

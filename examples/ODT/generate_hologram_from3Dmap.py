@@ -16,6 +16,7 @@ except ImportError:
 
     _cp = False
 
+EDGE_SIZE = 0
 
 # %%
 
@@ -65,19 +66,15 @@ def extract3Dto2D_minimum(
     oblique_shift: tuple[int, int],
     return_index_map=False,
 ) -> xp.ndarray:
-    array_2d_fft = xp.zeros(
-        (params.aperturesize, params.aperturesize), dtype=xp.complex128
-    )
-
     xx, yy = xp.meshgrid(
-        xp.arange(2 * params.aperturesize + 1),
-        xp.arange(2 * params.aperturesize + 1),
+        xp.arange(array_3d_fft.shape[0]),
+        xp.arange(array_3d_fft.shape[1]),
         indexing="ij",
     )
     _, _, zz = xp.meshgrid(
-        xp.arange(2 * params.aperturesize + 1),
-        xp.arange(2 * params.aperturesize + 1),
-        xp.arange(2 * params.aperturesize + 1),
+        xp.arange(array_3d_fft.shape[0]),
+        xp.arange(array_3d_fft.shape[1]),
+        xp.arange(array_3d_fft.shape[2]),
         indexing="ij",
     )
     circle = (xx - params.aperturesize - oblique_shift[0]) ** 2 + (
@@ -151,8 +148,8 @@ def generate_test_data(
             xp.fft.ifftshift(norm_fft_extent), norm="ortho"
         )
         test_data_extent = norm_test_data_extent / params.imgpx_unit
-        test_data_extent[:2, :] = 1e-6
-        test_data_extent[:, :2] = 1e-6
+        # test_data_extent[:EDGE_SIZE, :] = 1e-6
+        # test_data_extent[:, :EDGE_SIZE] = 1e-6
         if approx == "Rytov":
             E_test = E_initial * xp.exp(test_data_extent)
         elif approx == "Born":

@@ -59,6 +59,7 @@ shape_3d = (
 
 sample_index = 1.4
 radius = 5
+hermite = True
 
 # make answer 3D refractive map
 sphere = generate_3D_sphere(
@@ -350,7 +351,7 @@ odt_synthesizer = ODTSynthesizer()
 odt_synthesizer.set_parameters(params)
 odt_synthesizer.set_data(test_data, ref_data)
 synthesized_array, odt_fft = odt_synthesizer.ODT_synthesize(
-    approx=approx, hermite=False, load_fft=load_fft
+    approx=approx, hermite=hermite, load_fft=load_fft
 )
 synthesized_array = xp.real(
     calc_refractive_index_square(synthesized_array, params) ** 0.5
@@ -381,7 +382,7 @@ odt_synthesizer.set_parameters(params)
 # odt_synthesizer.set_data(test_data, ref_data)
 odt_synthesizer.set_data(test_data, ref_data)
 synthesized_array, odt_fft = odt_synthesizer.iterative_ODT(
-    approx=approx, epsilon=1e-6, max_N=10000, hermite=False, load_fft=load_fft
+    approx=approx, epsilon=1e-6, max_N=10000, hermite=hermite, load_fft=load_fft
 )
 
 synthesized_array = xp.real(
@@ -390,7 +391,7 @@ synthesized_array = xp.real(
 
 if _cp:
     odt_synthesized = xp.asnumpy(synthesized_array)
-    odt_fft = xp.asnumpy(np.log(np.abs(odt_fft) + 1))
+    odt_fft = xp.asnumpy(xp.log(xp.abs(odt_fft) + 1))
 else:
     odt_synthesized = synthesized_array
     odt_fft = np.log(np.abs(odt_fft) + 1)

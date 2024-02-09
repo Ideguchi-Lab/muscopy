@@ -281,39 +281,19 @@ class ODTSynthesizer(Synthesizer):
                 scatter_potential_fft,
                 synthesized_fft.shape,
                 oblique_center,
-                self.params.aperturesize,
                 self.params,
             )
 
             synthesized_fft = synthesized_fft + scatter_potential_fft3d
             synthesized_weight += scatter_potential_fft3d != 0
 
-            # if hermite:
-            #     conjugate_scatter_potential_fft = xp.flipud(
-            #         xp.fliplr(scatter_potential_fft.conjugate())
-            #     )
-            #     conjugate_sphere_center = (
-            #         synthesized_center[0] + oblique_center[0],
-            #         synthesized_center[1] + oblique_center[1],
-            #         synthesized_center[2] + kz_i,
-            #     )
-            #     conjugate_sphere_mask = make_semisphere_surface(
-            #         conjugate_sphere_center,
-            #         self.params.ki_mag,
-            #         synthesized_fft.shape,
-            #         upper=False,
-            #     )
-            #     conjugate_scatter_potential_fft_tiled = xp.stack(
-            #         [conjugate_scatter_potential_fft] * synthesized_fft.shape[2],
-            #         axis=-1,
-            #     )
-            #     conjugate_scatter_potential_fft_tiled = (
-            #         conjugate_scatter_potential_fft_tiled * conjugate_sphere_mask
-            #     )
-            #     synthesized_fft = (
-            #         synthesized_fft + conjugate_scatter_potential_fft_tiled
-            #     )
-            #     synthesized_weight += conjugate_scatter_potential_fft_tiled != 0
+            if hermite:
+
+                conj_fft3d = xp.flip(scatter_potential_fft3d, axis=(0, 1, 2))
+                conj_fft3d = xp.conjugate(conj_fft3d)
+
+                synthesized_fft = synthesized_fft + conj_fft3d
+                synthesized_weight += conj_fft3d != 0
 
         synthesized_weight -= synthesized_weight != 1
         synthesized_fft /= synthesized_weight
@@ -366,7 +346,6 @@ def map_aperture_to_3Dkspace(
     array: NDArray,
     shape: tuple[int, int, int],
     oblique_center: tuple[int, int],
-    aperturesize: int,
     params: ODTParameters,
 ):
     """map 2d array to 3d array(ODT)
@@ -420,8 +399,4 @@ def calc_refractive_index_square(array3d, params):
         xp.ones(array3d.shape, dtype=xp.complex128)
         - array3d / (params.ki_mag * params.k_unit) ** 2
     )
-    # r_3d_square = params.n_sol**2 * (
-    #     xp.ones(array3d.shape, dtype=xp.complex128) - array3d / (params.ki_mag) ** 2
-    # )
-    # print(f"nan num(refractive index); {xp.count_nonzero(xp.isnan(r_3d_square))}")
     return r_3d_square

@@ -76,6 +76,7 @@ class ODTParameters(QPIParameters):
         self.kz_extent = int(
             self.ki_mag * (1 - (1 - self.NA_illumi**2 / self.n_sol**2) ** 0.5)
         )
+        self.imgpx_unit_z = self.imgpx_unit * (self.aperturesize / self.kz_extent)
 
     def print_all_parameters(self):
         super().print_all_parameters()
@@ -84,6 +85,7 @@ class ODTParameters(QPIParameters):
         print(f"{self.ki_lateral_mag=}")
         print(f"{self.k_unit=}")
         print(f"{self.imgpx_unit=}")
+        print(f"{self.imgpx_unit_z=}")
         print(f"{self.kz_extent=}")
 
 
@@ -274,6 +276,7 @@ class ODTSynthesizer(Synthesizer):
             )
             kz_disk[disk > (self.params.aperturesize // 2) ** 2] = 0
             kz_disk = kz_disk * self.params.k_unit
+            # kz_disk = (kz_disk != 0) * 1e6
 
             scatter_potential_fft = 2j * kz_disk * e_fft_cropped
 
@@ -302,7 +305,9 @@ class ODTSynthesizer(Synthesizer):
         norm_synthesized_array = xp.fft.ifftn(
             xp.fft.ifftshift(norm_synthesized_fft), norm="ortho"
         )
-        synthesized_array = norm_synthesized_array / self.params.imgpx_unit ** (3 / 2)
+        synthesized_array = norm_synthesized_array / (
+            self.params.imgpx_unit * self.params.imgpx_unit_z**0.5
+        )
 
         synthesized_array = xp.fft.fftshift(synthesized_array, axes=(2))
 
@@ -319,7 +324,9 @@ class ODTSynthesizer(Synthesizer):
         iteration = 0
         while (delta > epsilon) and (iteration < max_N):
             current_array[current_array > 0] = 0
-            norm_current_array = current_array * self.params.imgpx_unit ** (3 / 2)
+            norm_current_array = current_array * (
+                self.params.imgpx_unit * self.params.imgpx_unit_z**0.5
+            )
             norm_current_fft = xp.fft.fftshift(
                 xp.fft.fftn(norm_current_array, norm="ortho")
             )
@@ -329,7 +336,9 @@ class ODTSynthesizer(Synthesizer):
             norm_current_array = xp.real(
                 xp.fft.ifftn(xp.fft.ifftshift(norm_current_fft), norm="ortho")
             )
-            current_array = norm_current_array / self.params.imgpx_unit ** (3 / 2)
+            current_array = norm_current_array / (
+                self.params.imgpx_unit * self.params.imgpx_unit_z**0.5
+            )
 
             delta = xp.sum(xp.abs(current_array - former_array))
             iteration += 1

@@ -60,6 +60,16 @@ def generate_3D_slope(shape: tuple, axis: str) -> xp.ndarray:
     return slope
 
 
+def generate_plate(shape, center, length, depth):
+    plate = xp.zeros(shape, dtype=xp.float32)
+    plate[
+        center[0] - length // 2 : center[0] + length // 2,
+        center[1] - length // 2 : center[1] + length // 2,
+        center[2] - depth // 2 : center[2] + depth // 2,
+    ] = 1
+    return plate
+
+
 def extract3Dto2D_minimum(
     array_3d_fft: xp.ndarray,
     params: ODTParameters,

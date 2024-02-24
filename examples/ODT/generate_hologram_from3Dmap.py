@@ -112,20 +112,6 @@ def extract3Dto2D_minimum(
         yy - params.aperturesize - oblique_shift[1]
     ) ** 2
     circle = circle < (params.aperturesize // 2) ** 2
-    # Fz_circle = xp.sqrt(
-    #     params.fi_mag**2
-    #     - (xx - params.aperturesize - oblique_shift[0]) ** 2
-    #     - (yy - params.aperturesize - oblique_shift[1]) ** 2
-    # ) - xp.sqrt(params.fi_mag**2 - oblique_shift[0] ** 2 - oblique_shift[1] ** 2)
-    # Fz_circle = (
-    #     xp.sqrt(
-    #         params.fi_mag**2
-    #         - (xx - params.aperturesize - oblique_shift[0]) ** 2
-    #         - (yy - params.aperturesize - oblique_shift[1]) ** 2
-    #     )
-    #     * circle
-    #     - params.fi_z
-    # )
     Fz_circle = (
         params.fi_mag**2
         - (xx - params.aperturesize - oblique_shift[0]) ** 2
@@ -152,6 +138,11 @@ def extract3Dto2D_minimum(
     array_cropped = array_3d_fft * Fz_index
 
     array_2d_fft = xp.sum(array_cropped, axis=2)
+
+    # print(Kz_circle.shape)
+    # print("norm of oblique_shift", oblique_shift[0] ** 2 + oblique_shift[1] ** 2)
+    # print("nonzero", xp.count_nonzero(Kz_circle))
+    # print("average", xp.mean(Kz_circle[Kz_circle != 0]) / params.k_per_pixel)
 
     Kz_circle[Kz_circle == 0] = 1
     array_2d_fft = array_2d_fft / Kz_circle
@@ -201,7 +192,7 @@ def generate_test_data(
         fft_extent = test_data_fft_cropped
         norm_fft_extent = fft_extent * params.k_per_pixel
         norm_test_data_extent = xp.fft.ifft2(
-            xp.fft.ifftshift(norm_fft_extent), norm="ortho"
+            xp.fft.ifftshift(norm_fft_extent), norm="backward"
         )
         test_data_extent = norm_test_data_extent / params.imgpx_unit
         # test_data_extent[:EDGE_SIZE, :] = 1e-6
@@ -213,7 +204,7 @@ def generate_test_data(
         if if_save:
             xp.save("./test_data_extent.npy", test_data_extent)
         norm_E_test = E_test * params.imgpx_unit
-        norm_E_test_fft = xp.fft.fftshift(xp.fft.fft2(norm_E_test, norm="ortho"))
+        norm_E_test_fft = xp.fft.fftshift(xp.fft.fft2(norm_E_test, norm="backward"))
         E_test_fft = norm_E_test_fft / params.k_per_pixel
         low_pass = make_disk(
             (

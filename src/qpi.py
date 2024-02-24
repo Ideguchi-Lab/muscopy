@@ -21,8 +21,10 @@ class QPIParameters:
 
     def calc_params(self):
         self.dim = self.img_shape[0]
-        self.freq_per_pixel = 1 / (self.pixelsize * self.dim)
-        self.aperturesize = 2 * round(self.NA / self.wav / self.freq_per_pixel) + 1
+        self.freq_per_pixel = 1 / (self.pixelsize * self.dim)  # 1 / L
+        self.aperturesize = (
+            2 * round(self.NA / self.wav / self.freq_per_pixel) + 1
+        )  # 2 * f_BW + 1
 
     def print_all_parameters(self):
         print(f"{self.dim=}")

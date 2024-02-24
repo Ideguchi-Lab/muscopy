@@ -136,7 +136,7 @@ def reconstruct_E(
         array_fft = array
     else:
         norm_array = array * params.pixelsize
-        norm_array_fft = xp.fft.fftshift(xp.fft.fft2(norm_array, norm="ortho"))
+        norm_array_fft = xp.fft.fftshift(xp.fft.fft2(norm_array, norm="backward"))
         array_fft = norm_array_fft / params.k_per_pixel
     disk = make_disk(params.offaxis_center, params.aperturesize // 2, array_fft.shape)
     array_fft = array_fft * disk
@@ -145,7 +145,6 @@ def reconstruct_E(
         max_x - params.offaxis_center[0],
         max_y - params.offaxis_center[1],
     )
-    print(oblique_center)
 
     left_index = max_x - params.aperturesize
     right_index = max_x + params.aperturesize + 1
@@ -168,7 +167,7 @@ def reconstruct_E(
     ]
 
     norm_array_fft = array_fft * params.k_per_pixel
-    norm_array_cropped = xp.fft.ifft2(xp.fft.ifftshift(norm_array_fft), norm="ortho")
+    norm_array_cropped = xp.fft.ifft2(xp.fft.ifftshift(norm_array_fft), norm="backward")
     array_cropped = norm_array_cropped / params.imgpx_unit
 
     # array_cropped[0:EDGE_SIZE, :] = 1e-6
@@ -178,7 +177,9 @@ def reconstruct_E(
         ref_array_fft = ref_array
     else:
         norm_ref_array = ref_array * params.pixelsize
-        norm_ref_array_fft = xp.fft.fftshift(xp.fft.fft2(norm_ref_array, norm="ortho"))
+        norm_ref_array_fft = xp.fft.fftshift(
+            xp.fft.fft2(norm_ref_array, norm="backward")
+        )
         ref_array_fft = norm_ref_array_fft / params.k_per_pixel
     ref_array_fft = ref_array_fft * disk
     ref_array_fft_pad = xp.pad(
@@ -196,7 +197,7 @@ def reconstruct_E(
     ]
     norm_ref_array_fft = ref_array_fft * params.k_per_pixel
     norm_ref_array_cropped = xp.fft.ifft2(
-        xp.fft.ifftshift(norm_ref_array_fft), norm="ortho"
+        xp.fft.ifftshift(norm_ref_array_fft), norm="backward"
     )
     ref_array_cropped = norm_ref_array_cropped / params.imgpx_unit
 
@@ -253,7 +254,7 @@ class ODTSynthesizer(Synthesizer):
             )
 
             norm_E_approx = E_approx * self.params.imgpx_unit
-            norm_e_fft = xp.fft.fftshift(xp.fft.fft2(norm_E_approx, norm="ortho"))
+            norm_e_fft = xp.fft.fftshift(xp.fft.fft2(norm_E_approx, norm="backward"))
             e_fft = norm_e_fft / self.params.k_per_pixel
             disk_synthesized = make_disk(
                 (
@@ -276,18 +277,23 @@ class ODTSynthesizer(Synthesizer):
                 xp.arange(2 * self.params.aperturesize + 1),
                 indexing="ij",
             )
-            disk = (xx - synthesized_center[0] - oblique_center[0]) ** 2 + (
-                yy - synthesized_center[1] - oblique_center[1]
-            ) ** 2
-            disk[disk > (self.params.aperturesize // 2) ** 2] = 0
-            fz_disk = (
-                xp.sqrt((self.params.aperturesize // 2) ** 2 - disk)
-                + fz_i
-                - synthesized_center[2]
-            )
-            fz_disk[disk > (self.params.aperturesize // 2) ** 2] = 0
-            kz_disk = fz_disk * self.params.k_per_pixel
-            # kz_disk = (kz_disk != 0) * 1e6
+            disk = (xx - synthesized_center[0] + oblique_center[0]) ** 2 + (
+                yy - synthesized_center[1] + oblique_center[1]
+            ) ** 2  # L2 distance from the center of illumination vector
+            disk_mask = disk < (self.params.aperturesize // 2) ** 2
+            # disk[disk > (self.params.aperturesize // 2) ** 2] = 0
+            # fz_disk = xp.sqrt(self.params.fi_mag**2 - disk)
+            fz_disk = self.params.fi_mag**2 - disk
+            # fz_disk[disk > (self.params.aperturesize // 2) ** 2] = 0
+            fz_disk[fz_disk < 0] = 0
+            fz_disk = fz_disk**0.5
+            kz_disk = fz_disk * self.params.k_per_pixel * disk_mask
+            # print(kz_disk.shape)
+            # print(
+            #     "norm of oblique shift", oblique_center[0] ** 2 + oblique_center[1] ** 2
+            # )
+            # print("nonzero", xp.sum(kz_disk != 0))
+            # print("average", xp.mean(kz_disk[kz_disk != 0]) / self.params.k_per_pixel)
 
             scatter_potential_fft = 2j * kz_disk * e_fft_cropped
 
@@ -314,7 +320,7 @@ class ODTSynthesizer(Synthesizer):
 
         norm_synthesized_fft = synthesized_fft * self.params.k_per_pixel ** (3 / 2)
         norm_synthesized_array = xp.fft.ifftn(
-            xp.fft.ifftshift(norm_synthesized_fft), norm="ortho"
+            xp.fft.ifftshift(norm_synthesized_fft), norm="backward"
         )
         synthesized_array = norm_synthesized_array / (
             self.params.imgpx_unit * self.params.imgpx_unit_z**0.5
@@ -339,13 +345,13 @@ class ODTSynthesizer(Synthesizer):
                 self.params.imgpx_unit * self.params.imgpx_unit_z**0.5
             )
             norm_current_fft = xp.fft.fftshift(
-                xp.fft.fftn(norm_current_array, norm="ortho")
+                xp.fft.fftn(norm_current_array, norm="backward")
             )
             current_fft = norm_current_fft / self.params.k_per_pixel ** (3 / 2)
             current_fft[array3d_fft != 0] = array3d_fft[array3d_fft != 0]
             norm_current_fft = current_fft * self.params.k_per_pixel ** (3 / 2)
             norm_current_array = xp.real(
-                xp.fft.ifftn(xp.fft.ifftshift(norm_current_fft), norm="ortho")
+                xp.fft.ifftn(xp.fft.ifftshift(norm_current_fft), norm="backward")
             )
             current_array = norm_current_array / (
                 self.params.imgpx_unit * self.params.imgpx_unit_z**0.5

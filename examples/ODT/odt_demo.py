@@ -37,14 +37,14 @@ EDGE_SIZE = 0
 
 # %%
 NA_i = 1.0
-step_angle = 360 / 30
+step_angle = 360 / 60
 params = ODTParameters(
     532e-9,
     1.2,
     (1400, 1400),
     (700, 700),
     # (3.45 * 1e-6) * 3 / 200 / 5,
-    (3.45 * 1e-6) * 3 / 200 / 4,
+    (3.45 * 1e-6) * 3 / 200 / 2,
     (612, 623),
     1.33,
     # 1.48,
@@ -60,8 +60,8 @@ shape_3d = (
     params.fz_extent * 2 + 1,
 )
 
-sample_index = 1.34
-radius = 5
+sample_index = 1.35
+radius = 10
 hermite = True
 hermite = False
 
@@ -73,9 +73,9 @@ sphere = generate_3D_sphere(
     center=(params.aperturesize, params.aperturesize, params.fz_extent),
 )
 
-depth = 10
+depth = 30
 plate = generate_plate(
-    shape_3d, (params.aperturesize, params.aperturesize, params.fz_extent), 5, depth
+    shape_3d, (params.aperturesize, params.aperturesize, params.fz_extent), 30, depth
 )
 
 gauss = generate_3d_gaussian(
@@ -107,7 +107,7 @@ norm_scatter_potential = (
     scatter_potential * params.imgpx_unit * params.imgpx_unit_z**0.5
 )
 norm_scatter_fft = xp.fft.fftshift(
-    xp.fft.fftn(xp.fft.ifftshift(norm_scatter_potential, axes=(2)), norm="ortho")
+    xp.fft.fftn(xp.fft.ifftshift(norm_scatter_potential, axes=(2)), norm="backward")
 )
 scatter_fft = norm_scatter_fft / params.k_per_pixel ** (3 / 2)
 # scatter_fft[0:EDGE_SIZE, :, :] = 0
@@ -121,49 +121,15 @@ norm_ref_scatter_potential = (
     ref_scatter_potential * params.imgpx_unit * params.imgpx_unit_z**0.5
 )
 norm_ref_scatter_fft = xp.fft.fftshift(
-    xp.fft.fftn(xp.fft.ifftshift(norm_ref_scatter_potential, axes=(2)), norm="ortho")
+    xp.fft.fftn(xp.fft.ifftshift(norm_ref_scatter_potential, axes=(2)), norm="backward")
 )
 ref_scatter_fft = norm_ref_scatter_fft / params.k_per_pixel ** (3 / 2)
 # ref_scatter_fft[0:EDGE_SIZE, :, :] = 0
 # ref_scatter_fft[:, 0:EDGE_SIZE, :] = 0
 # ref_scatter_fft[:, :, 0:EDGE_SIZE] = 0
 
-# # inverse z axis of scatter_Fft
-# scatter_fft = xp.flip(scatter_fft, axis=2)
-# ref_scatter_fft = xp.flip(ref_scatter_fft, axis=2)
-# fi_z = xp.sqrt(params.fi_mag**2 - params.fi_lateral_mag**2)
-# fz_array = zz - params.fz_extent + fi_z
-# fi_z = params.fi_mag * (
-# 1 - (1 - (params.NA_illumi / params.n_sol) ** 2) ** 0.5
-# )  # maybe wrong
-# fz_array = zz + fi_z - params.fz_extent
-# kz_array = zz - params.aperturesize + kz_i
-# kz_array = fz_array * params.k_per_pixel
-# kz_array = xp.ones_like(kz_array) * 1e6
-
-# kz_array = xp.ones(sphere.shape)
-# kz_array = zz - params.aperturesize
-# approx_field_fft = scatter_fft / kz_array / 2j / xp.pi
-# ref_approx_field_fft = ref_scatter_fft / kz_array / 2j / xp.pi
-# approx_field_fft = scatter_fft / kz_array / 2j
-# ref_approx_field_fft = ref_scatter_fft / kz_array / 2j
 approx_field_fft = scatter_fft / 2j
 ref_approx_field_fft = ref_scatter_fft / 2j
-
-
-# # %%
-# scatter_fft_test = approx_field_fft * kz_array * 2j
-# norm_scatter_fft_test = scatter_fft_test * params.k_unit ** (3 / 2)
-# norm_scatter_test = xp.fft.fftshift(
-#     xp.fft.ifftn((xp.fft.ifftshift(norm_scatter_fft_test)), norm="ortho"), axes=(2)
-# )
-# scatter_test = norm_scatter_test / (params.imgpx_unit * params.imgpx_unit_z**0.5)
-# r_index_test = xp.real(calc_refractive_index_square(scatter_test, params) ** 0.5)
-# if _cp:
-#     r_index_test = xp.asnumpy(r_index_test)
-
-# slice_visualizer = SlicingVisualizer(r_index_test)
-# slice_visualizer.run()
 
 # # %%
 # # show the given refractive index
@@ -175,37 +141,6 @@ ref_approx_field_fft = ref_scatter_fft / 2j
 # # show the fourier spectrum
 # approx_field_fft_to_show = xp.asnumpy(xp.abs(approx_field_fft))
 # slice_visualizer = SlicingVisualizer(approx_field_fft_to_show)
-# slice_visualizer.run()
-
-# # %%
-# print("identity check")
-# rindex_fft = xp.fft.fftshift(xp.fft.fftn(xp.fft.ifftshift(rindex, axes=(2))))
-# rindex = xp.abs(xp.fft.fftshift(xp.fft.ifftn(xp.fft.ifftshift(rindex_fft)), axes=(2)))
-# if _cp:
-#     rindex_to_show = xp.asnumpy(rindex)
-# else:
-#     rindex_to_show = rindex
-# slice_visualizer = SlicingVisualizer(rindex_to_show)
-# slice_visualizer.run()
-
-# # %%
-# # slice view
-# if _cp:
-#     kz_array_to_show = xp.asnumpy(kz_array)
-# else:
-#     kz_array_to_show = kz_array
-# slice_visualizer = SlicingVisualizer(kz_array_to_show)
-# slice_visualizer.run()
-
-# # %%
-# # debug for index map
-# oblique_shift = (0, 0)
-
-# map = extract3Dto2D_minimum(ref_rindex, params, oblique_shift, return_index_map=True)
-# if _cp:
-#     map = xp.asnumpy(map)
-
-# slice_visualizer = SlicingVisualizer(map)
 # slice_visualizer.run()
 
 # %%
@@ -246,14 +181,12 @@ norm_ret_fft = ret_fft * params.k_per_pixel ** (3 / 2)
 #     xp.fft.ifftn(xp.fft.ifftshift(ret_fft)), axes=(2)
 # )
 norm_ret_array = xp.fft.fftshift(
-    xp.fft.ifftn(xp.fft.ifftshift(norm_ret_fft), norm="ortho"), axes=(2)
+    xp.fft.ifftn(xp.fft.ifftshift(norm_ret_fft), norm="backward"), axes=(2)
 )
 ret_array = norm_ret_array / (params.imgpx_unit * params.imgpx_unit_z**0.5)
 ret_ref = xp.real(calc_refractive_index_square(ret_array, params) ** 0.5)
 if _cp:
     ret_ref = xp.asnumpy(ret_ref)
-
-print(ret_ref.shape)
 
 np.fft.fftshift(ret_ref, axes=(2))
 
@@ -294,24 +227,6 @@ print("generated test data!")
 # spectrum = data2d
 # cursor_visualizer = CursorVisualizer(np.log(np.abs(spectrum) + 1))
 # cursor_visualizer.run()
-
-# # %%
-# # visualize 3D refractive index
-# if _cp:
-#     rindex_to_show = xp.asnumpy(rindex)
-# else:
-#     rindex_to_show = rindex
-# slice_visualizer = SlicingVisualizer(rindex_to_show)
-# slice_visualizer.run()
-
-# # %%
-# # visualize 3D fft spectrum
-# if _cp:
-#     array_3d_fft_to_show = xp.asnumpy(xp.log(xp.abs(scatter_fft)))
-# else:
-#     array_3d_fft_to_show = xp.log(xp.abs(scatter_fft))
-# slice_visualizer = SlicingVisualizer(array_3d_fft_to_show)
-# slice_visualizer.run()
 
 # %%
 # execute synthetic aperture
@@ -367,15 +282,31 @@ odt_synthesizer.set_data(test_data, ref_data)
 synthesized_array, odt_fft = odt_synthesizer.ODT_synthesize(
     approx=approx, hermite=hermite, load_fft=load_fft
 )
-synthesized_array = xp.real(
-    calc_refractive_index_square(synthesized_array, params) ** 0.5
-)
+r_index_map = xp.real(calc_refractive_index_square(synthesized_array, params) ** 0.5)
+
+# # %%
+# scatter_pot_abs = xp.asnumpy(xp.abs(ret_array))
+# ret_scatter_pot_abs = xp.asnumpy(xp.abs(synthesized_array))
+
+# ratio = xp.sum(xp.abs(ret_array) ** 2) / xp.sum(xp.abs(synthesized_array) ** 2)
+# print(ratio)
+
+# print("scatter potential")
+# slice_visualizer = SlicingVisualizer(scatter_pot_abs)
+# slice_visualizer.run()
+
+# print("ret scatter potential")
+# slice_visualizer = SlicingVisualizer(ret_scatter_pot_abs)
+# slice_visualizer.run()
+
+
+# %%
 
 if _cp:
-    odt_synthesized = xp.asnumpy(synthesized_array)
+    odt_synthesized = xp.asnumpy(r_index_map)
     odt_fft = xp.asnumpy(xp.log(xp.abs(odt_fft) + 1))
 else:
-    odt_synthesized = xp.real(synthesized_array)
+    odt_synthesized = xp.real(r_index_map)
     odt_fft = xp.asnumpy(xp.log(xp.abs(odt_fft) + 1))
 
 # %%
@@ -402,7 +333,7 @@ ret_fft_new = scatter_fft * xp.array(fft_exist)
 
 norm_ret_fft_new = ret_fft_new * params.k_per_pixel ** (3 / 2)
 norm_ret_array_new = xp.fft.fftshift(
-    xp.fft.ifftn(xp.fft.ifftshift(norm_ret_fft_new), norm="ortho"), axes=(2)
+    xp.fft.ifftn(xp.fft.ifftshift(norm_ret_fft_new), norm="backward"), axes=(2)
 )
 ret_array_new = norm_ret_array_new / (params.imgpx_unit * params.imgpx_unit_z**0.5)
 ret_ref_new = xp.real(calc_refractive_index_square(ret_array_new, params) ** 0.5)

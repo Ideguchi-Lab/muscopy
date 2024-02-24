@@ -26,6 +26,7 @@ from generate_hologram_from3Dmap import (
     extract3Dto2D_minimum,
     generate_3D_slope,
     generate_plate,
+    generate_3d_gaussian,
 )
 
 from src.dir_parser import numpy_parser
@@ -42,10 +43,11 @@ params = ODTParameters(
     1.2,
     (1400, 1400),
     (700, 700),
-    (3.45 * 1e-6) * 3 / 200 / 5,
+    # (3.45 * 1e-6) * 3 / 200 / 5,
+    (3.45 * 1e-6) * 3 / 200 / 4,
     (612, 623),
-    # 1.33,
-    1.48,
+    1.33,
+    # 1.48,
     NA_i,
 )
 params.calc_params()
@@ -55,10 +57,10 @@ params.print_all_parameters()
 shape_3d = (
     params.aperturesize * 2 + 1,
     params.aperturesize * 2 + 1,
-    params.kz_extent * 2 + 1,
+    params.fz_extent * 2 + 1,
 )
 
-sample_index = 1.4
+sample_index = 1.34
 radius = 5
 hermite = True
 hermite = False
@@ -68,22 +70,26 @@ sphere = generate_3D_sphere(
     # shape=params.aperturesize * 2 + 1,
     shape=shape_3d,
     radius=radius,
-    center=(params.aperturesize, params.aperturesize, params.kz_extent),
-    # center=(params.aperturesize, params.aperturesize, params.aperturesize),
+    center=(params.aperturesize, params.aperturesize, params.fz_extent),
 )
 
-depth = 2
+depth = 10
 plate = generate_plate(
-    shape_3d, (params.aperturesize, params.aperturesize, params.kz_extent), 30, depth
+    shape_3d, (params.aperturesize, params.aperturesize, params.fz_extent), 5, depth
+)
+
+gauss = generate_3d_gaussian(
+    shape_3d, (params.aperturesize, params.aperturesize, params.fz_extent), radius
 )
 
 # slope = generate_3D_slope(shape_3d, "x")
 
 # slope = slope / slope.shape[0]  # normalize
 
-# r_sample = sphere
+r_sample = sphere
+# r_sample = gauss
 # r_sample = slope
-r_sample = plate
+# r_sample = plate
 
 # create target and reference refractive index map
 ref_rindex = (
@@ -94,7 +100,7 @@ ref_rindex = (
 rindex = ref_rindex + r_sample * (sample_index - params.n_sol)
 # then calculate scattering potential based on refractive index
 scatter_potential = (
-    -1 * ((params.k_unit * params.ki_mag)) ** 2 * (rindex**2 / ref_rindex**2 - 1)
+    -1 * ((params.k_per_pixel * params.fi_mag)) ** 2 * (rindex**2 / ref_rindex**2 - 1)
 )
 
 norm_scatter_potential = (
@@ -103,19 +109,21 @@ norm_scatter_potential = (
 norm_scatter_fft = xp.fft.fftshift(
     xp.fft.fftn(xp.fft.ifftshift(norm_scatter_potential, axes=(2)), norm="ortho")
 )
-scatter_fft = norm_scatter_fft / params.k_unit ** (3 / 2)
+scatter_fft = norm_scatter_fft / params.k_per_pixel ** (3 / 2)
 # scatter_fft[0:EDGE_SIZE, :, :] = 0
 # scatter_fft[:, :, 0:EDGE_SIZE] = 0
 # scatter_fft[:, 0:EDGE_SIZE, :] = 0
-ref_scatter_potential = -((params.k_unit * params.ki_mag) ** 2) * (
+ref_scatter_potential = -((params.k_per_pixel * params.fi_mag) ** 2) * (
     ref_rindex**2 / ref_rindex**2 - 1
 )
 
-norm_ref_scatter_potential = ref_scatter_potential * params.imgpx_unit ** (3 / 2)
+norm_ref_scatter_potential = (
+    ref_scatter_potential * params.imgpx_unit * params.imgpx_unit_z**0.5
+)
 norm_ref_scatter_fft = xp.fft.fftshift(
     xp.fft.fftn(xp.fft.ifftshift(norm_ref_scatter_potential, axes=(2)), norm="ortho")
 )
-ref_scatter_fft = norm_ref_scatter_fft / params.k_unit ** (3 / 2)
+ref_scatter_fft = norm_ref_scatter_fft / params.k_per_pixel ** (3 / 2)
 # ref_scatter_fft[0:EDGE_SIZE, :, :] = 0
 # ref_scatter_fft[:, 0:EDGE_SIZE, :] = 0
 # ref_scatter_fft[:, :, 0:EDGE_SIZE] = 0
@@ -123,26 +131,25 @@ ref_scatter_fft = norm_ref_scatter_fft / params.k_unit ** (3 / 2)
 # # inverse z axis of scatter_Fft
 # scatter_fft = xp.flip(scatter_fft, axis=2)
 # ref_scatter_fft = xp.flip(ref_scatter_fft, axis=2)
-
-xx, yy, zz = xp.meshgrid(
-    xp.arange(params.aperturesize * 2 + 1),
-    xp.arange(params.aperturesize * 2 + 1),
-    xp.arange(params.kz_extent * 2 + 1),
-    # xp.arange(params.aperturesize * 2 + 1),
-    indexing="ij",
-)
-kz_i = xp.sqrt(params.ki_mag**2 - params.ki_lateral_mag**2)
-kz_array = zz - params.kz_extent + kz_i
+# fi_z = xp.sqrt(params.fi_mag**2 - params.fi_lateral_mag**2)
+# fz_array = zz - params.fz_extent + fi_z
+# fi_z = params.fi_mag * (
+# 1 - (1 - (params.NA_illumi / params.n_sol) ** 2) ** 0.5
+# )  # maybe wrong
+# fz_array = zz + fi_z - params.fz_extent
 # kz_array = zz - params.aperturesize + kz_i
-kz_array = kz_array * params.k_unit
+# kz_array = fz_array * params.k_per_pixel
 # kz_array = xp.ones_like(kz_array) * 1e6
 
 # kz_array = xp.ones(sphere.shape)
 # kz_array = zz - params.aperturesize
 # approx_field_fft = scatter_fft / kz_array / 2j / xp.pi
 # ref_approx_field_fft = ref_scatter_fft / kz_array / 2j / xp.pi
-approx_field_fft = scatter_fft / kz_array / 2j
-ref_approx_field_fft = ref_scatter_fft / kz_array / 2j
+# approx_field_fft = scatter_fft / kz_array / 2j
+# ref_approx_field_fft = ref_scatter_fft / kz_array / 2j
+approx_field_fft = scatter_fft / 2j
+ref_approx_field_fft = ref_scatter_fft / 2j
+
 
 # # %%
 # scatter_fft_test = approx_field_fft * kz_array * 2j
@@ -210,8 +217,8 @@ ret_index = xp.zeros(
 
 for angle in range(0, 360, int(step_angle)):
     oblique_shift = (
-        int(params.ki_lateral_mag * np.cos(np.deg2rad(angle))),
-        int(params.ki_lateral_mag * np.sin(np.deg2rad(angle))),
+        int(params.fi_lateral_mag * np.cos(np.deg2rad(angle))),
+        int(params.fi_lateral_mag * np.sin(np.deg2rad(angle))),
     )
     print(oblique_shift)
     map = extract3Dto2D_minimum(
@@ -233,7 +240,7 @@ if _cp:
     ret_index = xp.array(ret_index)
 ret_fft = scatter_fft * ret_index
 
-norm_ret_fft = ret_fft * params.k_unit ** (3 / 2)
+norm_ret_fft = ret_fft * params.k_per_pixel ** (3 / 2)
 
 # ret_array = (params.freq_per_pixel) ** 3 * xp.fft.fftshift(
 #     xp.fft.ifftn(xp.fft.ifftshift(ret_fft)), axes=(2)
@@ -308,12 +315,12 @@ print("generated test data!")
 
 # %%
 # execute synthetic aperture
-# load_fft = True
-# test_data = numpy_parser("odt_test_data/sample")
-# ref_data = numpy_parser("odt_test_data/ref")
-load_fft = False
-test_data = numpy_parser("../data/aperture_sample_beads")
-ref_data = numpy_parser("../data/aperture_ref_beads")
+load_fft = True
+test_data = numpy_parser("odt_test_data/sample")
+ref_data = numpy_parser("odt_test_data/ref")
+# load_fft = False
+# test_data = numpy_parser("../data/aperture_sample_beads")
+# ref_data = numpy_parser("../data/aperture_ref_beads")
 qpi_synthesizer = QPISynthesizer()
 qpi_synthesizer.set_parameters(params)
 # qpi_synthesizer.set_data(test_data)
@@ -336,9 +343,9 @@ print("max phase: ", np.max(qpi_synthesized))
 print("min phase: ", np.min(qpi_synthesized))
 print(
     "estimated phase:",
-    2 * np.pi * 2
-    # * radius
-    * depth * params.imgpx_unit_z * (sample_index - params.n_sol) / params.wav,
+    2 * np.pi * 2 * radius
+    # * depth
+    * params.imgpx_unit_z * (sample_index - params.n_sol) / params.wav,
 )
 plt.savefig("synthesized_qpi.png")
 
@@ -393,7 +400,7 @@ slice_visualizer.run()
 # %%
 ret_fft_new = scatter_fft * xp.array(fft_exist)
 
-norm_ret_fft_new = ret_fft_new * params.k_unit ** (3 / 2)
+norm_ret_fft_new = ret_fft_new * params.k_per_pixel ** (3 / 2)
 norm_ret_array_new = xp.fft.fftshift(
     xp.fft.ifftn(xp.fft.ifftshift(norm_ret_fft_new), norm="ortho"), axes=(2)
 )
@@ -405,37 +412,42 @@ ret_array_new = xp.asnumpy(ret_ref_new)
 print(np.sum(np.abs(ret_ref - odt_synthesized)))
 print(np.sum(np.abs(ret_array_new - odt_synthesized)))
 diff_ref = ret_array_new - odt_synthesized
-slice_visualizer = SlicingVisualizer(diff_ref)
+# slice_visualizer = SlicingVisualizer(diff_ref)
+# slice_visualizer.run()
+
+to_show = xp.asnumpy(ret_array_new)
+
+slice_visualizer = SlicingVisualizer(to_show)
 slice_visualizer.run()
 
-# %%
-# iterative ODT
-odt_synthesizer = ODTSynthesizer()
-odt_synthesizer.set_parameters(params)
+# # %%
+# # iterative ODT
+# odt_synthesizer = ODTSynthesizer()
+# odt_synthesizer.set_parameters(params)
+# # odt_synthesizer.set_data(test_data, ref_data)
 # odt_synthesizer.set_data(test_data, ref_data)
-odt_synthesizer.set_data(test_data, ref_data)
-synthesized_array, odt_fft = odt_synthesizer.iterative_ODT(
-    approx=approx, epsilon=1e-6, max_N=10000, hermite=hermite, load_fft=load_fft
-)
+# synthesized_array, odt_fft = odt_synthesizer.iterative_ODT(
+#     approx=approx, epsilon=1e-6, max_N=10000, hermite=hermite, load_fft=load_fft
+# )
 
-synthesized_array = xp.real(
-    calc_refractive_index_square(synthesized_array, params) ** 0.5
-)
+# synthesized_array = xp.real(
+#     calc_refractive_index_square(synthesized_array, params) ** 0.5
+# )
 
-if _cp:
-    odt_synthesized = xp.asnumpy(synthesized_array)
-    odt_fft = xp.asnumpy(xp.log(xp.abs(odt_fft) + 1))
-else:
-    odt_synthesized = synthesized_array
-    odt_fft = np.log(np.abs(odt_fft) + 1)
-# %%
-# plot
-slice_visualizer = SlicingVisualizer(odt_synthesized)
-slice_visualizer.run()
+# if _cp:
+#     odt_synthesized = xp.asnumpy(synthesized_array)
+#     odt_fft = xp.asnumpy(xp.log(xp.abs(odt_fft) + 1))
+# else:
+#     odt_synthesized = synthesized_array
+#     odt_fft = np.log(np.abs(odt_fft) + 1)
+# # %%
+# # plot
+# slice_visualizer = SlicingVisualizer(odt_synthesized)
+# slice_visualizer.run()
 
-# %%
-# plot
-slice_visualizer = SlicingVisualizer(odt_fft)
-slice_visualizer.run()
+# # %%
+# # plot
+# slice_visualizer = SlicingVisualizer(odt_fft)
+# slice_visualizer.run()
 
 # # # # %%

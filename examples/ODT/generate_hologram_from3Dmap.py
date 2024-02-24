@@ -46,6 +46,27 @@ def generate_3D_sphere(
     return sphere
 
 
+def generate_3d_gaussian(shape: tuple, center: tuple, sigma: float) -> xp.ndarray:
+    """Generate 3D Gaussian distribution.
+
+    Args:
+        shape (tuple): shape of the tensor
+        center (tuple): center of the Gaussian
+        sigma (float): standard deviation of the Gaussian
+
+    Returns:
+        xp.ndarray: 3D Gaussian distribution
+    """
+    xx, yy, zz = xp.meshgrid(
+        xp.arange(shape[0]), xp.arange(shape[1]), xp.arange(shape[2]), indexing="ij"
+    )
+    gaussian = xp.exp(
+        -((xx - center[0]) ** 2 + (yy - center[1]) ** 2 + (zz - center[2]) ** 2)
+        / (2 * sigma**2)
+    )
+    return gaussian
+
+
 def generate_3D_slope(shape: tuple, axis: str) -> xp.ndarray:
     xx, yy, zz = xp.meshgrid(
         xp.arange(shape[0]), xp.arange(shape[1]), xp.arange(shape[2]), indexing="ij"
@@ -91,28 +112,49 @@ def extract3Dto2D_minimum(
         yy - params.aperturesize - oblique_shift[1]
     ) ** 2
     circle = circle < (params.aperturesize // 2) ** 2
-    Kz_circle = xp.sqrt(
-        params.ki_mag**2
+    # Fz_circle = xp.sqrt(
+    #     params.fi_mag**2
+    #     - (xx - params.aperturesize - oblique_shift[0]) ** 2
+    #     - (yy - params.aperturesize - oblique_shift[1]) ** 2
+    # ) - xp.sqrt(params.fi_mag**2 - oblique_shift[0] ** 2 - oblique_shift[1] ** 2)
+    # Fz_circle = (
+    #     xp.sqrt(
+    #         params.fi_mag**2
+    #         - (xx - params.aperturesize - oblique_shift[0]) ** 2
+    #         - (yy - params.aperturesize - oblique_shift[1]) ** 2
+    #     )
+    #     * circle
+    #     - params.fi_z
+    # )
+    Fz_circle = (
+        params.fi_mag**2
         - (xx - params.aperturesize - oblique_shift[0]) ** 2
         - (yy - params.aperturesize - oblique_shift[1]) ** 2
-    ) - xp.sqrt(params.ki_mag**2 - oblique_shift[0] ** 2 - oblique_shift[1] ** 2)
+    )
+    Fz_circle[Fz_circle < 0] = 0
+    Fz_circle = Fz_circle**0.5 - params.fi_z
 
-    Kz_value = (Kz_circle + array_3d_fft.shape[2] // 2) * circle
-    Kz_tile = xp.tile(Kz_value, (array_3d_fft.shape[2], 1, 1))
-    Kz_tile = Kz_tile.transpose(1, 2, 0)
+    Kz_circle = (Fz_circle + params.fi_z) * circle * params.k_per_pixel
 
-    Kz_tile = Kz_tile.astype(xp.int64)
+    Fz_value = (Fz_circle + array_3d_fft.shape[2] // 2) * circle
+    Fz_tile = xp.tile(Fz_value, (array_3d_fft.shape[2], 1, 1))
+    Fz_tile = Fz_tile.transpose(1, 2, 0)
 
-    Kz_tile -= Kz_tile == 0  # to avoid 0 index match with zz
+    Fz_tile = Fz_tile.astype(xp.int64)
 
-    Kz_index = zz == Kz_tile
+    Fz_tile -= Fz_tile == 0  # to avoid 0 index match with zz
+
+    Fz_index = zz == Fz_tile
 
     if return_index_map:
-        return Kz_index
+        return Fz_index
 
-    array_cropped = array_3d_fft * Kz_index
+    array_cropped = array_3d_fft * Fz_index
 
     array_2d_fft = xp.sum(array_cropped, axis=2)
+
+    Kz_circle[Kz_circle == 0] = 1
+    array_2d_fft = array_2d_fft / Kz_circle
 
     return array_2d_fft
 
@@ -143,17 +185,21 @@ def generate_test_data(
         shutil.rmtree(path)
     os.mkdir(path)
 
-    ki = round(NA_illumi / params.wav / params.freq_per_pixel)  # + 1 why +1?
+    # f_illumi = round(NA_illumi / params.wav / params.freq_per_pixel)  # + 1 why +1?
     for i in range(num):
         oblique_shift = (
-            int(ki * xp.cos(illumi_angle_step * i / 360 * 2 * xp.pi)),
-            int(ki * xp.sin(illumi_angle_step * i / 360 * 2 * xp.pi)),
+            int(
+                params.fi_lateral_mag * xp.cos(illumi_angle_step * i / 360 * 2 * xp.pi)
+            ),
+            int(
+                params.fi_lateral_mag * xp.sin(illumi_angle_step * i / 360 * 2 * xp.pi)
+            ),
         )
         test_data_fft_cropped = extract3Dto2D_minimum(
             array_3d_fft, params, oblique_shift=oblique_shift
         )
         fft_extent = test_data_fft_cropped
-        norm_fft_extent = fft_extent * params.k_unit
+        norm_fft_extent = fft_extent * params.k_per_pixel
         norm_test_data_extent = xp.fft.ifft2(
             xp.fft.ifftshift(norm_fft_extent), norm="ortho"
         )
@@ -168,7 +214,7 @@ def generate_test_data(
             xp.save("./test_data_extent.npy", test_data_extent)
         norm_E_test = E_test * params.imgpx_unit
         norm_E_test_fft = xp.fft.fftshift(xp.fft.fft2(norm_E_test, norm="ortho"))
-        E_test_fft = norm_E_test_fft / params.k_unit
+        E_test_fft = norm_E_test_fft / params.k_per_pixel
         low_pass = make_disk(
             (
                 params.aperturesize + oblique_shift[0],

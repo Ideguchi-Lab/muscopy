@@ -76,10 +76,9 @@ class ODTParameters(QPIParameters):
                 self.fi_mag * self.NA_illumi / self.n_sol
             )  # |k_T| in terms of pixel unit
 
-        # self.fi_z = int(
-        #     self.fi_mag * (1 - (1 - self.NA_illumi**2 / self.n_sol**2) ** 0.5)
-        # )  # |k_z| in terms of pixel unit
-        self.fi_z = int(self.fi_mag * (1 - self.NA_illumi**2 / self.n_sol**2) ** 0.5)
+        self.fi_z = int(
+            self.fi_mag * (1 - self.NA_illumi**2 / self.n_sol**2) ** 0.5
+        )  # |k_z| in terms of pixel unit
 
         self.fz_extent = int(
             (self.fi_mag - self.fi_z)
@@ -426,3 +425,34 @@ def calc_refractive_index_square(array3d, params):
         - array3d / (params.fi_mag * params.k_per_pixel) ** 2
     )
     return r_3d_square
+
+
+def discard_z(array, threshold):
+    array = array[:, :, threshold:-threshold]
+    return array
+
+
+def discard_higher_kz(array, threshold):
+    array_fft = xp.fft.fftshift(xp.fft.fftn(array, norm="backward"))
+    discarded = discard_z(array_fft, threshold)
+    new_array = xp.fft.ifftn(xp.fft.ifftshift(discarded), norm="backward")
+    return new_array
+
+
+def zeropad_higher_kz(array, extend):
+    array_fft = xp.fft.fftshift(xp.fft.fftn(array, norm="backward"))
+    new_array_fft = xp.zeros(
+        (
+            array_fft.shape[0],
+            array_fft.shape[1],
+            array_fft.shape[2] + extend * 2,
+        ),
+        dtype=xp.complex128,
+    )
+    new_array_fft[
+        :,
+        :,
+        extend : array_fft.shape[2] + extend,
+    ] = array_fft
+    new_array = xp.fft.ifftn(xp.fft.ifftshift(new_array_fft), norm="backward")
+    return new_array

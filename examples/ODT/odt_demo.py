@@ -37,14 +37,14 @@ EDGE_SIZE = 0
 
 # %%
 NA_i = 1.0
-step_angle = 360 / 60
+step_angle = 360 / 10
 params = ODTParameters(
     532e-9,
     1.2,
     (1400, 1400),
     (700, 700),
-    # (3.45 * 1e-6) * 3 / 200 / 5,
-    (3.45 * 1e-6) * 3 / 200 / 2,
+    (3.45 * 1e-6) * 3 / 200 / 5,
+    # (3.45 * 1e-6) * 3 / 200 / 2,
     (612, 623),
     1.33,
     # 1.48,
@@ -61,7 +61,7 @@ shape_3d = (
 )
 
 sample_index = 1.35
-radius = 10
+radius = 5
 hermite = True
 # hermite = False
 
@@ -230,12 +230,12 @@ print("generated test data!")
 
 # %%
 # execute synthetic aperture
-load_fft = True
-test_data = numpy_parser("odt_test_data/sample")
-ref_data = numpy_parser("odt_test_data/ref")
-# load_fft = False
-# test_data = numpy_parser("../data/aperture_sample_beads")
-# ref_data = numpy_parser("../data/aperture_ref_beads")
+# load_fft = True
+# test_data = numpy_parser("odt_test_data/sample")
+# ref_data = numpy_parser("odt_test_data/ref")
+load_fft = False
+test_data = numpy_parser("../data/aperture_sample_beads")
+ref_data = numpy_parser("../data/aperture_ref_beads")
 qpi_synthesizer = QPISynthesizer()
 qpi_synthesizer.set_parameters(params)
 # qpi_synthesizer.set_data(test_data)
@@ -284,15 +284,15 @@ synthesized_array, odt_fft = odt_synthesizer.ODT_synthesize(
 )
 r_index_map = xp.real(calc_refractive_index_square(synthesized_array, params) ** 0.5)
 
-imag_scatter_potential = xp.imag(
-    calc_refractive_index_square(synthesized_array, params) ** 0.5
-)
+# imag_scatter_potential = xp.imag(
+#     calc_refractive_index_square(synthesized_array, params) ** 0.5
+# )
 
-# %%
-print("imag part of scatter potential")
-print(f"max: {xp.max(imag_scatter_potential)}")
-slice_visualizer = SlicingVisualizer(xp.asnumpy(imag_scatter_potential))
-slice_visualizer.run()
+# # %%
+# print("imag part of scatter potential")
+# print(f"max: {xp.max(imag_scatter_potential)}")
+# slice_visualizer = SlicingVisualizer(xp.asnumpy(imag_scatter_potential))
+# slice_visualizer.run()
 
 # # %%
 # scatter_pot_abs = xp.asnumpy(xp.abs(ret_array))

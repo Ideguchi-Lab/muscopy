@@ -63,7 +63,7 @@ shape_3d = (
 sample_index = 1.35
 radius = 10
 hermite = True
-hermite = False
+# hermite = False
 
 # make answer 3D refractive map
 sphere = generate_3D_sphere(
@@ -284,6 +284,16 @@ synthesized_array, odt_fft = odt_synthesizer.ODT_synthesize(
 )
 r_index_map = xp.real(calc_refractive_index_square(synthesized_array, params) ** 0.5)
 
+imag_scatter_potential = xp.imag(
+    calc_refractive_index_square(synthesized_array, params) ** 0.5
+)
+
+# %%
+print("imag part of scatter potential")
+print(f"max: {xp.max(imag_scatter_potential)}")
+slice_visualizer = SlicingVisualizer(xp.asnumpy(imag_scatter_potential))
+slice_visualizer.run()
+
 # # %%
 # scatter_pot_abs = xp.asnumpy(xp.abs(ret_array))
 # ret_scatter_pot_abs = xp.asnumpy(xp.abs(synthesized_array))
@@ -311,11 +321,13 @@ else:
 
 # %%
 # plot
+print("synthesized ODT")
 slice_visualizer = SlicingVisualizer(odt_synthesized)
 slice_visualizer.run()
 
 # %%
 # plot
+print("fft index map")
 fft_exist = np.array(odt_fft != 0, dtype=np.uint8)
 t_slice_visualizer = SlicingVisualizer(fft_exist)
 slice_visualizer.run()
@@ -348,6 +360,7 @@ diff_ref = ret_array_new - odt_synthesized
 
 to_show = xp.asnumpy(ret_array_new)
 
+print("true scatter potential with wrong fft index")
 slice_visualizer = SlicingVisualizer(to_show)
 slice_visualizer.run()
 

@@ -43,7 +43,7 @@ EDGE_SIZE = 0
 
 # %%
 NA_i = 1.0
-step_angle = 360 / 10
+step_angle = 360 / 30
 params = ODTParameters(
     532e-9,
     1.2,
@@ -70,7 +70,7 @@ shape_3d = (
 sample_index = 1.34
 radius = 20
 hermite = True
-hermite = False
+# hermite = False
 
 # make answer 3D refractive map
 sphere = generate_3D_sphere(
@@ -195,13 +195,13 @@ norm_ret_array = xp.fft.fftshift(
     xp.fft.ifftn(xp.fft.ifftshift(norm_ret_fft), norm="backward"), axes=(2)
 )
 ret_array = norm_ret_array / (params.imgpx_unit * params.imgpx_unit_z**0.5)
-ret_ref = xp.real(calc_refractive_index_square(ret_array, params) ** 0.5)
-if _cp:
-    ret_ref = xp.asnumpy(ret_ref)
+# ret_ref = xp.real(calc_refractive_index_square(ret_array, params) ** 0.5)
+# if _cp:
+#     ret_ref = xp.asnumpy(ret_ref)
 
-print("refractive index with true scatter potential and true index")
-slice_visualizer = SlicingVisualizer(ret_ref)
-slice_visualizer.run()
+# print("refractive index with true scatter potential and true index")
+# slice_visualizer = SlicingVisualizer(ret_ref)
+# slice_visualizer.run()
 
 # %%
 # zero pad higher kz
@@ -356,7 +356,7 @@ slice_visualizer.run()
 # %%
 # plot
 print("fft index map")
-fft_exist = np.array(odt_fft != 0, dtype=np.uint8)
+fft_exist = np.array(odt_fft != 0)
 t_slice_visualizer = SlicingVisualizer(fft_exist)
 slice_visualizer.run()
 

@@ -428,18 +428,22 @@ def calc_refractive_index_square(array3d, params):
 
 
 def discard_z(array, threshold):
-    array = array[:, :, threshold:-threshold]
+    array = array[:, :, threshold : array.shape[2] - threshold]
     return array
 
 
 def discard_higher_kz(array, threshold):
+    norm_factor = array.shape[2]
     array_fft = xp.fft.fftshift(xp.fft.fftn(array, norm="backward"))
     discarded = discard_z(array_fft, threshold)
-    new_array = xp.fft.ifftn(xp.fft.ifftshift(discarded), norm="backward")
+    new_array = (
+        xp.fft.ifftn(xp.fft.ifftshift(discarded), norm="forward") / norm_factor**3
+    )
     return new_array
 
 
 def zeropad_higher_kz(array, extend):
+    norm_factor = array.shape[0] * array.shape[1] * array.shape[2]
     array_fft = xp.fft.fftshift(xp.fft.fftn(array, norm="backward"))
     new_array_fft = xp.zeros(
         (
@@ -454,5 +458,7 @@ def zeropad_higher_kz(array, extend):
         :,
         extend : array_fft.shape[2] + extend,
     ] = array_fft
-    new_array = xp.fft.ifftn(xp.fft.ifftshift(new_array_fft), norm="backward")
+    new_array = (
+        xp.fft.ifftn(xp.fft.ifftshift(new_array_fft), norm="forward") / norm_factor
+    )
     return new_array

@@ -31,7 +31,13 @@ from generate_hologram_from3Dmap import (
 
 from src.dir_parser import numpy_parser
 from src.aperture_synthesis import Synthesizer as QPISynthesizer
-from src.odt import ODTParameters, ODTSynthesizer, calc_refractive_index_square
+from src.odt import (
+    ODTParameters,
+    ODTSynthesizer,
+    calc_refractive_index_square,
+    discard_higher_kz,
+    zeropad_higher_kz,
+)
 
 EDGE_SIZE = 0
 
@@ -57,29 +63,30 @@ params.print_all_parameters()
 shape_3d = (
     params.aperturesize * 2 + 1,
     params.aperturesize * 2 + 1,
-    params.fz_extent * 2 + 1,
+    # params.fz_extent * 2 + 1,
+    params.aperturesize * 2 + 1,
 )
 
-sample_index = 1.35
-radius = 5
+sample_index = 1.34
+radius = 20
 hermite = True
-# hermite = False
+hermite = False
 
 # make answer 3D refractive map
 sphere = generate_3D_sphere(
     # shape=params.aperturesize * 2 + 1,
     shape=shape_3d,
     radius=radius,
-    center=(params.aperturesize, params.aperturesize, params.fz_extent),
+    center=(params.aperturesize, params.aperturesize, params.aperturesize),
 )
 
 depth = 30
 plate = generate_plate(
-    shape_3d, (params.aperturesize, params.aperturesize, params.fz_extent), 30, depth
+    shape_3d, (params.aperturesize, params.aperturesize, params.aperturesize), 30, depth
 )
 
 gauss = generate_3d_gaussian(
-    shape_3d, (params.aperturesize, params.aperturesize, params.fz_extent), radius
+    shape_3d, (params.aperturesize, params.aperturesize, params.aperturesize), radius
 )
 
 # slope = generate_3D_slope(shape_3d, "x")
@@ -97,7 +104,10 @@ ref_rindex = (
     * params.n_sol
     # + xp.random.rand(r_sample.shape[0], r_sample.shape[1], r_sample.shape[2]) * 0.01
 )
-rindex = ref_rindex + r_sample * (sample_index - params.n_sol)
+rindex_original = ref_rindex + r_sample * (sample_index - params.n_sol)
+
+rindex = discard_higher_kz(rindex_original, params.aperturesize - params.fz_extent)
+ref_rindex = discard_higher_kz(ref_rindex, params.aperturesize - params.fz_extent)
 # then calculate scattering potential based on refractive index
 scatter_potential = (
     -1 * ((params.k_per_pixel * params.fi_mag)) ** 2 * (rindex**2 / ref_rindex**2 - 1)
@@ -133,20 +143,21 @@ ref_approx_field_fft = ref_scatter_fft / 2j
 
 # # %%
 # # show the given refractive index
-# rindex_to_show = xp.asnumpy(rindex)
+# print("original refractive index")
+# rindex_to_show = xp.asnumpy(rindex_original)
 # slice_visualizer = SlicingVisualizer(rindex_to_show)
 # slice_visualizer.run()
 
 # # %%
-# # show the fourier spectrum
-# approx_field_fft_to_show = xp.asnumpy(xp.abs(approx_field_fft))
-# slice_visualizer = SlicingVisualizer(approx_field_fft_to_show)
+# print("truncated refractive index")
+# rindex_to_show = xp.asnumpy(xp.abs(rindex))
+# slice_visualizer = SlicingVisualizer(rindex_to_show)
 # slice_visualizer.run()
 
 # %%
 # directly retrieve 3D fft spectrum
 ret_index = xp.zeros(
-    r_sample.shape,
+    rindex.shape,
     dtype=xp.int32,
 )
 
@@ -188,9 +199,18 @@ ret_ref = xp.real(calc_refractive_index_square(ret_array, params) ** 0.5)
 if _cp:
     ret_ref = xp.asnumpy(ret_ref)
 
-np.fft.fftshift(ret_ref, axes=(2))
-
+print("refractive index with true scatter potential and true index")
 slice_visualizer = SlicingVisualizer(ret_ref)
+slice_visualizer.run()
+
+# %%
+# zero pad higher kz
+ret_array_padded = zeropad_higher_kz(ret_array, params.aperturesize - params.fz_extent)
+ret_ref_padded = xp.real(calc_refractive_index_square(ret_array_padded, params) ** 0.5)
+if _cp:
+    ret_ref_padded = xp.asnumpy(ret_ref_padded)
+print("zeropad refractive index with true scatter potential and true index")
+slice_visualizer = SlicingVisualizer(ret_ref_padded)
 slice_visualizer.run()
 
 # %%
@@ -230,12 +250,12 @@ print("generated test data!")
 
 # %%
 # execute synthetic aperture
-# load_fft = True
-# test_data = numpy_parser("odt_test_data/sample")
-# ref_data = numpy_parser("odt_test_data/ref")
-load_fft = False
-test_data = numpy_parser("../data/aperture_sample_beads")
-ref_data = numpy_parser("../data/aperture_ref_beads")
+load_fft = True
+test_data = numpy_parser("odt_test_data/sample")
+ref_data = numpy_parser("odt_test_data/ref")
+# load_fft = False
+# test_data = numpy_parser("../data/aperture_sample_beads")
+# ref_data = numpy_parser("../data/aperture_ref_beads")
 qpi_synthesizer = QPISynthesizer()
 qpi_synthesizer.set_parameters(params)
 # qpi_synthesizer.set_data(test_data)
@@ -260,7 +280,7 @@ print(
     "estimated phase:",
     2 * np.pi * 2 * radius
     # * depth
-    * params.imgpx_unit_z * (sample_index - params.n_sol) / params.wav,
+    * params.imgpx_unit * (sample_index - params.n_sol) / params.wav,
 )
 plt.savefig("synthesized_qpi.png")
 
@@ -283,6 +303,13 @@ synthesized_array, odt_fft = odt_synthesizer.ODT_synthesize(
     approx=approx, hermite=hermite, load_fft=load_fft
 )
 r_index_map = xp.real(calc_refractive_index_square(synthesized_array, params) ** 0.5)
+
+synthesized_array_pad = zeropad_higher_kz(
+    synthesized_array, params.aperturesize - params.fz_extent
+)
+r_index_map_pad = xp.real(
+    calc_refractive_index_square(synthesized_array_pad, params) ** 0.5
+)
 
 # imag_scatter_potential = xp.imag(
 #     calc_refractive_index_square(synthesized_array, params) ** 0.5
@@ -309,20 +336,21 @@ r_index_map = xp.real(calc_refractive_index_square(synthesized_array, params) **
 # slice_visualizer = SlicingVisualizer(ret_scatter_pot_abs)
 # slice_visualizer.run()
 
-
 # %%
 
 if _cp:
     odt_synthesized = xp.asnumpy(r_index_map)
+    odt_synthesized_pad = xp.asnumpy(r_index_map_pad)
     odt_fft = xp.asnumpy(xp.log(xp.abs(odt_fft) + 1))
 else:
-    odt_synthesized = xp.real(r_index_map)
+    odt_synthesized = r_index_map
+    odt_synthesized_pad = xp.real(r_index_map_pad)
     odt_fft = xp.asnumpy(xp.log(xp.abs(odt_fft) + 1))
 
 # %%
 # plot
 print("synthesized ODT")
-slice_visualizer = SlicingVisualizer(odt_synthesized)
+slice_visualizer = SlicingVisualizer(odt_synthesized_pad)
 slice_visualizer.run()
 
 # %%
@@ -340,29 +368,30 @@ slice_visualizer.run()
 # slice_visualizer = SlicingVisualizer(diff_index)
 # slice_visualizer.run()
 
-# %%
-ret_fft_new = scatter_fft * xp.array(fft_exist)
+# # %%
+# # check the difference between the true scatter potential and the synthesized scatter potential
+# ret_fft_new = scatter_fft * xp.array(fft_exist)
 
-norm_ret_fft_new = ret_fft_new * params.k_per_pixel ** (3 / 2)
-norm_ret_array_new = xp.fft.fftshift(
-    xp.fft.ifftn(xp.fft.ifftshift(norm_ret_fft_new), norm="backward"), axes=(2)
-)
-ret_array_new = norm_ret_array_new / (params.imgpx_unit * params.imgpx_unit_z**0.5)
-ret_ref_new = xp.real(calc_refractive_index_square(ret_array_new, params) ** 0.5)
-ret_array_new = xp.asnumpy(ret_ref_new)
+# norm_ret_fft_new = ret_fft_new * params.k_per_pixel ** (3 / 2)
+# norm_ret_array_new = xp.fft.fftshift(
+#     xp.fft.ifftn(xp.fft.ifftshift(norm_ret_fft_new), norm="backward"), axes=(2)
+# )
+# ret_array_new = norm_ret_array_new / (params.imgpx_unit * params.imgpx_unit_z**0.5)
+# ret_ref_new = xp.real(calc_refractive_index_square(ret_array_new, params) ** 0.5)
+# ret_array_new = xp.asnumpy(ret_ref_new)
 
-# print(np.testing.assert_almost_equal(ret_ref, odt_synthesized))
-print(np.sum(np.abs(ret_ref - odt_synthesized)))
-print(np.sum(np.abs(ret_array_new - odt_synthesized)))
-diff_ref = ret_array_new - odt_synthesized
-# slice_visualizer = SlicingVisualizer(diff_ref)
+# # print(np.testing.assert_almost_equal(ret_ref, odt_synthesized))
+# print(np.sum(np.abs(ret_ref - odt_synthesized)))
+# print(np.sum(np.abs(ret_array_new - odt_synthesized)))
+# diff_ref = ret_array_new - odt_synthesized
+# # slice_visualizer = SlicingVisualizer(diff_ref)
+# # slice_visualizer.run()
+
+# to_show = xp.asnumpy(ret_array_new)
+
+# print("true scatter potential with wrong fft index")
+# slice_visualizer = SlicingVisualizer(to_show)
 # slice_visualizer.run()
-
-to_show = xp.asnumpy(ret_array_new)
-
-print("true scatter potential with wrong fft index")
-slice_visualizer = SlicingVisualizer(to_show)
-slice_visualizer.run()
 
 # # %%
 # # iterative ODT

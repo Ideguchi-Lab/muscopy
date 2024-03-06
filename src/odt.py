@@ -220,7 +220,7 @@ def reconstruct_E(
 
 class ODTSynthesizer(Synthesizer):
     def ODT_synthesize(
-        self, approx: str, hermite=False, load_fft=False
+        self, approx: str, hermite=False, load_fft=False, calc_ocupancy=False
     ) -> tuple[np.ndarray, np.ndarray]:
         assert approx in ["Rytov", "Born"]
         assert self.reference_data is not None
@@ -317,6 +317,12 @@ class ODTSynthesizer(Synthesizer):
         synthesized_weight -= synthesized_weight != 1
         synthesized_fft /= synthesized_weight
 
+        # calculate the volume of filled pixels
+        filled_volume = xp.sum(synthesized_weight > 1)
+        full_volume = calc_full_volume(self.params)
+        ocupancy = filled_volume / full_volume
+        print(f"ocupancy: {ocupancy}")
+
         norm_synthesized_fft = synthesized_fft * self.params.k_per_pixel ** (3 / 2)
         norm_synthesized_array = xp.fft.ifftn(
             xp.fft.ifftshift(norm_synthesized_fft), norm="backward"
@@ -327,36 +333,48 @@ class ODTSynthesizer(Synthesizer):
 
         synthesized_array = xp.fft.fftshift(synthesized_array, axes=(2))
 
-        return synthesized_array, synthesized_fft
+        if calc_ocupancy:
+            return synthesized_array, synthesized_fft, ocupancy
+        else:
+            return synthesized_array, synthesized_fft
 
     def iterative_ODT(
         self, approx, epsilon=1e-6, max_N=100, hermite=False, load_fft=False
     ):
         # principle: Fr < 0
         array3d, array3d_fft = self.ODT_synthesize(approx, hermite, load_fft)
+        array3d = xp.fft.ifftshift(array3d, axes=(2))
         current_array = array3d.copy()
         former_array = current_array.copy()
         delta = xp.inf
         iteration = 0
+        # start iteration
         while (delta > epsilon) and (iteration < max_N):
-            current_array[current_array > 0] = 0
+            current_array[xp.real(current_array) > 0] = 0
             norm_current_array = current_array * (
                 self.params.imgpx_unit * self.params.imgpx_unit_z**0.5
-            )
+            )  # normalization for fft
             norm_current_fft = xp.fft.fftshift(
                 xp.fft.fftn(norm_current_array, norm="backward")
             )
             current_fft = norm_current_fft / self.params.k_per_pixel ** (3 / 2)
-            current_fft[array3d_fft != 0] = array3d_fft[array3d_fft != 0]
+            current_fft[array3d_fft != 0] = array3d_fft[
+                array3d_fft != 0
+            ]  # substitute the measured value
             norm_current_fft = current_fft * self.params.k_per_pixel ** (3 / 2)
-            norm_current_array = xp.real(
-                xp.fft.ifftn(xp.fft.ifftshift(norm_current_fft), norm="backward")
+            norm_current_array = xp.fft.ifftn(
+                xp.fft.ifftshift(norm_current_fft), norm="backward"
             )
+            # norm_current_array = xp.real(
+            #     norm_current_array
+            # )  # cut off the imaginary part
             current_array = norm_current_array / (
                 self.params.imgpx_unit * self.params.imgpx_unit_z**0.5
             )
 
-            delta = xp.sum(xp.abs(current_array - former_array))
+            delta = xp.sum(
+                xp.abs(current_array - former_array)
+            )  # calculate the difference
             iteration += 1
             former_array = current_array.copy()
 
@@ -462,3 +480,25 @@ def zeropad_higher_kz(array, extend):
         xp.fft.ifftn(xp.fft.ifftshift(new_array_fft), norm="forward") / norm_factor
     )
     return new_array
+
+
+def calc_full_volume(params):
+    """Calculate the volume which can be filled with FW light under the given parameters
+
+    Args:
+        params (ODTParameters): parameters for the ODT system
+
+    Returns:
+        xp.float : Volume
+    """
+    theta = xp.arcsin(params.aperturesize / (2 * params.fi_mag))
+    S = 2 * theta * params.fi_mag**2 - params.aperturesize * params.fi_mag * xp.cos(
+        theta
+    )
+    V = S * xp.pi * params.aperturesize
+    return V
+
+
+def calc_normalized_L2error(array, ref_array):
+    error = xp.sum(xp.abs(array - ref_array)) / xp.sum(xp.abs(ref_array))
+    return error

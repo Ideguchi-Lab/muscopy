@@ -37,13 +37,14 @@ from src.odt import (
     calc_refractive_index_square,
     discard_higher_kz,
     zeropad_higher_kz,
+    calc_normalized_L2error,
 )
 
 EDGE_SIZE = 0
 
 # %%
 NA_i = 1.0
-step_angle = 360 / 30
+step_angle = 360 / 10
 params = ODTParameters(
     532e-9,
     1.2,
@@ -67,10 +68,12 @@ shape_3d = (
     params.aperturesize * 2 + 1,
 )
 
-sample_index = 1.35
-radius = 20
+sample_index = 1.35  # PMMA=1.49, water=1.33
+radius = 10
 hermite = True
-hermite = False
+# hermite = False
+
+print("real beads size:", 2 * radius * params.imgpx_unit * 1e6, "um")
 
 # make answer 3D refractive map
 sphere = generate_3D_sphere(
@@ -224,10 +227,9 @@ ret_array = norm_ret_array / (params.imgpx_unit * params.imgpx_unit_z**0.5)
 # %%
 # zero pad higher kz
 ret_array_padded = zeropad_higher_kz(ret_array, params.aperturesize - params.fz_extent)
-ret_ref_padded = (
-    xp.real(calc_refractive_index_square(ret_array_padded, params) ** 0.5)
-    - params.n_sol
-)
+ret_ref_padded = xp.real(calc_refractive_index_square(ret_array_padded, params) ** 0.5)
+if PT:
+    ret_ref_padded = ret_ref_padded - params.n_sol
 if _cp:
     ret_ref_padded = xp.asnumpy(ret_ref_padded)
 print("zeropad refractive index with true scatter potential and true index")
@@ -305,6 +307,17 @@ print(
 )
 plt.savefig("synthesized_qpi.png")
 
+sample_phase = np.max(qpi_synthesized)
+estimated_phase = (
+    2
+    * np.pi
+    * 2
+    * radius
+    * params.imgpx_unit
+    * (sample_index - params.n_sol)
+    / params.wav
+)
+
 plt.close()
 fig = plt.figure()
 ax = fig.add_subplot(111)
@@ -320,8 +333,8 @@ cursor_visualizer.run()
 odt_synthesizer = ODTSynthesizer()
 odt_synthesizer.set_parameters(params)
 odt_synthesizer.set_data(test_data, ref_data)
-synthesized_array, odt_fft = odt_synthesizer.ODT_synthesize(
-    approx=approx, hermite=hermite, load_fft=load_fft
+synthesized_array, odt_fft, occupancy = odt_synthesizer.ODT_synthesize(
+    approx=approx, hermite=hermite, load_fft=load_fft, calc_ocupancy=True
 )
 r_index_map = (
     xp.real(calc_refractive_index_square(synthesized_array, params) ** 0.5)
@@ -331,10 +344,25 @@ r_index_map = (
 synthesized_array_pad = zeropad_higher_kz(
     synthesized_array, params.aperturesize - params.fz_extent
 )
-r_index_map_pad = (
-    xp.real(calc_refractive_index_square(synthesized_array_pad, params) ** 0.5)
-    - params.n_sol
+r_index_map_pad = xp.real(
+    calc_refractive_index_square(synthesized_array_pad, params) ** 0.5
 )
+
+# normalized_error = calc_normalized_L2error(r_index_map_pad, rindex_original)
+# # print(f"normalized error: {normalized_error}")
+
+# max_ref_index = xp.max(r_index_map)
+# ref_diff = (sample_index - params.n_sol) - max_ref_index
+# # print(f"refractive index difference: {max_ref_index - (sample_index - params.n_sol)}")
+
+# if PT:
+#     r_index_map = r_index_map - params.n_sol
+#     r_index_map_pad = r_index_map_pad - params.n_sol
+
+# print("====================================")
+# print(
+#     f"{occupancy=}, {sample_phase=}, {estimated_phase=}, {normalized_error=}, {ref_diff=}"
+# )
 
 # imag_scatter_potential = xp.imag(
 #     calc_refractive_index_square(synthesized_array, params) ** 0.5
@@ -361,7 +389,7 @@ r_index_map_pad = (
 # slice_visualizer = SlicingVisualizer(ret_scatter_pot_abs)
 # slice_visualizer.run()
 
-# %%
+# # %%
 
 if _cp:
     odt_synthesized = xp.asnumpy(r_index_map)
@@ -418,34 +446,37 @@ slice_visualizer.run()
 # slice_visualizer = SlicingVisualizer(to_show)
 # slice_visualizer.run()
 
-# # %%
-# # iterative ODT
-# odt_synthesizer = ODTSynthesizer()
-# odt_synthesizer.set_parameters(params)
-# # odt_synthesizer.set_data(test_data, ref_data)
-# odt_synthesizer.set_data(test_data, ref_data)
-# synthesized_array, odt_fft = odt_synthesizer.iterative_ODT(
-#     approx=approx, epsilon=1e-6, max_N=10000, hermite=hermite, load_fft=load_fft
-# )
+# %%
+# iterative ODT
+odt_synthesizer = ODTSynthesizer()
+odt_synthesizer.set_parameters(params)
+odt_synthesizer.set_data(test_data, ref_data)
+synthesized_array, odt_fft = odt_synthesizer.iterative_ODT(
+    approx=approx, epsilon=1e-6, max_N=1000, hermite=hermite, load_fft=load_fft
+)
 
-# synthesized_array = xp.real(
-#     calc_refractive_index_square(synthesized_array, params) ** 0.5
-# )
+synthesized_array_pad = zeropad_higher_kz(
+    synthesized_array, params.aperturesize - params.fz_extent
+)
 
-# if _cp:
-#     odt_synthesized = xp.asnumpy(synthesized_array)
-#     odt_fft = xp.asnumpy(xp.log(xp.abs(odt_fft) + 1))
-# else:
-#     odt_synthesized = synthesized_array
-#     odt_fft = np.log(np.abs(odt_fft) + 1)
-# # %%
-# # plot
-# slice_visualizer = SlicingVisualizer(odt_synthesized)
-# slice_visualizer.run()
+synthesized_odt = xp.real(
+    calc_refractive_index_square(synthesized_array_pad, params) ** 0.5
+)
 
-# # %%
-# # plot
-# slice_visualizer = SlicingVisualizer(odt_fft)
-# slice_visualizer.run()
+if _cp:
+    odt_synthesized = xp.asnumpy(synthesized_odt)
+    odt_fft = xp.asnumpy(xp.log(xp.abs(odt_fft) + 1))
+else:
+    odt_synthesized = synthesized_odt
+    odt_fft = np.log(np.abs(odt_fft) + 1)
+# %%
+# plot
+slice_visualizer = SlicingVisualizer(odt_synthesized)
+slice_visualizer.run()
 
-# # # # %%
+# %%
+# plot
+slice_visualizer = SlicingVisualizer(odt_fft)
+slice_visualizer.run()
+
+# # # %%

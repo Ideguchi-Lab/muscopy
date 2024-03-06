@@ -1,4 +1,5 @@
 import os
+import pathlib
 
 
 def numpy_parser(dir_path):
@@ -7,6 +8,14 @@ def numpy_parser(dir_path):
     for file in os.listdir(dir_path):
         if file.endswith(".npy"):
             files.append(os.path.join(dir_path, file))
+    return files
+
+
+def recurcive_numpy_parser(dir_path):
+    files = []
+    p = pathlib.Path(dir_path)
+    for path in p.glob("**/*.npy"):
+        files.append(path)
     return files
 
 

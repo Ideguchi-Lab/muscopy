@@ -237,9 +237,9 @@ class Synthesizer:
         synthesized_qpi = xp.angle(synthesized_array)
         # synthesized_qpi = xp.abs(xp.fft.ifft2(xp.fft.ifftshift(synthesized_fft)))
 
-        if _cp:
-            synthesized_fft = xp.asnumpy(synthesized_fft)
-            synthesized_qpi = xp.asnumpy(synthesized_qpi)
+        # if _cp:
+        #     synthesized_fft = xp.asnumpy(synthesized_fft)
+        #     synthesized_qpi = xp.asnumpy(synthesized_qpi)
 
         # synthesized_qpi = unwrap_phase(synthesized_qpi)
 

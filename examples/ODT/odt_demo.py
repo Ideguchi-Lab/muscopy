@@ -1,4 +1,5 @@
 # %%
+import os
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
@@ -243,6 +244,12 @@ NA_illumi = NA_i
 # approx = "Born"
 approx = "Rytov"
 
+# create dir if not exist
+if not os.path.exists("odt_test_data"):
+    os.mkdir("odt_test_data")
+    os.mkdir("odt_test_data/sample")
+    os.mkdir("odt_test_data/ref")
+
 generate_test_data(
     approx_field_fft,
     params,
@@ -273,12 +280,12 @@ print("generated test data!")
 
 # %%
 # execute synthetic aperture
-load_fft = True
-test_data = numpy_parser("odt_test_data/sample")
-ref_data = numpy_parser("odt_test_data/ref")
-# load_fft = False
-# test_data = numpy_parser("../data/aperture_sample_beads")
-# ref_data = numpy_parser("../data/aperture_ref_beads")
+# load_fft = True
+# test_data = numpy_parser("odt_test_data/sample")
+# ref_data = numpy_parser("odt_test_data/ref")
+load_fft = False
+test_data = numpy_parser("../data/aperture_sample_beads")
+ref_data = numpy_parser("../data/aperture_ref_beads")
 qpi_synthesizer = QPISynthesizer()
 qpi_synthesizer.set_parameters(params)
 # qpi_synthesizer.set_data(test_data)
@@ -446,37 +453,37 @@ slice_visualizer.run()
 # slice_visualizer = SlicingVisualizer(to_show)
 # slice_visualizer.run()
 
-# %%
-# iterative ODT
-odt_synthesizer = ODTSynthesizer()
-odt_synthesizer.set_parameters(params)
-odt_synthesizer.set_data(test_data, ref_data)
-synthesized_array, odt_fft = odt_synthesizer.iterative_ODT(
-    approx=approx, epsilon=1e-6, max_N=1000, hermite=hermite, load_fft=load_fft
-)
+# # %%
+# # iterative ODT
+# odt_synthesizer = ODTSynthesizer()
+# odt_synthesizer.set_parameters(params)
+# odt_synthesizer.set_data(test_data, ref_data)
+# synthesized_array, odt_fft = odt_synthesizer.iterative_ODT(
+#     approx=approx, epsilon=1e-6, max_N=1000, hermite=hermite, load_fft=load_fft
+# )
 
-synthesized_array_pad = zeropad_higher_kz(
-    synthesized_array, params.aperturesize - params.fz_extent
-)
+# synthesized_array_pad = zeropad_higher_kz(
+#     synthesized_array, params.aperturesize - params.fz_extent
+# )
 
-synthesized_odt = xp.real(
-    calc_refractive_index_square(synthesized_array_pad, params) ** 0.5
-)
+# synthesized_odt = xp.real(
+#     calc_refractive_index_square(synthesized_array_pad, params) ** 0.5
+# )
 
-if _cp:
-    odt_synthesized = xp.asnumpy(synthesized_odt)
-    odt_fft = xp.asnumpy(xp.log(xp.abs(odt_fft) + 1))
-else:
-    odt_synthesized = synthesized_odt
-    odt_fft = np.log(np.abs(odt_fft) + 1)
-# %%
-# plot
-slice_visualizer = SlicingVisualizer(odt_synthesized)
-slice_visualizer.run()
+# if _cp:
+#     odt_synthesized = xp.asnumpy(synthesized_odt)
+#     odt_fft = xp.asnumpy(xp.log(xp.abs(odt_fft) + 1))
+# else:
+#     odt_synthesized = synthesized_odt
+#     odt_fft = np.log(np.abs(odt_fft) + 1)
+# # %%
+# # plot
+# slice_visualizer = SlicingVisualizer(odt_synthesized)
+# slice_visualizer.run()
 
-# %%
-# plot
-slice_visualizer = SlicingVisualizer(odt_fft)
-slice_visualizer.run()
+# # %%
+# # plot
+# slice_visualizer = SlicingVisualizer(odt_fft)
+# slice_visualizer.run()
 
-# # # %%
+# # # # %%

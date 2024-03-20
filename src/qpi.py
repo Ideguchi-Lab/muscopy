@@ -101,3 +101,43 @@ def qpi(array, reference, params):
     # dif_phase = dif_phase - mean_phase
 
     return dif_phase
+
+
+def mipqpi(array_on, array_off, params, print_backend=False):
+    assert array_on.shape == array_off.shape
+    array_off_fft = xp.fft.fftshift(xp.fft.fft2(array_off))
+    mask = make_disk(params.offaxis_center, params.aperturesize, params.img_shape)
+    array_off_fft = array_off_fft * mask
+    array_off_fft = array_off_fft[
+        params.offaxis_center[0]
+        - params.aperturesize // 2 : params.offaxis_center[0]
+        + params.aperturesize // 2
+        + 1,
+        params.offaxis_center[1]
+        - params.aperturesize // 2 : params.offaxis_center[1]
+        + params.aperturesize // 2
+        + 1,
+    ]
+    array_off = xp.fft.ifft2(xp.fft.ifftshift(array_off_fft))
+
+    array_on_fft = xp.fft.fftshift(xp.fft.fft2(array_on))
+    array_on_fft = array_on_fft * mask
+    array_on_fft = array_on_fft[
+        params.offaxis_center[0]
+        - params.aperturesize // 2 : params.offaxis_center[0]
+        + params.aperturesize // 2
+        + 1,
+        params.offaxis_center[1]
+        - params.aperturesize // 2 : params.offaxis_center[1]
+        + params.aperturesize // 2
+        + 1,
+    ]
+    array_on = xp.fft.ifft2(xp.fft.ifftshift(array_on_fft))
+
+    dif_phase = xp.angle(array_on / array_off)
+
+    if print_backend:
+        backend = "cupy" if _cp else "numpy"
+        print(backend + " is used as a backend")
+
+    return dif_phase

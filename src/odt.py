@@ -317,11 +317,12 @@ class ODTSynthesizer(Synthesizer):
         synthesized_weight -= synthesized_weight != 1
         synthesized_fft /= synthesized_weight
 
-        # calculate the volume of filled pixels
-        filled_volume = xp.sum(synthesized_weight > 1)
-        full_volume = calc_full_volume(self.params)
-        ocupancy = filled_volume / full_volume
-        print(f"ocupancy: {ocupancy}")
+        if calc_ocupancy:
+            # calculate the volume of filled pixels
+            filled_volume = xp.sum(synthesized_weight > 1)
+            full_volume = calc_full_volume(self.params)
+            ocupancy = filled_volume / full_volume
+            print(f"ocupancy: {ocupancy}")
 
         norm_synthesized_fft = synthesized_fft * self.params.k_per_pixel ** (3 / 2)
         norm_synthesized_array = xp.fft.ifftn(
@@ -350,7 +351,7 @@ class ODTSynthesizer(Synthesizer):
         iteration = 0
         # start iteration
         while (delta > epsilon) and (iteration < max_N):
-            current_array[xp.real(current_array) > 0] = 0
+            current_array[xp.real(current_array) < 0] = 0
             norm_current_array = current_array * (
                 self.params.imgpx_unit * self.params.imgpx_unit_z**0.5
             )  # normalization for fft

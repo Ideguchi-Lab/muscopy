@@ -48,7 +48,7 @@ def preprocess_for_synthesis(array, ref_array=None, params=None, load_fft=False)
     if load_fft:
         array_fft = array
     else:
-        norm_array = array * params.pixelsize
+        norm_array = array * params.imgpx_unit
         norm_array_fft = xp.fft.fftshift(xp.fft.fft2(norm_array, norm="backward"))
         array_fft = norm_array_fft / params.k_per_pixel
 
@@ -90,7 +90,7 @@ def preprocess_for_synthesis(array, ref_array=None, params=None, load_fft=False)
         if load_fft:
             ref_array_fft = ref_array
         else:
-            norm_ref_array = ref_array * params.pixelsize
+            norm_ref_array = ref_array * params.imgpx_unit
             norm_ref_array_fft = xp.fft.fftshift(
                 xp.fft.fft2(norm_ref_array, norm="backward")
             )

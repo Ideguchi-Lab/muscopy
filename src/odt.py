@@ -58,6 +58,8 @@ class ODTParameters(QPIParameters):
         self.n_sol = n_sol
         self.NA_illumi = NA_illumi
 
+        self.calc_params()
+
     def calc_params(self):
         super().calc_params()
         self.fi_mag = (

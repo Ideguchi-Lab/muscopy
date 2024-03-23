@@ -19,6 +19,8 @@ class QPIParameters:
         self.pixelsize = pixelsize
         self.offaxis_center = offaxis_center
 
+        self.calc_params()
+
     def calc_params(self):
         self.dim = self.img_shape[0]
         self.freq_per_pixel = 1 / (self.pixelsize * self.dim)  # 1 / L

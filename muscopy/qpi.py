@@ -99,7 +99,7 @@ def get_field(array: xp.array, params: QPIParameters, crop_center: bool = False,
         crop_center (bool, optional): crop the center of the array or not. Defaults to False.
 
     Returns:
-        xp.array: field of the array
+        xp.array: field from the hologram array
     """
     array_fft = xp.fft.fftshift(xp.fft.fft2(array))
     mask = make_disk(params.offaxis_center, params.aperturesize / 2, params.img_shape)
@@ -115,6 +115,15 @@ def get_field(array: xp.array, params: QPIParameters, crop_center: bool = False,
 
 
 def correct_offset(array, offset_regs: list[tuple[tuple[int, int], tuple[int, int]]]) -> xp.array:
+    """internal method. correct phase and amplitude offset
+
+    Args:
+        array (xp.array): input complex array
+        offset_regs (list[tuple[tuple[int, int], tuple[int, int]]]): regions for offset calculation
+
+    Returns:
+        xp.array: corrected array
+    """
     phase_offset_list = []
     amplitude_offset_list = []
     for region in offset_regs:

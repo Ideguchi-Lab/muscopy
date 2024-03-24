@@ -14,12 +14,19 @@ import matplotlib.pyplot as plt
 from skimage.restoration import unwrap_phase
 from tqdm import tqdm
 
-from src.qpi import make_disk
+from muscopy.utils import EDGE_SIZE
+from muscopy.qpi import QPIParameters, make_disk
 
-EDGE_SIZE = 2  # for avoiding edge artifact in ifft
 
+def find_max_args(array: xp.array) -> tuple[int, int, float]:
+    """Find maximum value and its index in the array
 
-def find_max_args(array):
+    Args:
+        array (xp.array): array to find maximum value
+
+    Returns:
+        tuple[int, int, float]: position of max value, and max value itself
+    """
     max_value = xp.max(array)
     max_idx = xp.unravel_index(np.argmax(array), array.shape)
     max_x = max_idx[0]
@@ -28,7 +35,7 @@ def find_max_args(array):
     return max_x, max_y, max_value
 
 
-def preprocess_for_synthesis(array, ref_array=None, params=None, load_fft=False):
+def preprocess_for_synthesis(array: xp.array, ref_array: xp.array = None, params: , load_fft=False):
     global EDGE_SIZE
     REF_REGIONS = [
         [[2, 20], [2, 20]],
@@ -81,9 +88,7 @@ def preprocess_for_synthesis(array, ref_array=None, params=None, load_fft=False)
     ]
 
     norm_array_fft = array_fft * params.k_per_pixel
-    norm_array_cropped = xp.fft.ifft2(
-        xp.fft.ifftshift(norm_array_fft), norm="backward"
-    )[EDGE_SIZE:, EDGE_SIZE:]
+    norm_array_cropped = xp.fft.ifft2(xp.fft.ifftshift(norm_array_fft), norm="backward")[EDGE_SIZE:, EDGE_SIZE:]
     array_cropped = norm_array_cropped / params.imgpx_unit
 
     if not ref_array is None:
@@ -91,9 +96,7 @@ def preprocess_for_synthesis(array, ref_array=None, params=None, load_fft=False)
             ref_array_fft = ref_array
         else:
             norm_ref_array = ref_array * params.imgpx_unit
-            norm_ref_array_fft = xp.fft.fftshift(
-                xp.fft.fft2(norm_ref_array, norm="backward")
-            )
+            norm_ref_array_fft = xp.fft.fftshift(xp.fft.fft2(norm_ref_array, norm="backward"))
             ref_array_fft = norm_ref_array_fft / params.k_per_pixel
         ref_array_fft = ref_array_fft * disk
         ref_array_fft_pad = xp.pad(
@@ -110,9 +113,9 @@ def preprocess_for_synthesis(array, ref_array=None, params=None, load_fft=False)
             top_index + params.aperturesize : bottom_index + params.aperturesize,
         ]
         norm_ref_array_fft = ref_array_fft * params.k_per_pixel
-        norm_ref_array_cropped = xp.fft.ifft2(
-            xp.fft.ifftshift(norm_ref_array_fft), norm="backward"
-        )[EDGE_SIZE:, EDGE_SIZE:]
+        norm_ref_array_cropped = xp.fft.ifft2(xp.fft.ifftshift(norm_ref_array_fft), norm="backward")[
+            EDGE_SIZE:, EDGE_SIZE:
+        ]
         ref_array_cropped = norm_ref_array_cropped / params.imgpx_unit
 
     if not ref_array is None:
@@ -124,22 +127,10 @@ def preprocess_for_synthesis(array, ref_array=None, params=None, load_fft=False)
     amplitude_offset_list = []
     for region in REF_REGIONS:
         phase_offset_list.append(
-            xp.mean(
-                xp.angle(
-                    array_divided[
-                        region[0][0] : region[0][1], region[1][0] : region[1][1]
-                    ]
-                )
-            )
+            xp.mean(xp.angle(array_divided[region[0][0] : region[0][1], region[1][0] : region[1][1]]))
         )
         amplitude_offset_list.append(
-            xp.mean(
-                xp.abs(
-                    array_divided[
-                        region[0][0] : region[0][1], region[1][0] : region[1][1]
-                    ]
-                )
-            )
+            xp.mean(xp.abs(array_divided[region[0][0] : region[0][1], region[1][0] : region[1][1]]))
         )
     phase_offset = xp.mean(xp.array(phase_offset_list))
     amplitude_offset = xp.mean(xp.array(amplitude_offset_list))
@@ -173,7 +164,7 @@ class Synthesizer:
             for line in f:
                 self.oblique_centers.append(tuple(map(int, line.split(","))))
 
-    def synthesize(self, save_multiangle=False, load_fft=False):
+    def qpi(self, save_multiangle=False, load_fft=False):
         synthesized_fft = xp.zeros(
             (
                 2 * (self.params.aperturesize) + 1 - EDGE_SIZE,
@@ -201,9 +192,7 @@ class Synthesizer:
                 )
 
             else:
-                array_cropped, oblique_center = preprocess_for_synthesis(
-                    array, params=self.params, load_fft=load_fft
-                )
+                array_cropped, oblique_center = preprocess_for_synthesis(array, params=self.params, load_fft=load_fft)
             disk_synthesized = make_disk(
                 (
                     synthesized_center[0] - oblique_center[0],
@@ -218,9 +207,7 @@ class Synthesizer:
                 # self.multiangle_qpi[i] = xp.imag(array_cropped)
 
             norm_array_cropped = array_cropped * self.params.imgpx_unit
-            norm_fft_cropped = xp.fft.fftshift(
-                xp.fft.fft2(norm_array_cropped, norm="backward")
-            )
+            norm_fft_cropped = xp.fft.fftshift(xp.fft.fft2(norm_array_cropped, norm="backward"))
             fft_cropped = norm_fft_cropped / self.params.k_per_pixel
 
             fft_cropped = fft_cropped * disk_synthesized
@@ -230,12 +217,96 @@ class Synthesizer:
 
         synthesized_fft /= synthesized_weight
         norm_synthesized_fft = synthesized_fft * self.params.k_per_pixel
-        norm_synthesized_array = xp.fft.ifft2(
-            xp.fft.ifftshift(norm_synthesized_fft), norm="backward"
-        )
+        norm_synthesized_array = xp.fft.ifft2(xp.fft.ifftshift(norm_synthesized_fft), norm="backward")
         synthesized_array = norm_synthesized_array / self.params.imgpx_unit
         synthesized_qpi = xp.angle(synthesized_array)
         # synthesized_qpi = xp.abs(xp.fft.ifft2(xp.fft.ifftshift(synthesized_fft)))
+
+        # if _cp:
+        #     synthesized_fft = xp.asnumpy(synthesized_fft)
+        #     synthesized_qpi = xp.asnumpy(synthesized_qpi)
+
+        # synthesized_qpi = unwrap_phase(synthesized_qpi)
+
+        if save_multiangle:
+            if os.path.exists("multiangle_qpi"):
+                import shutil
+
+                shutil.rmtree("multiangle_qpi")
+            os.mkdir("multiangle_qpi")
+            for i in range(len(self.target_data)):
+                # save as png
+                if _cp:
+                    plt.imsave(
+                        f"multiangle_qpi/{i:03}.png",
+                        xp.asnumpy(self.multiangle_qpi[i]),
+                        cmap="gray",
+                    )
+                else:
+                    plt.imsave(
+                        f"multiangle_qpi/{i:03}.png",
+                        self.multiangle_qpi[i],
+                        cmap="gray",
+                    )
+
+        return synthesized_qpi, synthesized_fft
+
+    def mipqpi(self, save_multiangle=False, load_fft=False):
+        synthesized_fft = xp.zeros(
+            (
+                2 * (self.params.aperturesize) + 1 - EDGE_SIZE,
+                2 * (self.params.aperturesize) + 1 - EDGE_SIZE,
+            ),
+            dtype=xp.complex128,
+        )
+        synthesized_center = (
+            self.params.aperturesize - EDGE_SIZE // 2,
+            self.params.aperturesize - EDGE_SIZE // 2,
+        )
+        synthesized_weight = xp.ones(synthesized_fft.shape)
+
+        self.multiangle_qpi = dict()
+
+        print("synthesizing...")
+        for i in tqdm(range(len(self.target_data))):
+            array = xp.load(self.target_data[i])
+
+            if self.reference_data is not None:
+                ref_array = xp.load(self.reference_data[i])
+
+                array_cropped, oblique_center = preprocess_for_synthesis(
+                    array, ref_array, params=self.params, load_fft=load_fft
+                )
+
+            else:
+                array_cropped, oblique_center = preprocess_for_synthesis(array, params=self.params, load_fft=load_fft)
+            disk_synthesized = make_disk(
+                (
+                    synthesized_center[0] - oblique_center[0],
+                    synthesized_center[1] - oblique_center[1],
+                ),
+                self.params.aperturesize // 2,
+                array_cropped.shape,
+            )
+
+            if save_multiangle:
+                self.multiangle_qpi[i] = xp.angle(array_cropped)
+                # self.multiangle_qpi[i] = xp.imag(array_cropped)
+
+            norm_array_cropped = array_cropped * self.params.imgpx_unit
+            norm_fft_cropped = xp.fft.fftshift(xp.fft.fft2(norm_array_cropped, norm="backward"))
+            fft_cropped = norm_fft_cropped / self.params.k_per_pixel
+
+            fft_cropped = fft_cropped * disk_synthesized
+
+            synthesized_fft += fft_cropped
+            synthesized_weight += disk_synthesized != 0
+
+        synthesized_fft /= synthesized_weight
+        norm_synthesized_fft = synthesized_fft * self.params.k_per_pixel
+        norm_synthesized_array = xp.fft.ifft2(xp.fft.ifftshift(norm_synthesized_fft), norm="backward")
+        synthesized_array = norm_synthesized_array / self.params.imgpx_unit
+        synthesized_qpi = xp.angle(synthesized_array)
 
         # if _cp:
         #     synthesized_fft = xp.asnumpy(synthesized_fft)

@@ -7,8 +7,7 @@ except:
 
     _cp = False
 
-from microscopy_converters.src.mipqpi import (QPIParameters, convert_to_png,
-                                              decode_adimec, mipqpi)
+from microscopy_converters.muscopy.mipqpi import QPIParameters, convert_to_png, decode_adimec, mipqpi
 
 
 def mipqpi_converter_adimec(array1, array2, cutoff):

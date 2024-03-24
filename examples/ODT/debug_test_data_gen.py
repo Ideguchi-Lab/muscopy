@@ -22,12 +22,10 @@ sys.path.append("../..")
 
 from generate_hologram_from3Dmap import *
 
-from src.odt import ODTParameters, ODTSynthesizer, calc_refractive_index_square
+from muscopy.odt import ODTParameters, ODTSynthesizer, calc_refractive_index_square
 
 # %%
-params = ODTParameters(
-    532e-9, 1.2, (1400, 1400), (700, 700), (3.45 * 1e-6) * 3 / 200 / 5, (623, 612), 1.33
-)
+params = ODTParameters(532e-9, 1.2, (1400, 1400), (700, 700), (3.45 * 1e-6) * 3 / 200 / 5, (623, 612), 1.33)
 params.calc_params()
 params.print_all_parameters()
 
@@ -58,9 +56,7 @@ ref_approx_field_fft = ref_scatter_fft / kz_array / 2j
 
 # %%
 
-E_initial = xp.ones(
-    (2 * params.aperturesize + 1, 2 * params.aperturesize + 1), dtype=xp.complex128
-)
+E_initial = xp.ones((2 * params.aperturesize + 1, 2 * params.aperturesize + 1), dtype=xp.complex128)
 
 # NA_illumi = 1.0
 NA_illumi = 0
@@ -75,9 +71,7 @@ oblique_shift = (
     int(ki * xp.sin(illumi_angle_step * i / 360 * 2 * xp.pi)),
 )
 print(f"{oblique_shift=}")
-test_data_fft_cropped = extract3Dto2D_minimum(
-    array_3d_fft, params, oblique_shift=oblique_shift
-)
+test_data_fft_cropped = extract3Dto2D_minimum(array_3d_fft, params, oblique_shift=oblique_shift)
 
 # %%
 fft_to_show = xp.asnumpy((xp.abs(test_data_fft_cropped)))
@@ -158,14 +152,8 @@ plt.imshow(xp.asnumpy(xp.log(xp.abs(to_show))))
 # %%
 
 test_data_fft[
-    params.offaxis_center[0]
-    - params.aperturesize // 2 : params.offaxis_center[0]
-    + params.aperturesize // 2
-    + 1,
-    params.offaxis_center[1]
-    - params.aperturesize // 2 : params.offaxis_center[1]
-    + params.aperturesize // 2
-    + 1,
+    params.offaxis_center[0] - params.aperturesize // 2 : params.offaxis_center[0] + params.aperturesize // 2 + 1,
+    params.offaxis_center[1] - params.aperturesize // 2 : params.offaxis_center[1] + params.aperturesize // 2 + 1,
 ] = E_test_fft[
     params.aperturesize
     - oblique_shift[1]

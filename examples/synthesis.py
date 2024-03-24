@@ -7,7 +7,7 @@ sys.path.append("..")
 
 import matplotlib.pyplot as plt
 import numpy as np
-from src.aperture_synthesis import Synthesizer
+from muscopy.aperture_synthesis import Synthesizer
 
 try:
     import cupy as xp

@@ -8,7 +8,7 @@ sys.path.append("..")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from src.odt import ODTSynthesizer
+from muscopy.odt import ODTSynthesizer
 
 try:
     import cupy as xp

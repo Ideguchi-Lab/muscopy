@@ -6,8 +6,8 @@ import os
 import sys
 
 sys.path.append("../..")
-from src.odt import ODTParameters, find_max_args
-from src.qpi import make_disk
+from muscopy.odt import ODTParameters, find_max_args
+from muscopy.qpi import make_disk
 
 try:
     import cupy as xp
@@ -23,9 +23,7 @@ EDGE_SIZE = 0
 # %%
 
 
-def generate_3D_sphere(
-    shape: tuple | int, radius: float, center: tuple | None = None
-) -> xp.ndarray:
+def generate_3D_sphere(shape: tuple | int, radius: float, center: tuple | None = None) -> xp.ndarray:
     """Generate 3D sphere. The sphere is filled with 1, otherwise 0.
 
     Args:
@@ -40,9 +38,7 @@ def generate_3D_sphere(
         shape = (shape, shape, shape)
     if center is None:
         center = tuple([int(i / 2) for i in shape])
-    xx, yy, zz = xp.meshgrid(
-        xp.arange(shape[0]), xp.arange(shape[1]), xp.arange(shape[2]), indexing="ij"
-    )
+    xx, yy, zz = xp.meshgrid(xp.arange(shape[0]), xp.arange(shape[1]), xp.arange(shape[2]), indexing="ij")
     sphere = (xx - center[0]) ** 2 + (yy - center[1]) ** 2 + (zz - center[2]) ** 2
     sphere = sphere < radius**2
     return sphere
@@ -59,20 +55,13 @@ def generate_3d_gaussian(shape: tuple, center: tuple, sigma: float) -> xp.ndarra
     Returns:
         xp.ndarray: 3D Gaussian distribution
     """
-    xx, yy, zz = xp.meshgrid(
-        xp.arange(shape[0]), xp.arange(shape[1]), xp.arange(shape[2]), indexing="ij"
-    )
-    gaussian = xp.exp(
-        -((xx - center[0]) ** 2 + (yy - center[1]) ** 2 + (zz - center[2]) ** 2)
-        / (2 * sigma**2)
-    )
+    xx, yy, zz = xp.meshgrid(xp.arange(shape[0]), xp.arange(shape[1]), xp.arange(shape[2]), indexing="ij")
+    gaussian = xp.exp(-((xx - center[0]) ** 2 + (yy - center[1]) ** 2 + (zz - center[2]) ** 2) / (2 * sigma**2))
     return gaussian
 
 
 def generate_3D_slope(shape: tuple, axis: str) -> xp.ndarray:
-    xx, yy, zz = xp.meshgrid(
-        xp.arange(shape[0]), xp.arange(shape[1]), xp.arange(shape[2]), indexing="ij"
-    )
+    xx, yy, zz = xp.meshgrid(xp.arange(shape[0]), xp.arange(shape[1]), xp.arange(shape[2]), indexing="ij")
     if axis == "x":
         slope = xx
     elif axis == "y":
@@ -110,9 +99,7 @@ def extract3Dto2D_minimum(
         xp.arange(array_3d_fft.shape[2]),
         indexing="ij",
     )
-    circle = (xx - params.aperturesize - oblique_shift[0]) ** 2 + (
-        yy - params.aperturesize - oblique_shift[1]
-    ) ** 2
+    circle = (xx - params.aperturesize - oblique_shift[0]) ** 2 + (yy - params.aperturesize - oblique_shift[1]) ** 2
     circle = circle < (params.aperturesize // 2) ** 2
     Fz_circle = (
         params.fi_mag**2
@@ -163,9 +150,7 @@ def generate_test_data(
 ):
     assert approx in ["Rytov", "Born"]
     num = int(360 / illumi_angle_step)
-    E_initial = xp.ones(
-        (2 * params.aperturesize + 1, 2 * params.aperturesize + 1), dtype=xp.complex128
-    )
+    E_initial = xp.ones((2 * params.aperturesize + 1, 2 * params.aperturesize + 1), dtype=xp.complex128)
     # include noise
     # E_initial = (
     #     E_initial
@@ -181,21 +166,13 @@ def generate_test_data(
     # f_illumi = round(NA_illumi / params.wav / params.freq_per_pixel)  # + 1 why +1?
     for i in range(num):
         oblique_shift = (
-            int(
-                params.fi_lateral_mag * xp.cos(illumi_angle_step * i / 360 * 2 * xp.pi)
-            ),
-            int(
-                params.fi_lateral_mag * xp.sin(illumi_angle_step * i / 360 * 2 * xp.pi)
-            ),
+            int(params.fi_lateral_mag * xp.cos(illumi_angle_step * i / 360 * 2 * xp.pi)),
+            int(params.fi_lateral_mag * xp.sin(illumi_angle_step * i / 360 * 2 * xp.pi)),
         )
-        test_data_fft_cropped = extract3Dto2D_minimum(
-            array_3d_fft, params, oblique_shift=oblique_shift
-        )
+        test_data_fft_cropped = extract3Dto2D_minimum(array_3d_fft, params, oblique_shift=oblique_shift)
         fft_extent = test_data_fft_cropped
         norm_fft_extent = fft_extent * params.k_per_pixel
-        norm_test_data_extent = xp.fft.ifft2(
-            xp.fft.ifftshift(norm_fft_extent), norm="backward"
-        )
+        norm_test_data_extent = xp.fft.ifft2(xp.fft.ifftshift(norm_fft_extent), norm="backward")
         test_data_extent = norm_test_data_extent / params.imgpx_unit
         # test_data_extent[:EDGE_SIZE, :] = 1e-6
         # test_data_extent[:, :EDGE_SIZE] = 1e-6

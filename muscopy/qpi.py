@@ -114,11 +114,25 @@ def get_field(array: xp.array, params: QPIParameters, crop_center: bool = False,
     return array
 
 
+def correct_offset(array, offset_regs: list[tuple[tuple[int, int], tuple[int, int]]]) -> xp.array:
+    phase_offset_list = []
+    amplitude_offset_list = []
+    for region in offset_regs:
+        phase_offset_list.append(xp.mean(xp.angle(array[region[0][0] : region[0][1], region[1][0] : region[1][1]])))
+        amplitude_offset_list.append(xp.mean(xp.abs(array[region[0][0] : region[0][1], region[1][0] : region[1][1]])))
+    phase_offset = xp.mean(xp.array(phase_offset_list))
+    amplitude_offset = xp.mean(xp.array(amplitude_offset_list))
+
+    array = array * xp.exp(-1j * phase_offset) / amplitude_offset
+
+    return array
+
+
 def qpi(
     array: xp.array,
     reference: xp.array,
     params: QPIParameters,
-    phase_offset_regs: list[tuple[tuple[int, int], tuple[int, int]]] = None,
+    offset_regs: list[tuple[tuple[int, int], tuple[int, int]]] | None = None,
 ) -> xp.array:
     """Quantitative phase imaging (QPI) calculation
 
@@ -126,7 +140,7 @@ def qpi(
         array (xp.array): on-axis hologram
         reference (xp.array): off-axis hologram
         params (QPIParameters): QPIParameters class
-        phase_offset_regs (list[tuple[tuple[int, int], tuple[int, int]]], optional): regions for phase offset calculation. Defaults to None.
+        offset_regs (list[tuple[tuple[int, int], tuple[int, int]]], optional): regions for offset calculation. Defaults to None.
 
     Returns:
         xp.array: QPI phase image
@@ -136,15 +150,13 @@ def qpi(
     array_field = get_field(array, params)
     ref_array_field = get_field(reference, params)
 
-    dif_phase = xp.angle(array_field / ref_array_field)
+    array_div = array_field / ref_array_field
 
-    # remove phase offset
-    if phase_offset_regs is not None:
-        phase_offset_ls = []
-        for reg in phase_offset_regs:
-            phase_offset_ls.append(xp.mean(dif_phase[reg[0][0] : reg[0][1], reg[1][0] : reg[1][1]]))
-        phase_offset = xp.mean(phase_offset_ls)
-        dif_phase -= phase_offset
+    # remove phase and amplitude offset
+    if offset_regs is not None:
+        array_div = correct_offset(array_div, offset_regs)
+
+    dif_phase = xp.angle(array_div)
 
     return dif_phase
 
@@ -153,8 +165,9 @@ def mipqpi(
     array_on: xp.array,
     array_off: xp.array,
     params: QPIParameters,
-    phase_offset_regs: list[tuple[tuple[int, int], tuple[int, int]]] = None,
+    offset_regs: list[tuple[tuple[int, int], tuple[int, int]]] | None = None,
     crop_center: bool = False,
+    **kwargs,
 ) -> xp.array:
     """Mid-infrared photothermal quantitative phase imaging (MIP-QPI) calculation
 
@@ -162,24 +175,22 @@ def mipqpi(
         array_on (xp.array): on-axis hologram
         array_off (xp.array): off-axis hologram
         params (QPIParameters): QPIParameters class
-        phase_offset_regs (list[tuple[tuple[int, int], tuple[int, int]]], optional): regions for phase offset calculation. Defaults to None.
+        offset_regs (list[tuple[tuple[int, int], tuple[int, int]]], optional): regions for phase offset calculation. Defaults to None.
         crop_center (bool, optional): crop the center of the array or not. Defaults to False.
 
     Returns:
         xp.array: MIP-QPI phase image
     """
     assert array_on.shape == array_off.shape
-    array_on_field = get_field(array_on, params, crop_center=crop_center)
-    array_off_field = get_field(array_off, params, crop_center=crop_center)
+    array_on_field = get_field(array_on, params, crop_center=crop_center, **kwargs)
+    array_off_field = get_field(array_off, params, crop_center=crop_center, **kwargs)
 
-    dif_phase = xp.angle(array_on_field / array_off_field)
+    array_div = array_on_field / array_off_field
 
-    # remove phase offset
-    if phase_offset_regs is not None:
-        phase_offset_ls = []
-        for reg in phase_offset_regs:
-            phase_offset_ls.append(xp.mean(dif_phase[reg[0][0] : reg[0][1], reg[1][0] : reg[1][1]]))
-        phase_offset = xp.mean(phase_offset_ls)
-        dif_phase -= phase_offset
+    # remove phase and amplitude offset
+    if offset_regs is not None:
+        array_div = correct_offset(array_div, offset_regs)
+
+    dif_phase = xp.angle(array_div)
 
     return dif_phase

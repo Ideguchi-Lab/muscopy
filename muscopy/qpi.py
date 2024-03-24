@@ -118,7 +118,7 @@ def qpi(
     array: xp.array,
     reference: xp.array,
     params: QPIParameters,
-    phase_offset_regs: list[list[list[int, int], list[int, int]]] = None,
+    phase_offset_regs: list[tuple[tuple[int, int], tuple[int, int]]] = None,
 ) -> xp.array:
     """Quantitative phase imaging (QPI) calculation
 
@@ -126,7 +126,7 @@ def qpi(
         array (xp.array): on-axis hologram
         reference (xp.array): off-axis hologram
         params (QPIParameters): QPIParameters class
-        phase_offset_regs (list[list[list[int, int], list[int, int]]], optional): regions for phase offset calculation. Defaults to None.
+        phase_offset_regs (list[tuple[tuple[int, int], tuple[int, int]]], optional): regions for phase offset calculation. Defaults to None.
 
     Returns:
         xp.array: QPI phase image
@@ -153,7 +153,7 @@ def mipqpi(
     array_on: xp.array,
     array_off: xp.array,
     params: QPIParameters,
-    phase_offset_regs: list[list[list[int, int], list[int, int]]] = None,
+    phase_offset_regs: list[tuple[tuple[int, int], tuple[int, int]]] = None,
     crop_center: bool = False,
 ) -> xp.array:
     """Mid-infrared photothermal quantitative phase imaging (MIP-QPI) calculation
@@ -162,7 +162,7 @@ def mipqpi(
         array_on (xp.array): on-axis hologram
         array_off (xp.array): off-axis hologram
         params (QPIParameters): QPIParameters class
-        phase_offset_regs (list[list[list[int, int], list[int, int]]], optional): regions for phase offset calculation. Defaults to None.
+        phase_offset_regs (list[tuple[tuple[int, int], tuple[int, int]]], optional): regions for phase offset calculation. Defaults to None.
         crop_center (bool, optional): crop the center of the array or not. Defaults to False.
 
     Returns:

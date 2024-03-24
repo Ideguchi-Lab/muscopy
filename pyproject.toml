@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "muscopy"
+version = "0.1.0"
+description = "A library for microscopy analyze functions"
+readme = "README.md"
+authors = [{name="Masato Fukushima", email="masato63fuk@g.ecc.u-tokyo.ac.jp"}]
+license = {file = "LICENSE"}
+requires-python = ">=3.8.0"
+dynamic = ["dependencies"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+]
+
+[tool.setuptools.dynamic]
+dependencies = {file = "requirements.txt"}
+
+[tool.black]
+line-length = 120
+
+[tool.isort]
+profile = "black"
+line_length = 120
+multi_line_output = 3
+include_trailing_comma = true
+
+[tool.flake8]
+max-line-length = 120
+max-complexity = 18
+ignore = "E203,E266,W503,"
+
+[tool.mypy]
+no_strict_optional = true
+ignore_missing_imports = true
+check_untyped_defs = true

@@ -9,7 +9,7 @@ sys.path.append("../")
 import numpy as np
 import matplotlib.pyplot as plt
 
-from src.odt import find_max_args
+from muscopy.odt import find_max_args
 
 seed = 42
 

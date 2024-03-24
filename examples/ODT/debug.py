@@ -25,15 +25,13 @@ from generate_hologram_from3Dmap import (
     extract3Dto2D,
 )
 
-from src.odt import ODTParameters
+from muscopy.odt import ODTParameters
 
 # %%
 # params = ODTParameters(
 #     532e-9, 1.2, (1400, 1400), (700, 700), (3.45 * 1e-6) * 3 / 200 / 5, (623, 612), 1.33
 # )
-params = ODTParameters(
-    532e-9, 1.2, (400, 400), (200, 200), (3.45 * 1e-6) * 3 / 200 / 1, (100, 100), 1.33
-)
+params = ODTParameters(532e-9, 1.2, (400, 400), (200, 200), (3.45 * 1e-6) * 3 / 200 / 1, (100, 100), 1.33)
 # params = ODTParameters(
 #     532e-9, 1.2, (1400, 1400), (700, 700), (3.45 * 1e-6) * 3 / 200, (297, 277), 1.33
 # )

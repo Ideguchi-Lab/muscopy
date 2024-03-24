@@ -30,9 +30,9 @@ from generate_hologram_from3Dmap import (
     generate_3d_gaussian,
 )
 
-from src.dir_parser import numpy_parser
-from src.aperture_synthesis import Synthesizer as QPISynthesizer
-from src.odt import (
+from muscopy.dir_parser import numpy_parser
+from muscopy.aperture_synthesis import Synthesizer as QPISynthesizer
+from muscopy.odt import (
     ODTParameters,
     ODTSynthesizer,
     calc_refractive_index_square,
@@ -85,13 +85,9 @@ sphere = generate_3D_sphere(
 )
 
 depth = 30
-plate = generate_plate(
-    shape_3d, (params.aperturesize, params.aperturesize, params.aperturesize), 30, depth
-)
+plate = generate_plate(shape_3d, (params.aperturesize, params.aperturesize, params.aperturesize), 30, depth)
 
-gauss = generate_3d_gaussian(
-    shape_3d, (params.aperturesize, params.aperturesize, params.aperturesize), radius
-)
+gauss = generate_3d_gaussian(shape_3d, (params.aperturesize, params.aperturesize, params.aperturesize), radius)
 
 PT_radius = 5
 PT_dn = 0.1  # in the real set up, order may be 1e-2. but, current set up, 1e-2 modulation may be difficult to detect
@@ -110,9 +106,7 @@ r_sample = sphere
 # r_sample = slope
 # r_sample = plate
 
-uniform_background = discard_higher_kz(
-    xp.ones(r_sample.shape) * params.n_sol, params.aperturesize - params.fz_extent
-)
+uniform_background = discard_higher_kz(xp.ones(r_sample.shape) * params.n_sol, params.aperturesize - params.fz_extent)
 
 # create target and reference refractive index map
 PT = False
@@ -129,29 +123,17 @@ rindex_original = ref_rindex + r_sample * (sample_index - params.n_sol)
 rindex = discard_higher_kz(rindex_original, params.aperturesize - params.fz_extent)
 ref_rindex = discard_higher_kz(ref_rindex, params.aperturesize - params.fz_extent)
 # then calculate scattering potential based on refractive index
-scatter_potential = (
-    -1
-    * ((params.k_per_pixel * params.fi_mag)) ** 2
-    * (rindex**2 / uniform_background**2 - 1)
-)
+scatter_potential = -1 * ((params.k_per_pixel * params.fi_mag)) ** 2 * (rindex**2 / uniform_background**2 - 1)
 
-norm_scatter_potential = (
-    scatter_potential * params.imgpx_unit * params.imgpx_unit_z**0.5
-)
-norm_scatter_fft = xp.fft.fftshift(
-    xp.fft.fftn(xp.fft.ifftshift(norm_scatter_potential, axes=(2)), norm="backward")
-)
+norm_scatter_potential = scatter_potential * params.imgpx_unit * params.imgpx_unit_z**0.5
+norm_scatter_fft = xp.fft.fftshift(xp.fft.fftn(xp.fft.ifftshift(norm_scatter_potential, axes=(2)), norm="backward"))
 scatter_fft = norm_scatter_fft / params.k_per_pixel ** (3 / 2)
 # scatter_fft[0:EDGE_SIZE, :, :] = 0
 # scatter_fft[:, :, 0:EDGE_SIZE] = 0
 # scatter_fft[:, 0:EDGE_SIZE, :] = 0
-ref_scatter_potential = -((params.k_per_pixel * params.fi_mag) ** 2) * (
-    ref_rindex**2 / uniform_background**2 - 1
-)
+ref_scatter_potential = -((params.k_per_pixel * params.fi_mag) ** 2) * (ref_rindex**2 / uniform_background**2 - 1)
 
-norm_ref_scatter_potential = (
-    ref_scatter_potential * params.imgpx_unit * params.imgpx_unit_z**0.5
-)
+norm_ref_scatter_potential = ref_scatter_potential * params.imgpx_unit * params.imgpx_unit_z**0.5
 norm_ref_scatter_fft = xp.fft.fftshift(
     xp.fft.fftn(xp.fft.ifftshift(norm_ref_scatter_potential, axes=(2)), norm="backward")
 )
@@ -189,9 +171,7 @@ for angle in range(0, 360, int(step_angle)):
         int(params.fi_lateral_mag * np.sin(np.deg2rad(angle))),
     )
     print(oblique_shift)
-    map = extract3Dto2D_minimum(
-        ref_rindex, params, oblique_shift, return_index_map=True
-    )
+    map = extract3Dto2D_minimum(ref_rindex, params, oblique_shift, return_index_map=True)
     ret_index += map
 
 ret_index = ret_index > 0
@@ -213,9 +193,7 @@ norm_ret_fft = ret_fft * params.k_per_pixel ** (3 / 2)
 # ret_array = (params.freq_per_pixel) ** 3 * xp.fft.fftshift(
 #     xp.fft.ifftn(xp.fft.ifftshift(ret_fft)), axes=(2)
 # )
-norm_ret_array = xp.fft.fftshift(
-    xp.fft.ifftn(xp.fft.ifftshift(norm_ret_fft), norm="backward"), axes=(2)
-)
+norm_ret_array = xp.fft.fftshift(xp.fft.ifftn(xp.fft.ifftshift(norm_ret_fft), norm="backward"), axes=(2))
 ret_array = norm_ret_array / (params.imgpx_unit * params.imgpx_unit_z**0.5)
 # ret_ref = xp.real(params.n_sol * (1 - calc_refractive_index_square(ret_array, params)) ** 0.5)
 # if _cp:
@@ -290,9 +268,7 @@ qpi_synthesizer = QPISynthesizer()
 qpi_synthesizer.set_parameters(params)
 # qpi_synthesizer.set_data(test_data)
 qpi_synthesizer.set_data(test_data, ref_data)
-qpi_synthesized, qpi_fft = qpi_synthesizer.synthesize(
-    save_multiangle=True, load_fft=load_fft
-)
+qpi_synthesized, qpi_fft = qpi_synthesizer.synthesize(save_multiangle=True, load_fft=load_fft)
 
 if _cp:
     qpi_synthesized = xp.asnumpy(qpi_synthesized)
@@ -315,15 +291,7 @@ print(
 plt.savefig("synthesized_qpi.png")
 
 sample_phase = np.max(qpi_synthesized)
-estimated_phase = (
-    2
-    * np.pi
-    * 2
-    * radius
-    * params.imgpx_unit
-    * (sample_index - params.n_sol)
-    / params.wav
-)
+estimated_phase = 2 * np.pi * 2 * radius * params.imgpx_unit * (sample_index - params.n_sol) / params.wav
 
 plt.close()
 fig = plt.figure()
@@ -343,17 +311,10 @@ odt_synthesizer.set_data(test_data, ref_data)
 synthesized_array, odt_fft, occupancy = odt_synthesizer.ODT_synthesize(
     approx=approx, hermite=hermite, load_fft=load_fft, calc_ocupancy=True
 )
-r_index_map = (
-    xp.real(calc_refractive_index_square(synthesized_array, params) ** 0.5)
-    - params.n_sol
-)
+r_index_map = xp.real(calc_refractive_index_square(synthesized_array, params) ** 0.5) - params.n_sol
 
-synthesized_array_pad = zeropad_higher_kz(
-    synthesized_array, params.aperturesize - params.fz_extent
-)
-r_index_map_pad = xp.real(
-    calc_refractive_index_square(synthesized_array_pad, params) ** 0.5
-)
+synthesized_array_pad = zeropad_higher_kz(synthesized_array, params.aperturesize - params.fz_extent)
+r_index_map_pad = xp.real(calc_refractive_index_square(synthesized_array_pad, params) ** 0.5)
 
 # normalized_error = calc_normalized_L2error(r_index_map_pad, rindex_original)
 # # print(f"normalized error: {normalized_error}")

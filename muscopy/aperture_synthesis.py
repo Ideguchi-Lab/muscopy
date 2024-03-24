@@ -9,13 +9,14 @@ except ImportError:
 
     _cp = False
 
-import numpy as np
+import shutil
+
 import matplotlib.pyplot as plt
-from skimage.restoration import unwrap_phase
+import numpy as np
 from tqdm import tqdm
 
-from muscopy.utils import EDGE_SIZE
-from muscopy.qpi import QPIParameters, make_disk
+from muscopy.cfg import EDGE_SIZE
+from muscopy.qpi import QPIParameters, correct_offset, make_disk
 
 
 def find_max_args(array: xp.array) -> tuple[int, int, float]:
@@ -35,136 +36,206 @@ def find_max_args(array: xp.array) -> tuple[int, int, float]:
     return max_x, max_y, max_value
 
 
-def preprocess_for_synthesis(array: xp.array, ref_array: xp.array = None, params: , load_fft=False):
-    global EDGE_SIZE
-    REF_REGIONS = [
-        [[2, 20], [2, 20]],
-        [
-            [2, 20],
-            [params.aperturesize - 20 - EDGE_SIZE, params.aperturesize - 2 - EDGE_SIZE],
-        ],
-        [
-            [params.aperturesize - 20 - EDGE_SIZE, params.aperturesize - 2 - EDGE_SIZE],
-            [2, 20],
-        ],
-        [
-            [params.aperturesize - 20 - EDGE_SIZE, params.aperturesize - 2 - EDGE_SIZE],
-            [params.aperturesize - 20 - EDGE_SIZE, params.aperturesize - 2 - EDGE_SIZE],
-        ],
-    ]
-    if load_fft:
-        array_fft = array
-    else:
-        norm_array = array * params.imgpx_unit
-        norm_array_fft = xp.fft.fftshift(xp.fft.fft2(norm_array, norm="backward"))
-        array_fft = norm_array_fft / params.k_per_pixel
+def crop_oblique_array(
+    array: xp.array, oblique_center: tuple[int, int], aperturesize: int
+) -> tuple[xp.array, tuple[int, int]]:
+    """Crop the array with the oblique center and aperturesize
 
-    disk = make_disk(params.offaxis_center, params.aperturesize // 2, array_fft.shape)
-    array_fft = array_fft * disk
-    max_x, max_y, _ = find_max_args(np.abs(array_fft))
-    oblique_center = (
-        max_x - params.offaxis_center[0],
-        max_y - params.offaxis_center[1],
-    )
+    Args:
+        array (xp.array): input array
+        oblique_center (tuple[int, int]): center of the oblique array
+        aperturesize (int): size of the aperturesize
 
-    left_index = max_x - params.aperturesize
-    right_index = max_x + params.aperturesize + 1
-    top_index = max_y - params.aperturesize
-    bottom_index = max_y + params.aperturesize + 1
+    Returns:
+        xp.array: cropped array
+        tuple[int, int]: oblique shift in the Fourier space
+    """
+    max_x, max_y, _ = find_max_args(xp.abs(array))
+    oblique_shift = (max_x - oblique_center[0], max_y - oblique_center[1])
 
-    array_fft_pad = xp.pad(
-        array_fft,
+    left_index = max_x - aperturesize
+    right_index = max_x + aperturesize + 1
+    top_index = max_y - aperturesize
+    bottom_index = max_y + aperturesize + 1
+
+    array_pad = xp.pad(
+        array,
         (
-            (params.aperturesize, params.aperturesize),
-            (params.aperturesize, params.aperturesize),
+            (aperturesize, aperturesize),
+            (aperturesize, aperturesize),
         ),
         mode="constant",
         constant_values=0,
     )
 
-    array_fft = array_fft_pad[
-        left_index + params.aperturesize : right_index + params.aperturesize,
-        top_index + params.aperturesize : bottom_index + params.aperturesize,
+    array_cropped = array_pad[
+        left_index + aperturesize : right_index + aperturesize,
+        top_index + aperturesize : bottom_index + aperturesize,
     ]
 
-    norm_array_fft = array_fft * params.k_per_pixel
-    norm_array_cropped = xp.fft.ifft2(xp.fft.ifftshift(norm_array_fft), norm="backward")[EDGE_SIZE:, EDGE_SIZE:]
-    array_cropped = norm_array_cropped / params.imgpx_unit
+    return array_cropped, oblique_shift
 
-    if not ref_array is None:
-        if load_fft:
-            ref_array_fft = ref_array
-        else:
-            norm_ref_array = ref_array * params.imgpx_unit
-            norm_ref_array_fft = xp.fft.fftshift(xp.fft.fft2(norm_ref_array, norm="backward"))
-            ref_array_fft = norm_ref_array_fft / params.k_per_pixel
-        ref_array_fft = ref_array_fft * disk
-        ref_array_fft_pad = xp.pad(
-            ref_array_fft,
-            (
-                (params.aperturesize, params.aperturesize),
-                (params.aperturesize, params.aperturesize),
-            ),
-            mode="constant",
-            constant_values=0,
+
+def get_oblique_field(array: xp.array, params: QPIParameters) -> tuple[xp.array, tuple[int, int]]:
+    """internal method. get the electric field from the hologram array
+
+    Args:
+        array (xp.array): input array
+        params (QPIParameters): QPIParameters class
+
+    Returns:
+        xp.array: field from the hologram array
+        tuple[int, int]: oblique shift in the Fourier space
+    """
+    array_fft = xp.fft.fftshift(xp.fft.fft2(array))
+    mask = make_disk(params.offaxis_center, params.aperturesize / 2, params.img_shape)
+    array_fft = array_fft * mask
+
+    array_fft, oblique_shift = crop_oblique_array(array_fft, params.offaxis_center, params.aperturesize)
+    # remove EDGE to avoid the edge effect
+    array_field = xp.fft.ifft2(xp.fft.ifftshift(array_fft))[EDGE_SIZE:, EDGE_SIZE:]
+
+    return array_field, oblique_shift
+
+
+def preprocess_for_synthesis(
+    array: xp.array,
+    ref_array: xp.array,
+    params: QPIParameters,
+    offset_regs: list[tuple[tuple[int, int], tuple[int, int]]] | None = None,
+    crop_center: bool = False,
+    c_r: int = 5,
+) -> tuple[xp.array, xp.array]:
+    """internal method. preprocess the array for synthesis
+
+    Args:
+        array (xp.array): input array
+        ref_array (xp.array): reference array
+        params (QPIParameters): QPIParameters class
+        offset_regs (list[tuple[tuple[int, int], tuple[int, int]]], optional): offset regions. Defaults to None.
+        crop_center (bool, optional): whether to crop the center of the array for MIPQPI. Defaults to False.
+        c_r (int, optional): radius of the center crop for MIPQPI. Defaults to 5.
+
+    Returns:
+        tuple[xp.array, xp.array]: preprocessed array and its Fourier transform
+    """
+
+    array_field, oblique_shift = get_oblique_field(array, params)
+    ref_array_field, _ = get_oblique_field(ref_array, params)
+
+    array_div = array_field / ref_array_field
+
+    if offset_regs is not None:
+        array_div = correct_offset(array_div, offset_regs)
+
+    array_div_fft = xp.fft.fftshift(xp.fft.fft2(array_div))
+    disk_for_synthesis = make_disk(
+        (
+            params.aperturesize - oblique_shift[0],
+            params.aperturesize - oblique_shift[1],
+        ),
+        params.aperturesize // 2,
+        array_field.shape,
+    )
+
+    array_div_fft = array_div_fft * disk_for_synthesis
+
+    # for mipqpi
+    if crop_center:
+        mask_highpass = make_disk(
+            (params.aperturesize - oblique_shift[0], params.aperturesize - oblique_shift[1]),
+            c_r,
+            array_div.shape,
+            highpass=True,
         )
-        ref_array_fft = ref_array_fft_pad[
-            left_index + params.aperturesize : right_index + params.aperturesize,
-            top_index + params.aperturesize : bottom_index + params.aperturesize,
-        ]
-        norm_ref_array_fft = ref_array_fft * params.k_per_pixel
-        norm_ref_array_cropped = xp.fft.ifft2(xp.fft.ifftshift(norm_ref_array_fft), norm="backward")[
-            EDGE_SIZE:, EDGE_SIZE:
-        ]
-        ref_array_cropped = norm_ref_array_cropped / params.imgpx_unit
+        array_div_fft = array_div_fft * mask_highpass
 
-    if not ref_array is None:
-        array_divided = array_cropped / ref_array_cropped
-    else:
-        array_divided = array_cropped
-
-    phase_offset_list = []
-    amplitude_offset_list = []
-    for region in REF_REGIONS:
-        phase_offset_list.append(
-            xp.mean(xp.angle(array_divided[region[0][0] : region[0][1], region[1][0] : region[1][1]]))
-        )
-        amplitude_offset_list.append(
-            xp.mean(xp.abs(array_divided[region[0][0] : region[0][1], region[1][0] : region[1][1]]))
-        )
-    phase_offset = xp.mean(xp.array(phase_offset_list))
-    amplitude_offset = xp.mean(xp.array(amplitude_offset_list))
-
-    array_divided = array_divided * xp.exp(-1j * phase_offset)
-    array_divided = array_divided / amplitude_offset
-
-    return array_divided, oblique_center
+    return array_div, array_div_fft
 
 
 class Synthesizer:
-    def __init__(self):
-        pass
+    def __init__(self, params: QPIParameters, target: list[xp.array], reference: list[xp.array]):
+        """Synthesizer class for aperture synthesis
 
-    def set_parameters(self, params):
+        Args:
+            params (QPIParameters): QPIParameters class
+            target (list[xp.array]): sample holograms
+            reference (list[xp.array]): reference field holograms
+        """
         self.params = params
-        self.params.calc_params()
+        self.target = target
+        self.reference = reference
 
-    def set_data(self, target, reference=None):
-        self.target_data = target
-        self.reference_data = reference
+    def get_field_and_spectrum(
+        self,
+        offset_regs: list[tuple[int, int], tuple[int, int]] | None = None,
+        crop_center: bool = False,
+        c_r: int = 5,
+    ):
+        """get the field and spectrum from the hologram arrays
 
-        self.target_data.sort()
-        if self.reference_data is not None:
-            self.reference_data.sort()
+        Args:
+            offset_regs (list[tuple[int, int], tuple[int, int]] | None, optional): offset regions. Defaults to None.
+            crop_center (bool, optional): whether to crop the center of the array for MIPQPI. Defaults to False.
+            c_r (int, optional): radius of the center crop for MIPQPI. Defaults to 5.
+        """
+        print("convert to field...")
+        self.field = []
+        self.spectrum = []
+        for i in tqdm(range(len(self.target))):
+            array = self.target[i]
+            ref_array = self.reference[i]
 
-    def load_oblique_centers(self, centers_path):
-        """will be deprecated"""
-        self.oblique_centers = []
-        with open(centers_path, "r") as f:
-            for line in f:
-                self.oblique_centers.append(tuple(map(int, line.split(","))))
+            array_field, array_field_fft = preprocess_for_synthesis(
+                array, ref_array, self.params, offset_regs, crop_center, c_r
+            )
 
-    def qpi(self, save_multiangle=False, load_fft=False):
+            self.field.append(array_field)
+            self.spectrum.append(array_field_fft)
+
+    def save_multiangle_qpi(self, path: str = "multiangle_qpi"):
+        """save multiangle QPI images
+
+        Args:
+            path (str, optional): Path to save QPIs. Defaults to "multiangle_qpi".
+        """
+        assert len(self.field) != 0
+        if os.path.exists(path):
+            shutil.rmtree(path)
+        os.mkdir(path)
+        print("saving...")
+        for i in tqdm(range(len(self.field))):
+            if _cp:
+                to_save = xp.asnumpy(xp.angle(self.field[i]))
+            else:
+                to_save = xp.angle(self.field[i])
+            plt.imsave(f"{path}/{i:03}.png", to_save, cmap="gray")
+
+    def save_multiangle_spectrum(self, path: str = "multiangle_spectrum"):
+        """save multiangle spectrum images
+
+        Args:
+            path (str, optional): Path to save spectrum images. Defaults to "multiangle_spectrum".
+        """
+        assert len(self.spectrum) != 0
+        if os.path.exists(path):
+            shutil.rmtree(path)
+        os.mkdir(path)
+        print("saving...")
+        for i in tqdm(range(len(self.spectrum))):
+            if _cp:
+                to_save = xp.asnumpy(xp.log(xp.abs(self.spectrum[i])))
+            else:
+                to_save = xp.log(xp.abs(self.spectrum[i]))
+            plt.imsave(f"{path}/{i:03}.png", to_save, cmap="gray")
+
+    def synthesize_spectrums(self) -> tuple[xp.array, xp.array]:
+        """synthesize the spectrums
+
+        Returns:
+            tuple[xp.array, xp.array]: synthesized array and its Fourier transform
+        """
+        assert len(self.field) != 0
         synthesized_fft = xp.zeros(
             (
                 2 * (self.params.aperturesize) + 1 - EDGE_SIZE,
@@ -172,167 +243,49 @@ class Synthesizer:
             ),
             dtype=xp.complex128,
         )
-        synthesized_center = (
-            self.params.aperturesize - EDGE_SIZE // 2,
-            self.params.aperturesize - EDGE_SIZE // 2,
-        )
         synthesized_weight = xp.ones(synthesized_fft.shape)
 
-        self.multiangle_qpi = dict()
-
         print("synthesizing...")
-        for i in tqdm(range(len(self.target_data))):
-            array = xp.load(self.target_data[i])
+        for i in tqdm(range(len(self.target))):
+            fft_field = self.spectrum[i]
 
-            if self.reference_data is not None:
-                ref_array = xp.load(self.reference_data[i])
-
-                array_cropped, oblique_center = preprocess_for_synthesis(
-                    array, ref_array, params=self.params, load_fft=load_fft
-                )
-
-            else:
-                array_cropped, oblique_center = preprocess_for_synthesis(array, params=self.params, load_fft=load_fft)
-            disk_synthesized = make_disk(
-                (
-                    synthesized_center[0] - oblique_center[0],
-                    synthesized_center[1] - oblique_center[1],
-                ),
-                self.params.aperturesize // 2,
-                array_cropped.shape,
-            )
-
-            if save_multiangle:
-                self.multiangle_qpi[i] = xp.angle(array_cropped)
-                # self.multiangle_qpi[i] = xp.imag(array_cropped)
-
-            norm_array_cropped = array_cropped * self.params.imgpx_unit
-            norm_fft_cropped = xp.fft.fftshift(xp.fft.fft2(norm_array_cropped, norm="backward"))
-            fft_cropped = norm_fft_cropped / self.params.k_per_pixel
-
-            fft_cropped = fft_cropped * disk_synthesized
-
-            synthesized_fft += fft_cropped
-            synthesized_weight += disk_synthesized != 0
+            synthesized_fft += fft_field
+            synthesized_weight += fft_field != 0
 
         synthesized_fft /= synthesized_weight
-        norm_synthesized_fft = synthesized_fft * self.params.k_per_pixel
-        norm_synthesized_array = xp.fft.ifft2(xp.fft.ifftshift(norm_synthesized_fft), norm="backward")
-        synthesized_array = norm_synthesized_array / self.params.imgpx_unit
+        synthesized_array = xp.fft.ifft2(xp.fft.ifftshift(synthesized_fft))
+
+        return synthesized_array, synthesized_fft
+
+    def qpi(self, offset_regs: list[tuple[int, int], tuple[int, int]] | None = None) -> tuple[xp.array, xp.array]:
+        """Quantitative phase imaging (QPI) calculation
+
+        Args:
+            offset_regs (list[tuple[int, int], tuple[int, int]] | None, optional): offset regions. Defaults to None.
+
+        Returns:
+            tuple[xp.array, xp.array]: synthesized QPI and its Fourier transform
+        """
+        self.get_field_and_spectrum(offset_regs=offset_regs)
+        synthesized_array, synthesized_fft = self.synthesize_spectrums()
         synthesized_qpi = xp.angle(synthesized_array)
-        # synthesized_qpi = xp.abs(xp.fft.ifft2(xp.fft.ifftshift(synthesized_fft)))
-
-        # if _cp:
-        #     synthesized_fft = xp.asnumpy(synthesized_fft)
-        #     synthesized_qpi = xp.asnumpy(synthesized_qpi)
-
-        # synthesized_qpi = unwrap_phase(synthesized_qpi)
-
-        if save_multiangle:
-            if os.path.exists("multiangle_qpi"):
-                import shutil
-
-                shutil.rmtree("multiangle_qpi")
-            os.mkdir("multiangle_qpi")
-            for i in range(len(self.target_data)):
-                # save as png
-                if _cp:
-                    plt.imsave(
-                        f"multiangle_qpi/{i:03}.png",
-                        xp.asnumpy(self.multiangle_qpi[i]),
-                        cmap="gray",
-                    )
-                else:
-                    plt.imsave(
-                        f"multiangle_qpi/{i:03}.png",
-                        self.multiangle_qpi[i],
-                        cmap="gray",
-                    )
 
         return synthesized_qpi, synthesized_fft
 
-    def mipqpi(self, save_multiangle=False, load_fft=False):
-        synthesized_fft = xp.zeros(
-            (
-                2 * (self.params.aperturesize) + 1 - EDGE_SIZE,
-                2 * (self.params.aperturesize) + 1 - EDGE_SIZE,
-            ),
-            dtype=xp.complex128,
-        )
-        synthesized_center = (
-            self.params.aperturesize - EDGE_SIZE // 2,
-            self.params.aperturesize - EDGE_SIZE // 2,
-        )
-        synthesized_weight = xp.ones(synthesized_fft.shape)
+    def mipqpi(
+        self, offset_regs: list[tuple[int, int], tuple[int, int]] | None = None, c_r: int = 5
+    ) -> tuple[xp.array, xp.array]:
+        """Mid-infrared Photothermal Quantitative Phase imaging (MIPQPI) calculation
 
-        self.multiangle_qpi = dict()
+        Args:
+            offset_regs (list[tuple[int, int], tuple[int, int]] | None, optional): offset regions. Defaults to None.
+            c_r (int, optional): radius of the center crop for MIPQPI. Defaults to 5.
 
-        print("synthesizing...")
-        for i in tqdm(range(len(self.target_data))):
-            array = xp.load(self.target_data[i])
+        Returns:
+            tuple[xp.array, xp.array]: synthesized MIPQPI and its Fourier transform
+        """
+        self.get_field_and_spectrum(offset_regs=offset_regs, crop_center=True, c_r=c_r)
+        synthesized_array, synthesized_fft = self.synthesize_spectrums()
+        synthesized_mipqpi = xp.angle(synthesized_array)
 
-            if self.reference_data is not None:
-                ref_array = xp.load(self.reference_data[i])
-
-                array_cropped, oblique_center = preprocess_for_synthesis(
-                    array, ref_array, params=self.params, load_fft=load_fft
-                )
-
-            else:
-                array_cropped, oblique_center = preprocess_for_synthesis(array, params=self.params, load_fft=load_fft)
-            disk_synthesized = make_disk(
-                (
-                    synthesized_center[0] - oblique_center[0],
-                    synthesized_center[1] - oblique_center[1],
-                ),
-                self.params.aperturesize // 2,
-                array_cropped.shape,
-            )
-
-            if save_multiangle:
-                self.multiangle_qpi[i] = xp.angle(array_cropped)
-                # self.multiangle_qpi[i] = xp.imag(array_cropped)
-
-            norm_array_cropped = array_cropped * self.params.imgpx_unit
-            norm_fft_cropped = xp.fft.fftshift(xp.fft.fft2(norm_array_cropped, norm="backward"))
-            fft_cropped = norm_fft_cropped / self.params.k_per_pixel
-
-            fft_cropped = fft_cropped * disk_synthesized
-
-            synthesized_fft += fft_cropped
-            synthesized_weight += disk_synthesized != 0
-
-        synthesized_fft /= synthesized_weight
-        norm_synthesized_fft = synthesized_fft * self.params.k_per_pixel
-        norm_synthesized_array = xp.fft.ifft2(xp.fft.ifftshift(norm_synthesized_fft), norm="backward")
-        synthesized_array = norm_synthesized_array / self.params.imgpx_unit
-        synthesized_qpi = xp.angle(synthesized_array)
-
-        # if _cp:
-        #     synthesized_fft = xp.asnumpy(synthesized_fft)
-        #     synthesized_qpi = xp.asnumpy(synthesized_qpi)
-
-        # synthesized_qpi = unwrap_phase(synthesized_qpi)
-
-        if save_multiangle:
-            if os.path.exists("multiangle_qpi"):
-                import shutil
-
-                shutil.rmtree("multiangle_qpi")
-            os.mkdir("multiangle_qpi")
-            for i in range(len(self.target_data)):
-                # save as png
-                if _cp:
-                    plt.imsave(
-                        f"multiangle_qpi/{i:03}.png",
-                        xp.asnumpy(self.multiangle_qpi[i]),
-                        cmap="gray",
-                    )
-                else:
-                    plt.imsave(
-                        f"multiangle_qpi/{i:03}.png",
-                        self.multiangle_qpi[i],
-                        cmap="gray",
-                    )
-
-        return synthesized_qpi, synthesized_fft
+        return synthesized_mipqpi, synthesized_fft

@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 try:
     import cupy as xp
 
     _cp = True
-except:
+except ImportError:
     import numpy as xp
 
     _cp = False
@@ -10,53 +12,59 @@ except:
 
 class QPIParameters:
     def __init__(
-        self, wavelength, NA, img_shape, img_center, pixelsize, offaxis_center
+        self,
+        wavelength: float,
+        NA: float,
+        img_shape: tuple[int, int],
+        pixelsize: float,
+        offaxis_center: tuple[int, int],
     ):
+        """QPIParameters class for QPI calculation
+
+        Args:
+            wavelength (float): wavelength of the probe
+            NA (float): Numerical aperture of the objective
+            img_shape (tuple[int, int]): shape of the image
+            pixelsize (float): image pixel size
+            offaxis_center (tuple[int, int]): center position of the off axis holography in the Fourier domain
+        """
         self.wav = wavelength
         self.NA = NA
         self.img_shape = img_shape
-        self.img_center = img_center
         self.pixelsize = pixelsize
         self.offaxis_center = offaxis_center
 
-        self.calc_params()
+        self._calc_params()
 
-    def calc_params(self):
+    def _calc_params(self):
+        """Calculate parameters for QPI calculation. This method is called in __init__ method."""
+
+        self.img_center = (self.img_shape[0] // 2, self.img_shape[1] // 2)
         self.dim = self.img_shape[0]
         self.freq_per_pixel = 1 / (self.pixelsize * self.dim)  # 1 / L
-        self.aperturesize = (
-            2 * round(self.NA / self.wav / self.freq_per_pixel) + 1
-        )  # 2 * f_BW + 1
+        self.aperturesize = 2 * round(self.NA / self.wav / self.freq_per_pixel) + 1  # 2 * f_BW + 1
 
     def print_all_parameters(self):
-        print(f"{self.dim=}")
-        print(f"{self.freq_per_pixel=}")
-        print(f"{self.aperturesize=}")
-        print(f"{self.offaxis_center=}")
-        print(f"{self.img_center=}")
-        print(f"{self.pixelsize=}")
-        print(f"{self.img_shape=}")
-        print(f"{self.NA=}")
-        print(f"{self.wav=}")
+        """Print all parameters in the QPIParameters class"""
+        for key, value in vars(self).items():
+            print(f"{key}={value}")
 
 
-def make_disk(center, radius, array_shape, highpass=False):
-    """internal method. return disk filled with 1.
+def make_disk(center: tuple[int, int], radius: float, array_shape: tuple[int, int], highpass: bool = False) -> xp.array:
+    """make disk mask for filtering
 
     Args:
-        center (tuple of int): center position of the circle.
-        radius (float): radius of the circle
-        shape (_type_): _description_
-        highpass (bool, optional): _description_. Defaults to False.
+        center (tuple[int, int]): center position of the disk mask
+        radius (float): radius of the disk mask
+        array_shape (tuple[int, int]): shape of the array
+        highpass (bool, optional): Filter low frequency or not. Defaults to False.
 
     Returns:
-        xp.array: array whose pass area is filled with 1, otherwise 0.
+        xp.array: disk mask
     """
     if isinstance(array_shape, int):
         array_shape = (array_shape, array_shape)
-    xx, yy = xp.meshgrid(
-        xp.arange(array_shape[0]), xp.arange(array_shape[1]), indexing="ij"
-    )
+    xx, yy = xp.meshgrid(xp.arange(array_shape[0]), xp.arange(array_shape[1]), indexing="ij")
     circle = (xx - center[0]) ** 2 + (yy - center[1]) ** 2
     if highpass:
         disk = circle > radius**2
@@ -65,81 +73,113 @@ def make_disk(center, radius, array_shape, highpass=False):
     return disk
 
 
-def qpi(array, reference, params):
-    assert array.shape == reference.shape
-    reference_fft = xp.fft.fftshift(xp.fft.fft2(reference))
-    mask = make_disk(params.off_axis, params.aperturesize / 2, params.img_shape)
-    reference_fft = reference_fft * mask
-    reference_fft = reference_fft[
-        params.off_axis[0]
-        - params.aperturesize // 2 : params.off_axis[0]
-        + params.aperturesize // 2
-        + 1,
-        params.off_axis[1]
-        - params.aperturesize // 2 : params.off_axis[1]
-        + params.aperturesize // 2
-        + 1,
-    ]
-    reference = xp.fft.ifft2(xp.fft.ifftshift(reference_fft))
+def crop_array(array: xp.array, center: tuple[int, int], width: int) -> xp.array:
+    """internal method. crop the array with specified center and width.
 
+    Args:
+        array (xp.array): array to be cropped
+        center (tuple of int): center position of the cropped array
+        width (int): width of the cropped array
+
+    Returns:
+        xp.array: cropped array
+    """
+    return array[
+        center[0] - width // 2 : center[0] + width // 2 + 1,
+        center[1] - width // 2 : center[1] + width // 2 + 1,
+    ]
+
+
+def get_field(array: xp.array, params: QPIParameters, crop_center: bool = False, c_r: int = 5) -> xp.array:
+    """internal method. get the electric field from the hologram array
+
+    Args:
+        array (xp.array): input array
+        params (QPIParameters): QPIParameters class
+        crop_center (bool, optional): crop the center of the array or not. Defaults to False.
+
+    Returns:
+        xp.array: field of the array
+    """
     array_fft = xp.fft.fftshift(xp.fft.fft2(array))
+    mask = make_disk(params.offaxis_center, params.aperturesize / 2, params.img_shape)
     array_fft = array_fft * mask
-    array_fft = array_fft[
-        params.off_axis[1]
-        - params.aperturesize // 2 : params.off_axis[0]
-        + params.aperturesize // 2
-        + 1,
-        params.off_axis[0]
-        - params.aperturesize // 2 : params.off_axis[1]
-        + params.aperturesize // 2
-        + 1,
-    ]
+
+    if crop_center:
+        mask_highpass = make_disk(params.offaxis_center, c_r, params.img_shape, highpass=True)
+        array_fft = array_fft * mask_highpass
+
+    array_fft = crop_array(array_fft, params.offaxis_center, params.aperturesize)
     array = xp.fft.ifft2(xp.fft.ifftshift(array_fft))
+    return array
 
-    # mean_phase = xp.mean(xp.angle(reference))
 
-    dif_phase = xp.angle(array / reference)
+def qpi(
+    array: xp.array,
+    reference: xp.array,
+    params: QPIParameters,
+    phase_offset_regs: list[list[list[int, int], list[int, int]]] = None,
+) -> xp.array:
+    """Quantitative phase imaging (QPI) calculation
 
-    # dif_phase = dif_phase - mean_phase
+    Args:
+        array (xp.array): on-axis hologram
+        reference (xp.array): off-axis hologram
+        params (QPIParameters): QPIParameters class
+        phase_offset_regs (list[list[list[int, int], list[int, int]]], optional): regions for phase offset calculation. Defaults to None.
+
+    Returns:
+        xp.array: QPI phase image
+    """
+    assert array.shape == reference.shape
+
+    array_field = get_field(array, params)
+    ref_array_field = get_field(reference, params)
+
+    dif_phase = xp.angle(array_field / ref_array_field)
+
+    # remove phase offset
+    if phase_offset_regs is not None:
+        phase_offset_ls = []
+        for reg in phase_offset_regs:
+            phase_offset_ls.append(xp.mean(dif_phase[reg[0][0] : reg[0][1], reg[1][0] : reg[1][1]]))
+        phase_offset = xp.mean(phase_offset_ls)
+        dif_phase -= phase_offset
 
     return dif_phase
 
 
-def mipqpi(array_on, array_off, params, print_backend=False):
+def mipqpi(
+    array_on: xp.array,
+    array_off: xp.array,
+    params: QPIParameters,
+    phase_offset_regs: list[list[list[int, int], list[int, int]]] = None,
+    crop_center: bool = False,
+) -> xp.array:
+    """Mid-infrared photothermal quantitative phase imaging (MIP-QPI) calculation
+
+    Args:
+        array_on (xp.array): on-axis hologram
+        array_off (xp.array): off-axis hologram
+        params (QPIParameters): QPIParameters class
+        phase_offset_regs (list[list[list[int, int], list[int, int]]], optional): regions for phase offset calculation. Defaults to None.
+        crop_center (bool, optional): crop the center of the array or not. Defaults to False.
+
+    Returns:
+        xp.array: MIP-QPI phase image
+    """
     assert array_on.shape == array_off.shape
-    array_off_fft = xp.fft.fftshift(xp.fft.fft2(array_off))
-    mask = make_disk(params.offaxis_center, params.aperturesize, params.img_shape)
-    array_off_fft = array_off_fft * mask
-    array_off_fft = array_off_fft[
-        params.offaxis_center[0]
-        - params.aperturesize // 2 : params.offaxis_center[0]
-        + params.aperturesize // 2
-        + 1,
-        params.offaxis_center[1]
-        - params.aperturesize // 2 : params.offaxis_center[1]
-        + params.aperturesize // 2
-        + 1,
-    ]
-    array_off = xp.fft.ifft2(xp.fft.ifftshift(array_off_fft))
+    array_on_field = get_field(array_on, params, crop_center=crop_center)
+    array_off_field = get_field(array_off, params, crop_center=crop_center)
 
-    array_on_fft = xp.fft.fftshift(xp.fft.fft2(array_on))
-    array_on_fft = array_on_fft * mask
-    array_on_fft = array_on_fft[
-        params.offaxis_center[0]
-        - params.aperturesize // 2 : params.offaxis_center[0]
-        + params.aperturesize // 2
-        + 1,
-        params.offaxis_center[1]
-        - params.aperturesize // 2 : params.offaxis_center[1]
-        + params.aperturesize // 2
-        + 1,
-    ]
-    array_on = xp.fft.ifft2(xp.fft.ifftshift(array_on_fft))
+    dif_phase = xp.angle(array_on_field / array_off_field)
 
-    dif_phase = xp.angle(array_on / array_off)
-
-    if print_backend:
-        backend = "cupy" if _cp else "numpy"
-        print(backend + " is used as a backend")
+    # remove phase offset
+    if phase_offset_regs is not None:
+        phase_offset_ls = []
+        for reg in phase_offset_regs:
+            phase_offset_ls.append(xp.mean(dif_phase[reg[0][0] : reg[0][1], reg[1][0] : reg[1][1]]))
+        phase_offset = xp.mean(phase_offset_ls)
+        dif_phase -= phase_offset
 
     return dif_phase

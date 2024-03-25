@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import NewType
+
 try:
     import cupy as xp
 
@@ -8,6 +10,9 @@ except ImportError:
     import numpy as xp
 
     _cp = False
+
+
+Regions = NewType("Regions", list[tuple[tuple[int, int], tuple[int, int]]])
 
 
 class QPIParameters:
@@ -114,12 +119,12 @@ def get_field(array: xp.array, params: QPIParameters, crop_center: bool = False,
     return array
 
 
-def correct_offset(array, offset_regs: list[tuple[tuple[int, int], tuple[int, int]]]) -> xp.array:
+def correct_offset(array, offset_regs: Regions) -> xp.array:
     """internal method. correct phase and amplitude offset
 
     Args:
         array (xp.array): input complex array
-        offset_regs (list[tuple[tuple[int, int], tuple[int, int]]]): regions for offset calculation
+        offset_regs (Regions): regions for offset calculation
 
     Returns:
         xp.array: corrected array
@@ -141,7 +146,7 @@ def qpi(
     array: xp.array,
     reference: xp.array,
     params: QPIParameters,
-    offset_regs: list[tuple[tuple[int, int], tuple[int, int]]] | None = None,
+    offset_regs: Regions | None = None,
 ) -> xp.array:
     """Quantitative phase imaging (QPI) calculation
 
@@ -149,7 +154,7 @@ def qpi(
         array (xp.array): on-axis hologram
         reference (xp.array): off-axis hologram
         params (QPIParameters): QPIParameters class
-        offset_regs (list[tuple[tuple[int, int], tuple[int, int]]], optional): regions for offset calculation. Defaults to None.
+        offset_regs (Regions, optional): regions for offset calculation. Defaults to None.
 
     Returns:
         xp.array: QPI phase image
@@ -174,7 +179,7 @@ def mipqpi(
     array_on: xp.array,
     array_off: xp.array,
     params: QPIParameters,
-    offset_regs: list[tuple[tuple[int, int], tuple[int, int]]] | None = None,
+    offset_regs: Regions | None = None,
     crop_center: bool = False,
     **kwargs,
 ) -> xp.array:
@@ -184,7 +189,7 @@ def mipqpi(
         array_on (xp.array): on-axis hologram
         array_off (xp.array): off-axis hologram
         params (QPIParameters): QPIParameters class
-        offset_regs (list[tuple[tuple[int, int], tuple[int, int]]], optional): regions for phase offset calculation. Defaults to None.
+        offset_regs (Regions, optional): regions for phase offset calculation. Defaults to None.
         crop_center (bool, optional): crop the center of the array or not. Defaults to False.
 
     Returns:

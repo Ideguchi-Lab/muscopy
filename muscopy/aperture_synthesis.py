@@ -434,8 +434,101 @@ class Synthesizer:
 
         return synthesized_array, synthesized_fft
 
-    def synthesize_on_3d(self):
-        pass
+    def synthesize_on_3d(self, hermite: bool = False) -> tuple[xp.array, xp.array]:
+        """synthesize the spectrums on 3D
+
+        Args:
+            hermite (bool, optional): whether to use Hermite symmetry. Defaults to False.
+
+        Returns:
+            tuple[xp.array, xp.array]: synthesized array and its Fourier transform
+        """
+        assert isinstance(self.params, ODTParameters)
+        synthesized_fft = xp.zeros(
+            (
+                2 * (self.params.aperturesize) + 1 - EDGE_SIZE,
+                2 * (self.params.aperturesize) + 1 - EDGE_SIZE,
+                self.params.fz_extent * 2 + 1,
+            ),
+            dtype=xp.complex128,
+        )
+        synthesized_weight = xp.ones(synthesized_fft.shape)
+
+        print("ODT Synthesizing...")
+        for i in tqdm(range(len(self.identifiers))):
+            data = self.data[self.identifiers[i]]
+            fft_field = data.scattering_spectrum
+            kz_disk = calc_kz_value(self.params, data.oblique_shift)
+
+            scatter_potential_fft = 2j * kz_disk * fft_field
+
+            scatter_potential_fft3d = map_aperture_to_Ewald(
+                scatter_potential_fft,
+                synthesized_fft.shape,
+                data.oblique_shift,
+                self.params,
+            )
+
+            synthesized_fft += scatter_potential_fft3d
+            synthesized_weight += scatter_potential_fft3d != 0
+
+            if hermite:
+                conj_scatter_potential_fft_3d = xp.conjugate(xp.flip(scatter_potential_fft3d, axis=(0, 1, 2)))
+
+                synthesized_fft += conj_scatter_potential_fft_3d
+                synthesized_weight += conj_scatter_potential_fft_3d != 0
+
+        synthesized_weight -= synthesized_weight == 1
+        synthesized_fft /= synthesized_weight
+
+        synthesized_array = xp.fft.ifftn(xp.fft.ifftshift(synthesized_fft))
+
+        synthesized_array = xp.fft.fftshift(synthesized_array, axes=(2))
+        return synthesized_array, synthesized_fft
+
+    def iterative_reconstruct(
+        self,
+        array3d: xp.array,
+        array3dfft: xp.array,
+        scale_diff: float = 1,
+        n_iter: int = 100,
+        epsilon: float = 0.1,
+        interval: int = 100,
+    ) -> xp.array:
+        """Iterative reconstruction
+
+        Args:
+            array3d (xp.array): 3D array to be reconstructed
+            array3dfft (xp.array): Fourier transform of the 3D array
+            scale_diff (float, optional): scale difference between spatial array and spectral array. Defaults to 1.
+            n_iter (int, optional): maximum number of iterations. Defaults to 100.
+            epsilon (float, optional): epsilon for the convergence. Defaults to 0.1.
+            interval (int, optional): interval to print the error. Defaults to 100.
+
+        Returns:
+            xp.array: reconstructed 3D array
+        """
+        print("Iterative reconstruction...")
+        tmp_array = array3d.copy()
+        last_array = array3d.copy()
+        err = np.inf
+        count = 0
+        while (err > epsilon) and (count < n_iter):
+            tmp_array[xp.real(tmp_array) < 0] = 0
+            tmp_fft = xp.fft.fftshift(xp.fft.fftn(tmp_array)) * scale_diff
+            tmp_fft[array3dfft != 0] = array3dfft[array3dfft != 0]
+            tmp_array = xp.fft.ifftn(xp.fft.ifftshift(tmp_fft)) / scale_diff
+
+            err = calc_normalized_L2error(tmp_array, last_array)
+            last_array = tmp_array.copy()
+
+            count += 1
+            if count % interval == 0:
+                err = calc_normalized_L2error(array3d, last_array)
+                print(f"iter: {count}, error: {err}")
+                last_array = array3d.copy()
+
+        return last_array
 
     def qpi(self, offset_regs: Regions | None = None) -> tuple[xp.array, xp.array]:
         """Quantitative phase imaging (QPI) calculation
@@ -531,6 +624,24 @@ def map_aperture_to_Ewald(
     array_tiled = xp.stack([array] * shape[2], axis=-1)
     array_projected = array_tiled * Fz_index
     return array_projected
+
+
+def calc_kz_value(
+    params: ODTParameters,
+    oblique_shift: tuple[int, int],
+) -> xp.array:
+    xx, yy = xp.meshgrid(
+        xp.arange(2 * params.aperturesize + 1),
+        xp.arange(2 * params.aperturesize + 1),
+        indexing="ij",
+    )
+    disk = (xx - params.aperturesize + oblique_shift[0]) ** 2 + (yy - params.aperturesize + oblique_shift[1]) ** 2
+    disk_mask = disk < (params.aperturesize // 2) ** 2
+    fz_disk = (params.fi_mag**2 - disk) * disk_mask
+    fz_disk = fz_disk**0.5
+    kz_disk = fz_disk * params.k_per_pixel
+
+    return kz_disk
 
 
 def calc_refractive_index_square(array3d: xp.array, params: ODTParameters) -> xp.array:

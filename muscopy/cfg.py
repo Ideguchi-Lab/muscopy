@@ -1,5 +1,9 @@
+from typing import NewType
+
 EDGE_SIZE = 2
 OFFSET_REGS = [((0, 0), (0, 0))]
+
+Regions = NewType("Regions", list[tuple[tuple[int, int], tuple[int, int]]])
 
 
 def set_edge_size(size: int):

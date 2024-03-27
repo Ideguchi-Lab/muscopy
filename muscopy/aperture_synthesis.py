@@ -19,10 +19,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 
-from muscopy.cfg import EDGE_SIZE
+from muscopy.cfg import EDGE_SIZE, Regions
 from muscopy.qpi import QPIParameters, correct_offset, make_disk
-
-Regions = NewType("Regions", list[tuple[tuple[int, int], tuple[int, int]]])
 
 
 class ODTParameters(QPIParameters):
@@ -40,10 +38,10 @@ class ODTParameters(QPIParameters):
         self.n_sol = n_sol
         self.NA_illumi = NA_illumi
 
-        self.calc_params()
+        self._calc_params()
 
-    def calc_params(self):
-        super().calc_params()
+    def _calc_params(self):
+        super()._calc_params()
         self.fi_mag = self.n_sol / self.wav / self.freq_per_pixel  # |k| in terms of pixel unit
 
         self.k_per_pixel = 2 * np.pi * self.freq_per_pixel  # unit of k in terms of pixel unit
@@ -54,12 +52,14 @@ class ODTParameters(QPIParameters):
         if self.NA_illumi is not None:
             self.fi_lateral_mag = self.fi_mag * self.NA_illumi / self.n_sol  # |k_T| in terms of pixel unit
 
-        self.fi_z = int(self.fi_mag * (1 - self.NA_illumi**2 / self.n_sol**2) ** 0.5)  # |k_z| in terms of pixel unit
+            self.fi_z = int(
+                self.fi_mag * (1 - self.NA_illumi**2 / self.n_sol**2) ** 0.5
+            )  # |k_z| in terms of pixel unit
 
-        self.fz_extent = int((self.fi_mag - self.fi_z))  # extent of kz axis in terms of pixel unit
-        self.imgpx_unit_z = self.imgpx_unit * (
-            (2 * self.aperturesize + 1) / (2 * self.fz_extent + 1)
-        )  # unit image pixel size along z axis on the cropped image plane
+            self.fz_extent = int((self.fi_mag - self.fi_z))  # extent of kz axis in terms of pixel unit
+            self.imgpx_unit_z = self.imgpx_unit * (
+                (2 * self.aperturesize + 1) / (2 * self.fz_extent + 1)
+            )  # unit image pixel size along z axis on the cropped image plane
 
 
 Params = Union[QPIParameters, ODTParameters]
@@ -251,15 +251,15 @@ class DataHolder:
         else:
             self.identifier = identifier
 
-        self.sample_field = None
-        self.reference_field = None
-        self.oblique_shift = None
+        self.sample_field: xp.array = None
+        self.reference_field: xp.array = None
+        self.oblique_shift: tuple[int, int] = None
 
-        self.div_field = None
-        self.spectrum = None
+        self.div_field: xp.array = None
+        self.spectrum: xp.array = None
 
-        self.scattering = None
-        self.scattering_spectrum = None
+        self.scattering: xp.arraye = None
+        self.scattering_spectrum: xp.array = None
 
         self.tags = kwargs
 
@@ -276,8 +276,8 @@ class Synthesizer:
         """
         self.params = params
 
-        self.identifiers = []
-        self.data = dict()
+        self.identifiers: list[str] = list()
+        self.data: dict[str, DataHolder] = dict()
 
     def set_sample_data(self, sample_data: list[xp.array]):
         """set sample data
@@ -367,7 +367,7 @@ class Synthesizer:
                 c_r=c_r,
             )
 
-            data.scattering_field = scattering
+            data.scattering = scattering
             data.scattering_spectrum = scattering_fft
 
     def save_multiangle_qpi(self, path: str = "multiangle_qpi"):
@@ -394,7 +394,6 @@ class Synthesizer:
         Args:
             path (str, optional): Path to save spectrum images. Defaults to "multiangle_spectrum".
         """
-        assert len(self.spectrum) != 0
         if os.path.exists(path):
             shutil.rmtree(path)
         os.mkdir(path)
@@ -413,7 +412,6 @@ class Synthesizer:
         Returns:
             tuple[xp.array, xp.array]: synthesized array and its Fourier transform
         """
-        assert len(self.field) != 0
         synthesized_fft = xp.zeros(
             (
                 2 * (self.params.aperturesize) + 1 - EDGE_SIZE,
@@ -424,8 +422,9 @@ class Synthesizer:
         synthesized_weight = xp.ones(synthesized_fft.shape)
 
         print("synthesizing...")
-        for i in tqdm(range(len(self.sample))):
-            fft_field = self.spectrum[i]
+        for i in tqdm(range(len(self.identifiers))):
+            data = self.data[self.identifiers[i]]
+            fft_field = data.spectrum[i]
 
             synthesized_fft += fft_field
             synthesized_weight += fft_field != 0
@@ -447,7 +446,8 @@ class Synthesizer:
         Returns:
             tuple[xp.array, xp.array]: synthesized QPI and its Fourier transform
         """
-        self.get_field_and_spectrum(offset_regs=offset_regs)
+        self.get_field()
+        self.get_div_field_and_spectrum(offset_regs=offset_regs)
         synthesized_array, synthesized_fft = self.synthesize_spectrums()
         synthesized_qpi = xp.angle(synthesized_array)
 
@@ -463,11 +463,18 @@ class Synthesizer:
         Returns:
             tuple[xp.array, xp.array]: synthesized MIPQPI and its Fourier transform
         """
-        self.get_field_and_spectrum(offset_regs=offset_regs, crop_center=True, c_r=c_r)
+        self.get_field()
+        self.get_div_field_and_spectrum(offset_regs=offset_regs, crop_center=True, c_r=c_r)
         synthesized_array, synthesized_fft = self.synthesize_spectrums()
         synthesized_mipqpi = xp.angle(synthesized_array)
 
         return synthesized_mipqpi, synthesized_fft
+
+    def odt(self):
+        pass
+
+    def mipodt(self):
+        pass
 
 
 ####################################################
@@ -475,22 +482,23 @@ class Synthesizer:
 ####################################################
 
 
-def map_aperture_to_3Dkspace(
+def map_aperture_to_Ewald(
     array: xp.array,
     shape: tuple[int, int, int],
-    oblique_center: tuple[int, int],
+    oblique_shift: tuple[int, int],
     params: ODTParameters,
-):
+) -> xp.array:
     """map 2d array to 3d array(ODT)
 
     Args:
-        array (NDArray): 2D array to be projected. array size should be 2*aperturesize+1 square.
-        shape (NDArray): shape of the output 3d array. xy shape must be consistent with the input array
-        oblique_center (tuple): center position of the input circle
-        aperturesize (int): aperture size of the input circle
-        km (float): magnitude of the wave vector
+        array (xp.array): 2D array to be projected. array size should be 2*aperturesize+1 square.
+        shape (tuple[int, int, int]): shape of the output 3d array. xy shape must be consistent with the input array
+        oblique_shift (tuple): oblique shift in the Fourier space
+        params (ODTParameters): parameters for the ODT system
+
+    Returns:
+        xp.array: 3D array projected to the Ewald sphere
     """
-    oblique_shift = oblique_center
     xx, yy = xp.meshgrid(
         xp.arange(shape[0]),
         xp.arange(shape[1]),
@@ -525,19 +533,46 @@ def map_aperture_to_3Dkspace(
     return array_projected
 
 
-def calc_refractive_index_square(array3d, params):
+def calc_refractive_index_square(array3d: xp.array, params: ODTParameters) -> xp.array:
+    """calculate :math:`n^2` for the ODT calculation
+
+    Args:
+        array3d (xp.array): Array to calculate refractive index square
+        params (ODTParameters): parameters for the ODT system
+
+    Returns:
+        xp.array: complex refractive index
+    """
     r_3d_square = params.n_sol**2 * (
         xp.ones(array3d.shape, dtype=xp.complex128) - array3d / (params.fi_mag * params.k_per_pixel) ** 2
     )
     return r_3d_square
 
 
-def discard_z(array, threshold):
+def discard_z(array: xp.array, threshold: int) -> xp.array:
+    """internal method for `discard_higher_kz`. discard the higher z values
+
+    Args:
+        array (xp.array): original array(usually Fourier transformed array)
+        threshold (int): cut off threshold
+
+    Returns:
+        xp.array: lowpassed array
+    """
     array = array[:, :, threshold : array.shape[2] - threshold]
     return array
 
 
-def discard_higher_kz(array, threshold):
+def discard_higher_kz(array: xp.array, threshold: int) -> xp.array:
+    """discard the higher z values
+
+    Args:
+        array (xp.array): original array
+        threshold (int): cut off threshold
+
+    Returns:
+        xp.array: lowpassed array
+    """
     norm_factor = array.shape[2]
     array_fft = xp.fft.fftshift(xp.fft.fftn(array, norm="backward"))
     discarded = discard_z(array_fft, threshold)
@@ -545,7 +580,16 @@ def discard_higher_kz(array, threshold):
     return new_array
 
 
-def zeropad_higher_kz(array, extend):
+def zeropad_higher_kz(array: xp.array, extend: int) -> xp.array:
+    """zero pad the higher z values
+
+    Args:
+        array (xp.array): original array
+        extend (int): extend size
+
+    Returns:
+        xp.array: zero padded array
+    """
     norm_factor = array.shape[0] * array.shape[1] * array.shape[2]
     array_fft = xp.fft.fftshift(xp.fft.fftn(array, norm="backward"))
     new_array_fft = xp.zeros(
@@ -565,7 +609,7 @@ def zeropad_higher_kz(array, extend):
     return new_array
 
 
-def calc_full_volume(params):
+def calc_full_volume(params: ODTParameters) -> xp.float:
     """Calculate the volume which can be filled with FW light under the given parameters
 
     Args:
@@ -580,6 +624,15 @@ def calc_full_volume(params):
     return V
 
 
-def calc_normalized_L2error(array, ref_array):
+def calc_normalized_L2error(array: xp.array, ref_array: xp.array) -> float:
+    """Calculate the normalized L2 error
+
+    Args:
+        array (xp.array): array to be compared
+        ref_array (xp.array): reference array
+
+    Returns:
+        float: normalized L2 error
+    """
     error = xp.sum(xp.abs(array - ref_array)) / xp.sum(xp.abs(ref_array))
     return error

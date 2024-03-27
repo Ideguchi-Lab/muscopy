@@ -11,8 +11,7 @@ except ImportError:
 
     _cp = False
 
-
-Regions = NewType("Regions", list[tuple[tuple[int, int], tuple[int, int]]])
+from muscopy.cfg import EDGE_SIZE, OFFSET_REGS, Regions
 
 
 class QPIParameters:

@@ -38,9 +38,7 @@ def phase_unwrap(J, weight=None):
     else:  # weighted phase unwrap
         # check if the weight has the same size as J
         if not xp.all(weight.shape == J.shape):
-            raise ValueError(
-                "Size of the weight must be the same as size of the wrapped phase"
-            )
+            raise ValueError("Size of the weight must be the same as size of the wrapped phase")
 
         # vector b in the paper (eq 15) is dx and dy
         dx = xp.concatenate(

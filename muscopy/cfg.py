@@ -10,4 +10,3 @@ def set_edge_size(size: int):
 def set_offset_regs(offset_regs: list[tuple[tuple[int, int], tuple[int, int]]]):
     global OFFSET_REGS
     OFFSET_REGS = offset_regs
-

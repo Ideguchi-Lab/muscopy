@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import NewType
 
+import numpy as np
+
 try:
     import cupy as xp
 
@@ -22,6 +24,7 @@ class QPIParameters:
         img_shape: tuple[int, int],
         pixelsize: float,
         offaxis_center: tuple[int, int],
+        n_sol: float = 1.33,
     ):
         """QPIParameters class for QPI calculation
 
@@ -31,12 +34,14 @@ class QPIParameters:
             img_shape (tuple[int, int]): shape of the image
             pixelsize (float): image pixel size
             offaxis_center (tuple[int, int]): center position of the off axis holography in the Fourier domain
+            n_sol (float, optional): refractive index of the solvent. Defaults to 1.33.
         """
         self.wav = wavelength
         self.NA = NA
         self.img_shape = img_shape
         self.pixelsize = pixelsize
         self.offaxis_center = offaxis_center
+        self.n_sol = n_sol
 
         self._calc_params()
 
@@ -46,12 +51,42 @@ class QPIParameters:
         self.img_center = (self.img_shape[0] // 2, self.img_shape[1] // 2)
         self.dim = self.img_shape[0]
         self.freq_per_pixel = 1 / (self.pixelsize * self.dim)  # 1 / L
+        self.k_per_pixel = 2 * np.pi * self.freq_per_pixel  # unit of k in terms of pixel unit
         self.aperturesize = 2 * round(self.NA / self.wav / self.freq_per_pixel) + 1  # 2 * f_BW + 1
+        self.fi_mag = self.n_sol / self.wav / self.freq_per_pixel  # |k| in terms of pixel unit
+
+        self.imgpx_unit = (
+            self.pixelsize * self.img_shape[0] / (2 * self.aperturesize + 1 - EDGE_SIZE)
+        )  # unit image pixel size on the cropped image plane
 
     def print_all_parameters(self):
         """Print all parameters in the QPIParameters class"""
         for key, value in vars(self).items():
             print(f"{key}={value}")
+
+    def Hologram2F(self) -> float:
+        """Factor to convert the hologram to the Fourier space
+
+        Returns:
+            float: FFT factor
+        """
+        return (self.pixelsize / self.k_per_pixel) ** 0.5
+
+    def S2F(self) -> float:
+        """Factor to convert the spatial domain to the Fourier space
+
+        Returns:
+            float: FFT factor
+        """
+        return (self.imgpx_unit / self.k_per_pixel) ** 0.5
+
+    def F2S(self) -> float:
+        """Factor to convert the Fourier space to the spatial domain
+
+        Returns:
+            float: FFT factor
+        """
+        return (self.k_per_pixel / self.imgpx_unit) ** 0.5
 
 
 def make_disk(center: tuple[int, int], radius: float, array_shape: tuple[int, int], highpass: bool = False) -> xp.array:

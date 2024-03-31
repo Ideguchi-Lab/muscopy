@@ -34,20 +34,13 @@ class ODTParameters(QPIParameters):
         n_sol: float = 1.33,
         NA_illumi: float | None = None,
     ):
-        super().__init__(wavelength, NA, img_shape, pixelsize, offaxis_center)
-        self.n_sol = n_sol
+        super().__init__(wavelength, NA, img_shape, pixelsize, offaxis_center, n_sol)
         self.NA_illumi = NA_illumi
 
-        self._calc_params()
+        self._calc_odt_params()
 
-    def _calc_params(self):
+    def _calc_odt_params(self):
         super()._calc_params()
-        self.fi_mag = self.n_sol / self.wav / self.freq_per_pixel  # |k| in terms of pixel unit
-
-        self.k_per_pixel = 2 * np.pi * self.freq_per_pixel  # unit of k in terms of pixel unit
-        self.imgpx_unit = (
-            self.pixelsize * self.img_shape[0] / (2 * self.aperturesize + 1)
-        )  # unit image pixel size on the cropped image plane
 
         if self.NA_illumi is not None:
             self.fi_lateral_mag = self.fi_mag * self.NA_illumi / self.n_sol  # |k_T| in terms of pixel unit
@@ -133,13 +126,16 @@ def get_oblique_field(array: xp.array, params: Params) -> tuple[xp.array, tuple[
         xp.array: field from the hologram array
         tuple[int, int]: oblique shift in the Fourier space
     """
-    array_fft = xp.fft.fftshift(xp.fft.fft2(array))
+    array_fft = xp.fft.fftshift(xp.fft.fft2(array)) * params.Hologram2F() ** 2
     mask = make_disk(params.offaxis_center, params.aperturesize / 2, params.img_shape)
     array_fft = array_fft * mask
 
     array_fft, oblique_shift = crop_oblique_array(array_fft, params.offaxis_center, params.aperturesize)
+    # correct the scale factor caused by the cropping
+    scale_factor = len(array_fft) / len(array)
+    array_fft = array_fft * scale_factor
     # remove EDGE to avoid the edge effect
-    array_field = xp.fft.ifft2(xp.fft.ifftshift(array_fft))[EDGE_SIZE:, EDGE_SIZE:]
+    array_field = xp.fft.ifft2(xp.fft.ifftshift(array_fft))[EDGE_SIZE:, EDGE_SIZE:] * params.F2S() ** 2
 
     return array_field, oblique_shift
 
@@ -172,7 +168,7 @@ def preprocess_for_synthesis(
     if offset_regs is not None:
         array_div = correct_offset(array_div, offset_regs)
 
-    array_div_fft = xp.fft.fftshift(xp.fft.fft2(array_div))
+    array_div_fft = xp.fft.fftshift(xp.fft.fft2(array_div)) * params.S2F() ** 2
     disk_for_synthesis = make_disk(
         (
             params.aperturesize - oblique_shift[0],
@@ -202,7 +198,8 @@ def get_scattering_field(
     ref_array_field: xp.array,
     oblique_shift: tuple[int, int],
     params: Params,
-    approx: str,
+    offset_regs: Regions | None = None,
+    approx: str = "Rytov",
     crop_center: bool = False,
     c_r: int = 5,
 ) -> tuple[xp.array, xp.array]:
@@ -216,7 +213,10 @@ def get_scattering_field(
     else:
         raise ValueError("approx should be either 'Born' or 'Rytov'")
 
-    scattering_fft = xp.fft.fftshift(xp.fft.fft2(scattering))
+    if offset_regs is not None:
+        scattering = correct_offset(scattering, offset_regs)
+
+    scattering_fft = xp.fft.fftshift(xp.fft.fft2(scattering)) * params.S2F() ** 2
     disk_for_synthesis = make_disk(
         (
             params.aperturesize - oblique_shift[0],
@@ -344,7 +344,7 @@ class Synthesizer:
             data.spectrum = array_div_fft
 
     def get_scattering_field(
-        self, approx: str, offset_regs: Regions | None = None, crop_center: bool = False, c_r: int = 5
+        self, offset_regs: Regions | None = None, approx: str = "Rytov", crop_center: bool = False, c_r: int = 5
     ):
         """get the scattering field
 
@@ -362,6 +362,7 @@ class Synthesizer:
                 data.reference_field,
                 data.oblique_shift,
                 self.params,
+                offset_regs,
                 approx,
                 crop_center=crop_center,
                 c_r=c_r,
@@ -430,7 +431,7 @@ class Synthesizer:
             synthesized_weight += fft_field != 0
 
         synthesized_fft /= synthesized_weight
-        synthesized_array = xp.fft.ifft2(xp.fft.ifftshift(synthesized_fft))
+        synthesized_array = xp.fft.ifft2(xp.fft.ifftshift(synthesized_fft)) * self.params.F2S() ** 2
 
         return synthesized_array, synthesized_fft
 
@@ -481,7 +482,7 @@ class Synthesizer:
         synthesized_weight -= synthesized_weight == 1
         synthesized_fft /= synthesized_weight
 
-        synthesized_array = xp.fft.ifftn(xp.fft.ifftshift(synthesized_fft))
+        synthesized_array = xp.fft.ifftn(xp.fft.ifftshift(synthesized_fft)) * self.params.F2S() ** 3
 
         synthesized_array = xp.fft.fftshift(synthesized_array, axes=(2))
         return synthesized_array, synthesized_fft
@@ -563,8 +564,29 @@ class Synthesizer:
 
         return synthesized_mipqpi, synthesized_fft
 
-    def odt(self):
-        pass
+    def odt(
+        self, offset_regs: Regions | None = None, approx: str = "Rytov", hermite=False
+    ) -> tuple[xp.array, xp.array]:
+        """Optical Diffraction Tomography (ODT) calculation
+
+        Args:
+            offset_regs (Regions | None, optional): offset regions. Defaults to None.
+            approx (str, optional): approximation for the ODT calculation. Defaults to "Rytov".
+            hermite (bool, optional): whether to use Hermite symmetry. Defaults to False.
+
+        Returns:
+            tuple[xp.array, xp.array]: synthesized complex refractive index and its Fourier transform
+        """
+        assert isinstance(self.params, ODTParameters)
+        self.get_field()
+        self.get_scattering_field(offset_regs=offset_regs, approx=approx)
+        synthesized_array, synthesized_fft = self.synthesize_on_3d(hermite=hermite)
+
+        synthesized_array_pad = zeropad_higher_kz(synthesized_array, self.params.aperturesize - self.params.fz_extent)
+
+        r_index = calc_refractive_index_square(synthesized_array_pad, self.params) ** 0.5 - self.params.n_sol
+
+        return r_index, synthesized_fft
 
     def mipodt(self):
         pass

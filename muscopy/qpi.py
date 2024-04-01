@@ -13,7 +13,8 @@ except ImportError:
 
     _cp = False
 
-from muscopy.cfg import EDGE_SIZE, OFFSET_REGS, Regions
+import muscopy.cfg as mcfg
+from muscopy.cfg import Regions
 
 
 class QPIParameters:
@@ -56,7 +57,7 @@ class QPIParameters:
         self.fi_mag = self.n_sol / self.wav / self.freq_per_pixel  # |k| in terms of pixel unit
 
         self.imgpx_unit = (
-            self.pixelsize * self.img_shape[0] / (2 * self.aperturesize + 1 - EDGE_SIZE)
+            self.pixelsize * self.img_shape[0] / (2 * self.aperturesize + 1 - mcfg.EDGE_SIZE)
         )  # unit image pixel size on the cropped image plane
 
     def print_all_parameters(self):
@@ -176,11 +177,10 @@ def correct_offset(array, offset_regs: Regions) -> xp.array:
     return array
 
 
-def qpi(
+def QPI(
     array: xp.array,
     reference: xp.array,
     params: QPIParameters,
-    offset_regs: Regions | None = None,
 ) -> xp.array:
     """Quantitative phase imaging (QPI) calculation
 
@@ -188,7 +188,6 @@ def qpi(
         array (xp.array): on-axis hologram
         reference (xp.array): off-axis hologram
         params (QPIParameters): QPIParameters class
-        offset_regs (Regions, optional): regions for offset calculation. Defaults to None.
 
     Returns:
         xp.array: QPI phase image
@@ -201,19 +200,18 @@ def qpi(
     array_div = array_field / ref_array_field
 
     # remove phase and amplitude offset
-    if offset_regs is not None:
-        array_div = correct_offset(array_div, offset_regs)
+    if mcfg.OFFSET_REGS is not None:
+        array_div = correct_offset(array_div, mcfg.OFFSET_REGS)
 
     dif_phase = xp.angle(array_div)
 
     return dif_phase
 
 
-def mipqpi(
+def MIPQPI(
     array_on: xp.array,
     array_off: xp.array,
     params: QPIParameters,
-    offset_regs: Regions | None = None,
     crop_center: bool = False,
     **kwargs,
 ) -> xp.array:
@@ -223,7 +221,6 @@ def mipqpi(
         array_on (xp.array): on-axis hologram
         array_off (xp.array): off-axis hologram
         params (QPIParameters): QPIParameters class
-        offset_regs (Regions, optional): regions for phase offset calculation. Defaults to None.
         crop_center (bool, optional): crop the center of the array or not. Defaults to False.
 
     Returns:
@@ -236,8 +233,8 @@ def mipqpi(
     array_div = array_on_field / array_off_field
 
     # remove phase and amplitude offset
-    if offset_regs is not None:
-        array_div = correct_offset(array_div, offset_regs)
+    if mcfg.OFFSET_REGS is not None:
+        array_div = correct_offset(array_div, mcfg.OFFSET_REGS)
 
     dif_phase = xp.angle(array_div)
 

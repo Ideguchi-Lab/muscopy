@@ -46,20 +46,19 @@ class ODTParameters(QPIParameters):
         wavelength,
         NA,
         img_shape,
-        img_center,
         pixelsize,
         offaxis_center,
         n_sol,
         NA_illumi=None,
     ):
-        super().__init__(wavelength, NA, img_shape, img_center, pixelsize, offaxis_center)
+        super().__init__(wavelength, NA, img_shape, pixelsize, offaxis_center)
         self.n_sol = n_sol
         self.NA_illumi = NA_illumi
 
-        self.calc_params()
+        self._calc_params()
 
-    def calc_params(self):
-        super().calc_params()
+    def _calc_params(self):
+        super()._calc_params()
         self.fi_mag = self.n_sol / self.wav / self.freq_per_pixel  # |k| in terms of pixel unit
 
         self.k_per_pixel = 2 * np.pi * self.freq_per_pixel  # unit of k in terms of pixel unit

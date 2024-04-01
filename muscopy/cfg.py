@@ -1,9 +1,10 @@
-from typing import NewType
-
-EDGE_SIZE = 2
-OFFSET_REGS = [((0, 0), (0, 0))]
+from typing import NewType, Union
 
 Regions = NewType("Regions", list[tuple[tuple[int, int], tuple[int, int]]])
+OffsetRegions = Union[Regions, None]
+
+EDGE_SIZE = 0
+OFFSET_REGS = None
 
 
 def set_edge_size(size: int):
@@ -11,6 +12,6 @@ def set_edge_size(size: int):
     EDGE_SIZE = size
 
 
-def set_offset_regs(offset_regs: list[tuple[tuple[int, int], tuple[int, int]]]):
+def set_offset_regs(offset_regs: OffsetRegions):
     global OFFSET_REGS
     OFFSET_REGS = offset_regs

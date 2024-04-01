@@ -19,7 +19,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 
-from muscopy.cfg import EDGE_SIZE, Regions
+import muscopy.cfg as mcfg
+from muscopy.cfg import Regions
 from muscopy.qpi import QPIParameters, correct_offset, make_disk
 
 
@@ -135,7 +136,7 @@ def get_oblique_field(array: xp.array, params: Params) -> tuple[xp.array, tuple[
     scale_factor = len(array_fft) / len(array)
     array_fft = array_fft * scale_factor
     # remove EDGE to avoid the edge effect
-    array_field = xp.fft.ifft2(xp.fft.ifftshift(array_fft))[EDGE_SIZE:, EDGE_SIZE:] * params.F2S() ** 2
+    array_field = xp.fft.ifft2(xp.fft.ifftshift(array_fft))[mcfg.EDGE_SIZE :, mcfg.EDGE_SIZE :] * params.F2S() ** 2
 
     return array_field, oblique_shift
 
@@ -145,7 +146,6 @@ def preprocess_for_synthesis(
     ref_array_field: xp.array,
     oblique_shift: tuple[int, int],
     params: Params,
-    offset_regs: Regions | None = None,
     crop_center: bool = False,
     c_r: int = 5,
 ) -> tuple[xp.array, xp.array]:
@@ -156,7 +156,6 @@ def preprocess_for_synthesis(
         ref_array_field (xp.array): reference complex field
         params (Params): Parameters class
         oblique_shift (tuple[int, int]): oblique shift in the Fourier space
-        offset_regs (Regions optional): offset regions. Defaults to None.
         crop_center (bool, optional): whether to crop the center of the array for MIPQPI. Defaults to False.
         c_r (int, optional): radius of the center crop for MIPQPI. Defaults to 5.
 
@@ -165,8 +164,8 @@ def preprocess_for_synthesis(
     """
     array_div = array_field / ref_array_field
 
-    if offset_regs is not None:
-        array_div = correct_offset(array_div, offset_regs)
+    if mcfg.OFFSET_REGS is not None:
+        array_div = correct_offset(array_div, mcfg.OFFSET_REGS)
 
     array_div_fft = xp.fft.fftshift(xp.fft.fft2(array_div)) * params.S2F() ** 2
     disk_for_synthesis = make_disk(
@@ -198,11 +197,24 @@ def get_scattering_field(
     ref_array_field: xp.array,
     oblique_shift: tuple[int, int],
     params: Params,
-    offset_regs: Regions | None = None,
     approx: str = "Rytov",
     crop_center: bool = False,
     c_r: int = 5,
 ) -> tuple[xp.array, xp.array]:
+    """internal method. get the scattering field
+
+    Args:
+        array_field (xp.array): sample complex field
+        ref_array_field (xp.array): reference complex field
+        oblique_shift (tuple[int, int]): oblique shift in the Fourier space
+        params (Params): Parameters class
+        approx (str, optional): approximation for the ODT calculation. Defaults to "Rytov".
+        crop_center (bool, optional): whether to crop the center of the array for MIPQPI. Defaults to False.
+        c_r (int, optional): radius of the center crop for MIPQPI. Defaults to 5.
+
+    Returns:
+        tuple[xp.array, xp.array]: scattering field and its Fourier transform
+    """
     assert approx in ["Born", "Rytov"]
     if approx == "Born":
         scattering = (array_field - ref_array_field) / ref_array_field
@@ -213,8 +225,8 @@ def get_scattering_field(
     else:
         raise ValueError("approx should be either 'Born' or 'Rytov'")
 
-    if offset_regs is not None:
-        scattering = correct_offset(scattering, offset_regs)
+    if mcfg.OFFSET_REGS is not None:
+        scattering = correct_offset(scattering, mcfg.OFFSET_REGS)
 
     scattering_fft = xp.fft.fftshift(xp.fft.fft2(scattering)) * params.S2F() ** 2
     disk_for_synthesis = make_disk(
@@ -295,6 +307,24 @@ class Synthesizer:
         """
         self.reference = reference_data
 
+    def set_sample_data_from_path(self, path: list[str]):
+        """set sample data from the path
+
+        Args:
+            path (str): path to the sample holograms
+        """
+        path.sort()
+        self.sample = [xp.load(path) for path in path]
+
+    def set_reference_data_from_path(self, path: list[str]):
+        """set reference data from the path
+
+        Args:
+            path (str): path to the reference holograms
+        """
+        path.sort()
+        self.reference = [xp.load(path) for path in path]
+
     def get_field(self):
         """get the field from the hologram arrays"""
         print("get field...")
@@ -316,14 +346,12 @@ class Synthesizer:
 
     def get_div_field_and_spectrum(
         self,
-        offset_regs: Regions | None = None,
         crop_center: bool = False,
         c_r: int = 5,
     ):
         """get the divided field and its Fourier transform
 
         Args:
-            offset_regs (Regions | None, optional): offset regions. Defaults to None.
             crop_center (bool, optional): whether to crop the center of the array for MIPQPI. Defaults to False.
             c_r (int, optional): radius of the center crop for MIPQPI. Defaults to 5.
         """
@@ -335,7 +363,6 @@ class Synthesizer:
                 data.reference_field,
                 data.oblique_shift,
                 self.params,
-                offset_regs=offset_regs,
                 crop_center=crop_center,
                 c_r=c_r,
             )
@@ -343,14 +370,11 @@ class Synthesizer:
             data.div_field = array_div
             data.spectrum = array_div_fft
 
-    def get_scattering_field(
-        self, offset_regs: Regions | None = None, approx: str = "Rytov", crop_center: bool = False, c_r: int = 5
-    ):
+    def get_scattering_field(self, approx: str = "Rytov", crop_center: bool = False, c_r: int = 5):
         """get the scattering field
 
         Args:
             approx (str): approximation for the ODT calculation
-            offset_regs (Regions | None, optional): offset regions. Defaults to None.
             crop_center (bool, optional): whether to crop the center of the array for MIPQPI. Defaults to False.
             c_r (int, optional): radius of the center crop for MIPQPI. Defaults to 5.
         """
@@ -362,7 +386,6 @@ class Synthesizer:
                 data.reference_field,
                 data.oblique_shift,
                 self.params,
-                offset_regs,
                 approx,
                 crop_center=crop_center,
                 c_r=c_r,
@@ -402,7 +425,7 @@ class Synthesizer:
         for i in tqdm(range(len(self.identifiers))):
             data = self.data[self.identifiers[i]]
             if _cp:
-                to_save = xp.asnumpy(xp.log(xp.abs(data.spectrum)))
+                to_save = xp.asnumpy(xp.log(xp.abs(data.spectrum) + 1e-60))
             else:
                 to_save = xp.log(xp.abs(data.spectrum))
             plt.imsave(f"{path}/{i:03}.png", to_save, cmap="gray")
@@ -415,21 +438,22 @@ class Synthesizer:
         """
         synthesized_fft = xp.zeros(
             (
-                2 * (self.params.aperturesize) + 1 - EDGE_SIZE,
-                2 * (self.params.aperturesize) + 1 - EDGE_SIZE,
+                2 * (self.params.aperturesize) + 1 - mcfg.EDGE_SIZE,
+                2 * (self.params.aperturesize) + 1 - mcfg.EDGE_SIZE,
             ),
             dtype=xp.complex128,
         )
         synthesized_weight = xp.ones(synthesized_fft.shape)
 
         print("synthesizing...")
-        for i in tqdm(range(len(self.identifiers))):
+        for i in tqdm(range(1, len(self.identifiers))):
             data = self.data[self.identifiers[i]]
-            fft_field = data.spectrum[i]
+            fft_field = data.spectrum
 
             synthesized_fft += fft_field
             synthesized_weight += fft_field != 0
 
+        synthesized_weight -= synthesized_weight > 1
         synthesized_fft /= synthesized_weight
         synthesized_array = xp.fft.ifft2(xp.fft.ifftshift(synthesized_fft)) * self.params.F2S() ** 2
 
@@ -447,8 +471,8 @@ class Synthesizer:
         assert isinstance(self.params, ODTParameters)
         synthesized_fft = xp.zeros(
             (
-                2 * (self.params.aperturesize) + 1 - EDGE_SIZE,
-                2 * (self.params.aperturesize) + 1 - EDGE_SIZE,
+                2 * (self.params.aperturesize) + 1 - mcfg.EDGE_SIZE,
+                2 * (self.params.aperturesize) + 1 - mcfg.EDGE_SIZE,
                 self.params.fz_extent * 2 + 1,
             ),
             dtype=xp.complex128,
@@ -479,7 +503,7 @@ class Synthesizer:
                 synthesized_fft += conj_scatter_potential_fft_3d
                 synthesized_weight += conj_scatter_potential_fft_3d != 0
 
-        synthesized_weight -= synthesized_weight == 1
+        synthesized_weight -= synthesized_weight > 1
         synthesized_fft /= synthesized_weight
 
         synthesized_array = xp.fft.ifftn(xp.fft.ifftshift(synthesized_fft)) * self.params.F2S() ** 3
@@ -531,46 +555,39 @@ class Synthesizer:
 
         return last_array
 
-    def qpi(self, offset_regs: Regions | None = None) -> tuple[xp.array, xp.array]:
+    def QPI(self) -> tuple[xp.array, xp.array]:
         """Quantitative phase imaging (QPI) calculation
-
-        Args:
-            offset_regs (Regions | None, optional): offset regions. Defaults to None.
 
         Returns:
             tuple[xp.array, xp.array]: synthesized QPI and its Fourier transform
         """
         self.get_field()
-        self.get_div_field_and_spectrum(offset_regs=offset_regs)
+        self.get_div_field_and_spectrum()
         synthesized_array, synthesized_fft = self.synthesize_spectrums()
         synthesized_qpi = xp.angle(synthesized_array)
 
         return synthesized_qpi, synthesized_fft
 
-    def mipqpi(self, offset_regs: Regions | None = None, c_r: int = 5) -> tuple[xp.array, xp.array]:
+    def MIPQPI(self, c_r: int = 5) -> tuple[xp.array, xp.array]:
         """Mid-infrared Photothermal Quantitative Phase imaging (MIPQPI) calculation
 
         Args:
-            offset_regs (Regions | None, optional): offset regions. Defaults to None.
             c_r (int, optional): radius of the center crop for MIPQPI. Defaults to 5.
 
         Returns:
             tuple[xp.array, xp.array]: synthesized MIPQPI and its Fourier transform
         """
         self.get_field()
-        self.get_div_field_and_spectrum(offset_regs=offset_regs, crop_center=True, c_r=c_r)
+        self.get_div_field_and_spectrum(crop_center=True, c_r=c_r)
         synthesized_array, synthesized_fft = self.synthesize_spectrums()
         synthesized_mipqpi = xp.angle(synthesized_array)
 
         return synthesized_mipqpi, synthesized_fft
 
-    def odt(
-        self, offset_regs: Regions | None = None, approx: str = "Rytov", hermite=False
-    ) -> tuple[xp.array, xp.array]:
+    def ODT(self, approx: str = "Rytov", hermite=False) -> tuple[xp.array, xp.array]:
         """Optical Diffraction Tomography (ODT) calculation
 
         Args:
-            offset_regs (Regions | None, optional): offset regions. Defaults to None.
             approx (str, optional): approximation for the ODT calculation. Defaults to "Rytov".
             hermite (bool, optional): whether to use Hermite symmetry. Defaults to False.
 
@@ -579,7 +596,7 @@ class Synthesizer:
         """
         assert isinstance(self.params, ODTParameters)
         self.get_field()
-        self.get_scattering_field(offset_regs=offset_regs, approx=approx)
+        self.get_scattering_field(approx=approx)
         synthesized_array, synthesized_fft = self.synthesize_on_3d(hermite=hermite)
 
         synthesized_array_pad = zeropad_higher_kz(synthesized_array, self.params.aperturesize - self.params.fz_extent)
@@ -588,7 +605,7 @@ class Synthesizer:
 
         return r_index, synthesized_fft
 
-    def mipodt(self):
+    def MIPODT(self):
         pass
 
 
@@ -653,8 +670,8 @@ def calc_kz_value(
     oblique_shift: tuple[int, int],
 ) -> xp.array:
     xx, yy = xp.meshgrid(
-        xp.arange(2 * params.aperturesize + 1),
-        xp.arange(2 * params.aperturesize + 1),
+        xp.arange(2 * params.aperturesize + 1 - mcfg.EDGE_SIZE),
+        xp.arange(2 * params.aperturesize + 1 - mcfg.EDGE_SIZE),
         indexing="ij",
     )
     disk = (xx - params.aperturesize + oblique_shift[0]) ** 2 + (yy - params.aperturesize + oblique_shift[1]) ** 2

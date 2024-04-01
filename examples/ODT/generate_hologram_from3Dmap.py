@@ -5,8 +5,8 @@ import numpy as np
 import os
 import sys
 
-sys.path.append("../..")
-from muscopy.odt import ODTParameters, find_max_args
+# from muscopy.odt import ODTParameters, find_max_args
+from muscopy.aperture_synthesis import ODTParameters
 from muscopy.qpi import make_disk
 
 try:

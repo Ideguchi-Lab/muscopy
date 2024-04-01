@@ -18,8 +18,6 @@ backend = "numpy" if not _cp else "cupy"
 print(f"backend: {backend}")
 
 sys.path.append(".")
-sys.path.append("..")
-sys.path.append("../..")
 
 from generate_hologram_from3Dmap import (
     generate_3D_sphere,
@@ -30,18 +28,17 @@ from generate_hologram_from3Dmap import (
     generate_3d_gaussian,
 )
 
+import muscopy as mus
 from muscopy.dir_parser import numpy_parser
-from muscopy.aperture_synthesis import Synthesizer as QPISynthesizer
-from muscopy.odt import (
+from muscopy.aperture_synthesis import (
+    Synthesizer,
     ODTParameters,
-    ODTSynthesizer,
     calc_refractive_index_square,
     discard_higher_kz,
     zeropad_higher_kz,
     calc_normalized_L2error,
 )
 
-EDGE_SIZE = 0
 
 # %%
 NA_i = 1.0
@@ -50,7 +47,6 @@ params = ODTParameters(
     532e-9,
     1.2,
     (1400, 1400),
-    (700, 700),
     (3.45 * 1e-6) * 3 / 200 / 5,
     # (3.45 * 1e-6) * 3 / 200 / 2,
     (612, 623),
@@ -58,8 +54,20 @@ params = ODTParameters(
     # 1.48,
     NA_i,
 )
-params.calc_params()
 params.print_all_parameters()
+
+mus.set_edge_size(2)
+mus.set_offset_regs(
+    [
+        ((5, 20), (5, 20)),
+        ((5, 20), (2 * params.aperturesize - 20, 2 * params.aperturesize - 5)),
+        ((2 * params.aperturesize - 20, 2 * params.aperturesize - 5), (5, 20)),
+        (
+            (2 * params.aperturesize - 20, 2 * params.aperturesize - 5),
+            (2 * params.aperturesize - 20, 2 * params.aperturesize - 5),
+        ),
+    ]
+)
 
 # shape for z-compressed 3D map (for iterative ODT)
 shape_3d = (
@@ -222,30 +230,30 @@ NA_illumi = NA_i
 # approx = "Born"
 approx = "Rytov"
 
-# create dir if not exist
-if not os.path.exists("odt_test_data"):
-    os.mkdir("odt_test_data")
-    os.mkdir("odt_test_data/sample")
-    os.mkdir("odt_test_data/ref")
+# # create dir if not exist
+# if not os.path.exists("odt_test_data"):
+#     os.mkdir("odt_test_data")
+#     os.mkdir("odt_test_data/sample")
+#     os.mkdir("odt_test_data/ref")
 
-generate_test_data(
-    approx_field_fft,
-    params,
-    step_angle,
-    NA_illumi,
-    "odt_test_data/sample",
-    approx=approx,
-    if_save=True,
-)
-generate_test_data(
-    ref_approx_field_fft,
-    params,
-    step_angle,
-    NA_illumi,
-    "odt_test_data/ref",
-    approx=approx,
-)
-print("generated test data!")
+# generate_test_data(
+#     approx_field_fft,
+#     params,
+#     step_angle,
+#     NA_illumi,
+#     "odt_test_data/sample",
+#     approx=approx,
+#     if_save=True,
+# )
+# generate_test_data(
+#     ref_approx_field_fft,
+#     params,
+#     step_angle,
+#     NA_illumi,
+#     "odt_test_data/ref",
+#     approx=approx,
+# )
+# print("generated test data!")
 
 # # %%
 # # cursor visualizer
@@ -262,13 +270,16 @@ print("generated test data!")
 # test_data = numpy_parser("odt_test_data/sample")
 # ref_data = numpy_parser("odt_test_data/ref")
 load_fft = False
-test_data = numpy_parser("../data/aperture_sample_beads")
-ref_data = numpy_parser("../data/aperture_ref_beads")
-qpi_synthesizer = QPISynthesizer()
-qpi_synthesizer.set_parameters(params)
-# qpi_synthesizer.set_data(test_data)
-qpi_synthesizer.set_data(test_data, ref_data)
-qpi_synthesized, qpi_fft = qpi_synthesizer.synthesize(save_multiangle=True, load_fft=load_fft)
+test_data_path_list = numpy_parser("../data/aperture_sample_beads")
+ref_data_path_list = numpy_parser("../data/aperture_ref_beads")
+
+synthesizer = Synthesizer(params)
+synthesizer.set_sample_data_from_path(test_data_path_list)
+synthesizer.set_reference_data_from_path(ref_data_path_list)
+qpi_synthesized, qpi_fft = synthesizer.QPI()
+
+synthesizer.save_multiangle_qpi()
+synthesizer.save_multiangle_spectrum()
 
 if _cp:
     qpi_synthesized = xp.asnumpy(qpi_synthesized)
@@ -305,16 +316,8 @@ cursor_visualizer.run()
 
 
 # %%
-odt_synthesizer = ODTSynthesizer()
-odt_synthesizer.set_parameters(params)
-odt_synthesizer.set_data(test_data, ref_data)
-synthesized_array, odt_fft, occupancy = odt_synthesizer.ODT_synthesize(
-    approx=approx, hermite=hermite, load_fft=load_fft, calc_ocupancy=True
-)
-r_index_map = xp.real(calc_refractive_index_square(synthesized_array, params) ** 0.5) - params.n_sol
+r_index_map, odt_fft = synthesizer.ODT(approx=approx, hermite=hermite)
 
-synthesized_array_pad = zeropad_higher_kz(synthesized_array, params.aperturesize - params.fz_extent)
-r_index_map_pad = xp.real(calc_refractive_index_square(synthesized_array_pad, params) ** 0.5)
 
 # normalized_error = calc_normalized_L2error(r_index_map_pad, rindex_original)
 # # print(f"normalized error: {normalized_error}")
@@ -361,17 +364,15 @@ r_index_map_pad = xp.real(calc_refractive_index_square(synthesized_array_pad, pa
 
 if _cp:
     odt_synthesized = xp.asnumpy(r_index_map)
-    odt_synthesized_pad = xp.asnumpy(r_index_map_pad)
     odt_fft = xp.asnumpy(xp.log(xp.abs(odt_fft) + 1))
 else:
     odt_synthesized = r_index_map
-    odt_synthesized_pad = xp.real(r_index_map_pad)
     odt_fft = xp.asnumpy(xp.log(xp.abs(odt_fft) + 1))
 
 # %%
 # plot
 print("synthesized ODT")
-slice_visualizer = SlicingVisualizer(odt_synthesized_pad)
+slice_visualizer = SlicingVisualizer(odt_synthesized)
 slice_visualizer.run()
 
 # %%

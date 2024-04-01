@@ -6,7 +6,7 @@ from PIL import Image
 from skimage.restoration import unwrap_phase
 
 import muscopy as mus
-from muscopy.qpi import QPIParameters, qpi
+from muscopy.qpi import QPIParameters, QPI
 
 try:
     import cupy as xp
@@ -48,7 +48,7 @@ params = mus.qpi.QPIParameters(
     n_sol=1.33,
 )
 
-result = mus.qpi.qpi(array, ref, params, mus.OFFSET_REGS)
+result = QPI(array, ref, params, mus.OFFSET_REGS)
 
 # %%
 if _cp:

@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from typing import NewType
+
+import numpy as np
+
 try:
     import cupy as xp
 
@@ -8,6 +12,9 @@ except ImportError:
     import numpy as xp
 
     _cp = False
+
+import muscopy.cfg as mcfg
+from muscopy.cfg import Regions
 
 
 class QPIParameters:
@@ -18,6 +25,7 @@ class QPIParameters:
         img_shape: tuple[int, int],
         pixelsize: float,
         offaxis_center: tuple[int, int],
+        n_sol: float = 1.33,
     ):
         """QPIParameters class for QPI calculation
 
@@ -27,12 +35,14 @@ class QPIParameters:
             img_shape (tuple[int, int]): shape of the image
             pixelsize (float): image pixel size
             offaxis_center (tuple[int, int]): center position of the off axis holography in the Fourier domain
+            n_sol (float, optional): refractive index of the solvent. Defaults to 1.33.
         """
         self.wav = wavelength
         self.NA = NA
         self.img_shape = img_shape
         self.pixelsize = pixelsize
         self.offaxis_center = offaxis_center
+        self.n_sol = n_sol
 
         self._calc_params()
 
@@ -42,12 +52,42 @@ class QPIParameters:
         self.img_center = (self.img_shape[0] // 2, self.img_shape[1] // 2)
         self.dim = self.img_shape[0]
         self.freq_per_pixel = 1 / (self.pixelsize * self.dim)  # 1 / L
+        self.k_per_pixel = 2 * np.pi * self.freq_per_pixel  # unit of k in terms of pixel unit
         self.aperturesize = 2 * round(self.NA / self.wav / self.freq_per_pixel) + 1  # 2 * f_BW + 1
+        self.fi_mag = self.n_sol / self.wav / self.freq_per_pixel  # |k| in terms of pixel unit
+
+        self.imgpx_unit = (
+            self.pixelsize * self.img_shape[0] / (2 * self.aperturesize + 1 - mcfg.EDGE_SIZE)
+        )  # unit image pixel size on the cropped image plane
 
     def print_all_parameters(self):
         """Print all parameters in the QPIParameters class"""
         for key, value in vars(self).items():
             print(f"{key}={value}")
+
+    def Hologram2F(self) -> float:
+        """Factor to convert the hologram to the Fourier space
+
+        Returns:
+            float: FFT factor
+        """
+        return (self.pixelsize / self.k_per_pixel) ** 0.5
+
+    def S2F(self) -> float:
+        """Factor to convert the spatial domain to the Fourier space
+
+        Returns:
+            float: FFT factor
+        """
+        return (self.imgpx_unit / self.k_per_pixel) ** 0.5
+
+    def F2S(self) -> float:
+        """Factor to convert the Fourier space to the spatial domain
+
+        Returns:
+            float: FFT factor
+        """
+        return (self.k_per_pixel / self.imgpx_unit) ** 0.5
 
 
 def make_disk(center: tuple[int, int], radius: float, array_shape: tuple[int, int], highpass: bool = False) -> xp.array:
@@ -114,12 +154,12 @@ def get_field(array: xp.array, params: QPIParameters, crop_center: bool = False,
     return array
 
 
-def correct_offset(array, offset_regs: list[tuple[tuple[int, int], tuple[int, int]]]) -> xp.array:
+def correct_offset(array, offset_regs: Regions) -> xp.array:
     """internal method. correct phase and amplitude offset
 
     Args:
         array (xp.array): input complex array
-        offset_regs (list[tuple[tuple[int, int], tuple[int, int]]]): regions for offset calculation
+        offset_regs (Regions): regions for offset calculation
 
     Returns:
         xp.array: corrected array
@@ -137,11 +177,10 @@ def correct_offset(array, offset_regs: list[tuple[tuple[int, int], tuple[int, in
     return array
 
 
-def qpi(
+def QPI(
     array: xp.array,
     reference: xp.array,
     params: QPIParameters,
-    offset_regs: list[tuple[tuple[int, int], tuple[int, int]]] | None = None,
 ) -> xp.array:
     """Quantitative phase imaging (QPI) calculation
 
@@ -149,7 +188,6 @@ def qpi(
         array (xp.array): on-axis hologram
         reference (xp.array): off-axis hologram
         params (QPIParameters): QPIParameters class
-        offset_regs (list[tuple[tuple[int, int], tuple[int, int]]], optional): regions for offset calculation. Defaults to None.
 
     Returns:
         xp.array: QPI phase image
@@ -162,19 +200,18 @@ def qpi(
     array_div = array_field / ref_array_field
 
     # remove phase and amplitude offset
-    if offset_regs is not None:
-        array_div = correct_offset(array_div, offset_regs)
+    if mcfg.OFFSET_REGS is not None:
+        array_div = correct_offset(array_div, mcfg.OFFSET_REGS)
 
     dif_phase = xp.angle(array_div)
 
     return dif_phase
 
 
-def mipqpi(
+def MIPQPI(
     array_on: xp.array,
     array_off: xp.array,
     params: QPIParameters,
-    offset_regs: list[tuple[tuple[int, int], tuple[int, int]]] | None = None,
     crop_center: bool = False,
     **kwargs,
 ) -> xp.array:
@@ -184,7 +221,6 @@ def mipqpi(
         array_on (xp.array): on-axis hologram
         array_off (xp.array): off-axis hologram
         params (QPIParameters): QPIParameters class
-        offset_regs (list[tuple[tuple[int, int], tuple[int, int]]], optional): regions for phase offset calculation. Defaults to None.
         crop_center (bool, optional): crop the center of the array or not. Defaults to False.
 
     Returns:
@@ -197,8 +233,8 @@ def mipqpi(
     array_div = array_on_field / array_off_field
 
     # remove phase and amplitude offset
-    if offset_regs is not None:
-        array_div = correct_offset(array_div, offset_regs)
+    if mcfg.OFFSET_REGS is not None:
+        array_div = correct_offset(array_div, mcfg.OFFSET_REGS)
 
     dif_phase = xp.angle(array_div)
 

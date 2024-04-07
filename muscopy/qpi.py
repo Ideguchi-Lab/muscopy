@@ -154,7 +154,7 @@ def get_field(array: xp.array, params: QPIParameters, crop_center: bool = False,
     return array
 
 
-def correct_offset(array, offset_regs: Regions) -> xp.array:
+def correct_offset(array, offset_regs: Regions, phase: bool = True, amplitude: bool = True) -> xp.array:
     """internal method. correct phase and amplitude offset
 
     Args:
@@ -169,8 +169,14 @@ def correct_offset(array, offset_regs: Regions) -> xp.array:
     for region in offset_regs:
         phase_offset_list.append(xp.mean(xp.angle(array[region[0][0] : region[0][1], region[1][0] : region[1][1]])))
         amplitude_offset_list.append(xp.mean(xp.abs(array[region[0][0] : region[0][1], region[1][0] : region[1][1]])))
-    phase_offset = xp.mean(xp.array(phase_offset_list))
-    amplitude_offset = xp.mean(xp.array(amplitude_offset_list))
+    if phase:
+        phase_offset = xp.mean(xp.array(phase_offset_list))  #  - xp.pi / 2
+    else:
+        phase_offset = 0
+    if amplitude:
+        amplitude_offset = xp.mean(xp.array(amplitude_offset_list))
+    else:
+        amplitude_offset = 1
 
     array = array * xp.exp(-1j * phase_offset) / amplitude_offset
 
@@ -234,7 +240,7 @@ def MIPQPI(
 
     # remove phase and amplitude offset
     if mcfg.OFFSET_REGS is not None:
-        array_div = correct_offset(array_div, mcfg.OFFSET_REGS)
+        array_div = correct_offset(array_div, mcfg.OFFSET_REGS, phase=True)
 
     dif_phase = xp.angle(array_div)
 

@@ -22,6 +22,7 @@ from tqdm import tqdm
 import muscopy.cfg as mcfg
 from muscopy.cfg import Regions
 from muscopy.qpi import QPIParameters, correct_offset, make_disk
+from muscopy.unwrap_phase import phase_unwrap
 
 
 class ODTParameters(QPIParameters):
@@ -219,14 +220,24 @@ def get_scattering_field(
     if approx == "Born":
         scattering = (array_field - ref_array_field) / ref_array_field
     elif approx == "Rytov":
-        log_array = xp.log(array_field)
-        log_ref_array = xp.log(ref_array_field)
-        scattering = log_array - log_ref_array
+        array_log = xp.log(array_field)
+        array_log_real = xp.real(array_log)
+        array_log_imag = xp.imag(array_log)
+        ref_array_log = xp.log(ref_array_field)
+        ref_array_log_real = xp.real(ref_array_log)
+        ref_array_log_imag = xp.imag(ref_array_log)
+        array_log_imag_unwrap = phase_unwrap(array_log_imag)
+        ref_array_log_imag_unwrap = phase_unwrap(ref_array_log_imag)
+
+        scattering = (array_log_real - ref_array_log_real) + 1j * (array_log_imag_unwrap - ref_array_log_imag_unwrap)
+
     else:
         raise ValueError("approx should be either 'Born' or 'Rytov'")
 
     if mcfg.OFFSET_REGS is not None:
-        scattering = correct_offset(scattering, mcfg.OFFSET_REGS)
+        scattering = correct_scatter_offset(
+            scattering, mcfg.OFFSET_REGS, amplitude=False, phase=False
+        )  # TODO check or alter to correct_offset before applying scattering calc
 
     scattering_fft = xp.fft.fftshift(xp.fft.fft2(scattering)) * params.S2F() ** 2
     disk_for_synthesis = make_disk(
@@ -249,6 +260,39 @@ def get_scattering_field(
         scattering_fft = scattering_fft * mask_highpass
 
     return scattering, scattering_fft
+
+
+def correct_scatter_offset(
+    array: xp.array, offset_regs: Regions, phase: bool = True, amplitude: bool = True
+) -> xp.array:
+    """internal method. correct phase and amplitude offset for the scattering field
+
+    Args:
+        array (xp.array): input complex array
+        offset_regs (Regions): regions for offset calculation
+        phase (bool, optional): whether to correct phase offset. Defaults to True.
+        amplitude (bool, optional): whether to correct amplitude offset. Defaults to True.
+
+    Returns:
+        xp.array: corrected array
+    """
+    phase_offset_list = []
+    amplitude_offset_list = []
+    for region in offset_regs:
+        phase_offset_list.append(xp.mean(xp.angle(array[region[0][0] : region[0][1], region[1][0] : region[1][1]])))
+        amplitude_offset_list.append(xp.mean(xp.abs(array[region[0][0] : region[0][1], region[1][0] : region[1][1]])))
+    if phase:
+        phase_offset = xp.mean(xp.array(phase_offset_list))  #  - xp.pi / 2
+    else:
+        phase_offset = 0
+    if amplitude:
+        amplitude_offset = xp.mean(xp.array(amplitude_offset_list))
+    else:
+        amplitude_offset = 0
+
+    array = array * xp.exp(-1j * phase_offset) - amplitude_offset
+
+    return array
 
 
 ############################################
@@ -446,7 +490,7 @@ class Synthesizer:
         synthesized_weight = xp.ones(synthesized_fft.shape)
 
         print("synthesizing...")
-        for i in tqdm(range(1, len(self.identifiers))):
+        for i in tqdm(range(len(self.identifiers))):
             data = self.data[self.identifiers[i]]
             fft_field = data.spectrum
 
@@ -473,7 +517,7 @@ class Synthesizer:
             (
                 2 * (self.params.aperturesize) + 1 - mcfg.EDGE_SIZE,
                 2 * (self.params.aperturesize) + 1 - mcfg.EDGE_SIZE,
-                self.params.fz_extent * 2 + 1,
+                self.params.fz_extent * 2 + 1 + 6,
             ),
             dtype=xp.complex128,
         )
@@ -599,7 +643,9 @@ class Synthesizer:
         self.get_scattering_field(approx=approx)
         synthesized_array, synthesized_fft = self.synthesize_on_3d(hermite=hermite)
 
-        synthesized_array_pad = zeropad_higher_kz(synthesized_array, self.params.aperturesize - self.params.fz_extent)
+        synthesized_array_pad = zeropad_higher_kz(
+            synthesized_array, self.params.aperturesize - self.params.fz_extent - 3
+        )
 
         r_index = calc_refractive_index_square(synthesized_array_pad, self.params) ** 0.5 - self.params.n_sol
 

@@ -1,16 +1,13 @@
-import cupy as cp
-import numpy as np
-from cupyx.scipy.fft import dct as cp_dct
-from cupyx.scipy.fft import idct as cp_idct
-from scipy.fftpack import dct, idct
-
 try:
     import cupy as xp
+    from cupyx.scipy.fft import dct as cp_dct
+    from cupyx.scipy.fft import idct as cp_idct
 
     _cp = True
 
 except ImportError:
     import numpy as xp
+    from scipy.fftpack import dct, idct
 
     _cp = False
 

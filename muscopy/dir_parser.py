@@ -35,3 +35,20 @@ def tiff_parser(dir_path):
         if file.endswith(".tiff"):
             files.append(os.path.join(dir_path, file))
     return files
+
+
+def pkl_parser(dir_path):
+    """return list of pkl"""
+    files = []
+    for file in os.listdir(dir_path):
+        if file.endswith(".pkl"):
+            files.append(os.path.join(dir_path, file))
+    return files
+
+
+def recurcive_pkl_parser(dir_path):
+    files = []
+    p = pathlib.Path(dir_path)
+    for path in p.glob("**/*.pkl"):
+        files.append(path)
+    return files

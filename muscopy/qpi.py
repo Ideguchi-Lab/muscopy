@@ -130,6 +130,30 @@ def crop_array(array: xp.array, center: tuple[int, int], width: int) -> xp.array
     ]
 
 
+def get_spectrum(array: xp.array, params: QPIParameters, crop_center: bool = False, c_r: int = 5) -> xp.array:
+    """internal method. get the spectrum of the hologram array
+
+    Args:
+        array (xp.array): input array
+        params (QPIParameters): QPIParameters class
+        crop_center (bool, optional): crop the center of the array or not. Defaults to False.
+
+    Returns:
+        xp.array: cropped spectrum of the hologram array
+    """
+    array_fft = xp.fft.fftshift(xp.fft.fft2(array))
+    mask = make_disk(params.offaxis_center, params.aperturesize / 2, params.img_shape)
+    array_fft = array_fft * mask
+
+    if crop_center:
+        mask_highpass = make_disk(params.offaxis_center, c_r, params.img_shape, highpass=True)
+        array_fft = array_fft * mask_highpass
+
+    array_fft = crop_array(array_fft, params.offaxis_center, params.aperturesize)
+
+    return array_fft
+
+
 def get_field(array: xp.array, params: QPIParameters, crop_center: bool = False, c_r: int = 5) -> xp.array:
     """internal method. get the electric field from the hologram array
 
@@ -141,15 +165,7 @@ def get_field(array: xp.array, params: QPIParameters, crop_center: bool = False,
     Returns:
         xp.array: field from the hologram array
     """
-    array_fft = xp.fft.fftshift(xp.fft.fft2(array))
-    mask = make_disk(params.offaxis_center, params.aperturesize / 2, params.img_shape)
-    array_fft = array_fft * mask
-
-    if crop_center:
-        mask_highpass = make_disk(params.offaxis_center, c_r, params.img_shape, highpass=True)
-        array_fft = array_fft * mask_highpass
-
-    array_fft = crop_array(array_fft, params.offaxis_center, params.aperturesize)
+    array_fft = get_spectrum(array, params, crop_center, c_r)
     array = xp.fft.ifft2(xp.fft.ifftshift(array_fft))
     return array
 

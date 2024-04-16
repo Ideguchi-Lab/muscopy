@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import pickle
 import uuid
 from typing import NewType, Union
 
@@ -51,7 +52,10 @@ class ODTParameters(QPIParameters):
                 self.fi_mag * (1 - self.NA_illumi**2 / self.n_sol**2) ** 0.5
             )  # |k_z| in terms of pixel unit
 
-            self.fz_extent = int((self.fi_mag - self.fi_z))  # extent of kz axis in terms of pixel unit
+            fz_extent_top = int(self.fi_mag - self.fi_z)
+            fz_extent_buttom = int(self.fi_mag * (self.n_sol - (self.n_sol**2 - self.NA**2) ** 0.5))
+
+            self.fz_extent = max(fz_extent_top, fz_extent_buttom)  # extent of kz axis in terms of pixel unit
             self.imgpx_unit_z = self.imgpx_unit * (
                 (2 * self.aperturesize + 1) / (2 * self.fz_extent + 1)
             )  # unit image pixel size along z axis on the cropped image plane
@@ -117,6 +121,26 @@ def crop_oblique_array(
     return array_cropped, oblique_shift
 
 
+def get_oblique_spectrum(array: xp.array, params: Params) -> tuple[xp.array, tuple[int, int]]:
+    """internal method. get the spectrum from the hologram array
+
+    Args:
+        array (xp.array): input array
+        params (Params): Parameters class
+
+    Returns:
+        xp.array: spectrum from the hologram array
+        tuple[int, int]: oblique shift in the Fourier space
+    """
+    array_fft = xp.fft.fftshift(xp.fft.fft2(array))
+    mask = make_disk(params.offaxis_center, params.aperturesize / 2, params.img_shape)
+    array_fft = array_fft * mask
+
+    array_fft, oblique_shift = crop_oblique_array(array_fft, params.offaxis_center, params.aperturesize)
+
+    return array_fft, oblique_shift
+
+
 def get_oblique_field(array: xp.array, params: Params) -> tuple[xp.array, tuple[int, int]]:
     """internal method. get the electric field from the hologram array
 
@@ -128,11 +152,7 @@ def get_oblique_field(array: xp.array, params: Params) -> tuple[xp.array, tuple[
         xp.array: field from the hologram array
         tuple[int, int]: oblique shift in the Fourier space
     """
-    array_fft = xp.fft.fftshift(xp.fft.fft2(array)) * params.Hologram2F() ** 2
-    mask = make_disk(params.offaxis_center, params.aperturesize / 2, params.img_shape)
-    array_fft = array_fft * mask
-
-    array_fft, oblique_shift = crop_oblique_array(array_fft, params.offaxis_center, params.aperturesize)
+    array_fft, oblique_shift = get_oblique_spectrum(array, params)
     # correct the scale factor caused by the cropping
     scale_factor = len(array_fft) / len(array)
     array_fft = array_fft * scale_factor
@@ -282,7 +302,7 @@ def correct_scatter_offset(
         phase_offset_list.append(xp.mean(xp.angle(array[region[0][0] : region[0][1], region[1][0] : region[1][1]])))
         amplitude_offset_list.append(xp.mean(xp.abs(array[region[0][0] : region[0][1], region[1][0] : region[1][1]])))
     if phase:
-        phase_offset = xp.mean(xp.array(phase_offset_list))  #  - xp.pi / 2
+        phase_offset = xp.mean(xp.array(phase_offset_list))
     else:
         phase_offset = 0
     if amplitude:
@@ -308,11 +328,13 @@ class DataHolder:
             self.identifier = identifier
 
         self.sample_field: xp.array = None
+        self.sample_spectrum: xp.array = None
         self.reference_field: xp.array = None
+        self.reference_spectrum: xp.array = None
         self.oblique_shift: tuple[int, int] = None
 
         self.div_field: xp.array = None
-        self.spectrum: xp.array = None
+        self.div_spectrum: xp.array = None
 
         self.scattering: xp.arraye = None
         self.scattering_spectrum: xp.array = None
@@ -369,6 +391,24 @@ class Synthesizer:
         path.sort()
         self.reference = [xp.load(path) for path in path]
 
+    def set_sample_compressed_from_path(self, path: list[str]):
+        """set sample data from the path
+
+        Args:
+            path (str): path to the pickle file of the compressed sample holograms
+        """
+        path.sort()
+        self.sample_dh = [pickle.load(open(pkl_path, "rb")) for pkl_path in path]
+
+    def set_reference_compressed_from_path(self, path: list[str]):
+        """set reference data from the path
+
+        Args:
+            path (str): path to the pickle file of the compressed reference holograms
+        """
+        path.sort()
+        self.reference_dh = [pickle.load(open(pkl_path, "rb")) for pkl_path in path]
+
     def get_field(self):
         """get the field from the hologram arrays"""
         print("get field...")
@@ -387,6 +427,18 @@ class Synthesizer:
             data.sample_field = array_field
             data.reference_field = ref_array_field
             data.oblique_shift = oblique_shift
+
+    def get_field_from_compressed(self):
+        """get the field from the compressed hologram arrays"""
+        print("get field...")
+        for i in tqdm(range(len(self.sample_dh))):
+            data = self.sample_dh[i]
+            ref_data = self.reference_dh[i]
+            id = data.get_identifier()
+            self.identifiers.append(id)
+            self.data[id] = data
+
+            data.reference_field = ref_data.sample_field
 
     def get_div_field_and_spectrum(
         self,
@@ -412,7 +464,7 @@ class Synthesizer:
             )
 
             data.div_field = array_div
-            data.spectrum = array_div_fft
+            data.div_spectrum = array_div_fft
 
     def get_scattering_field(self, approx: str = "Rytov", crop_center: bool = False, c_r: int = 5):
         """get the scattering field
@@ -469,9 +521,9 @@ class Synthesizer:
         for i in tqdm(range(len(self.identifiers))):
             data = self.data[self.identifiers[i]]
             if _cp:
-                to_save = xp.asnumpy(xp.log(xp.abs(data.spectrum) + 1e-60))
+                to_save = xp.asnumpy(xp.log(xp.abs(data.div_spectrum) + 1e-60))
             else:
-                to_save = xp.log(xp.abs(data.spectrum))
+                to_save = xp.log(xp.abs(data.div_spectrum))
             plt.imsave(f"{path}/{i:03}.png", to_save, cmap="gray")
 
     def synthesize_spectrums(self) -> tuple[xp.array, xp.array]:
@@ -492,7 +544,7 @@ class Synthesizer:
         print("synthesizing...")
         for i in tqdm(range(len(self.identifiers))):
             data = self.data[self.identifiers[i]]
-            fft_field = data.spectrum
+            fft_field = data.div_spectrum
 
             synthesized_fft += fft_field
             synthesized_weight += fft_field != 0
@@ -599,47 +651,61 @@ class Synthesizer:
 
         return last_array
 
-    def QPI(self) -> tuple[xp.array, xp.array]:
+    def QPI(self, pkl_format: bool = False) -> tuple[xp.array, xp.array]:
         """Quantitative phase imaging (QPI) calculation
+        ]
+                Args:
+                    pkl_format (bool, optional): whether to use the data in pickle format(compressed). Defaults to False.
 
-        Returns:
-            tuple[xp.array, xp.array]: synthesized QPI and its Fourier transform
+                Returns:
+                    tuple[xp.array, xp.array]: synthesized QPI and its Fourier transform
         """
-        self.get_field()
+        if pkl_format:
+            self.get_field_from_compressed()
+        else:
+            self.get_field()
         self.get_div_field_and_spectrum()
         synthesized_array, synthesized_fft = self.synthesize_spectrums()
         synthesized_qpi = xp.angle(synthesized_array)
 
         return synthesized_qpi, synthesized_fft
 
-    def MIPQPI(self, c_r: int = 5) -> tuple[xp.array, xp.array]:
+    def MIPQPI(self, c_r: int = 5, pkl_format: bool = False) -> tuple[xp.array, xp.array]:
         """Mid-infrared Photothermal Quantitative Phase imaging (MIPQPI) calculation
 
         Args:
             c_r (int, optional): radius of the center crop for MIPQPI. Defaults to 5.
+            pkl_format (bool, optional): whether to use the data in pickle format(compressed). Defaults to False.
 
         Returns:
             tuple[xp.array, xp.array]: synthesized MIPQPI and its Fourier transform
         """
-        self.get_field()
+        if pkl_format:
+            self.get_field_from_compressed()
+        else:
+            self.get_field()
         self.get_div_field_and_spectrum(crop_center=True, c_r=c_r)
         synthesized_array, synthesized_fft = self.synthesize_spectrums()
         synthesized_mipqpi = xp.angle(synthesized_array)
 
         return synthesized_mipqpi, synthesized_fft
 
-    def ODT(self, approx: str = "Rytov", hermite=False) -> tuple[xp.array, xp.array]:
+    def ODT(self, approx: str = "Rytov", hermite=False, pkl_format: bool = False) -> tuple[xp.array, xp.array]:
         """Optical Diffraction Tomography (ODT) calculation
 
         Args:
             approx (str, optional): approximation for the ODT calculation. Defaults to "Rytov".
             hermite (bool, optional): whether to use Hermite symmetry. Defaults to False.
+            pkl_format (bool, optional): whether to use the data in pickle format(compressed). Defaults to False.
 
         Returns:
             tuple[xp.array, xp.array]: synthesized complex refractive index and its Fourier transform
         """
         assert isinstance(self.params, ODTParameters)
-        self.get_field()
+        if pkl_format:
+            self.get_field_from_compressed()
+        else:
+            self.get_field()
         self.get_scattering_field(approx=approx)
         synthesized_array, synthesized_fft = self.synthesize_on_3d(hermite=hermite)
 

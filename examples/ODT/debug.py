@@ -1,7 +1,8 @@
 # %%
 import sys
-import numpy as np
+
 import matplotlib.pyplot as plt
+import numpy as np
 
 try:
     import cupy as xp
@@ -19,11 +20,7 @@ sys.path.append(".")
 sys.path.append("..")
 sys.path.append("../..")
 
-from generate_hologram_from3Dmap import (
-    generate_3D_sphere,
-    project_onto_2D_space,
-    extract3Dto2D,
-)
+from generate_hologram_from3Dmap import extract3Dto2D, generate_3D_sphere, project_onto_2D_space
 
 from muscopy.odt import ODTParameters
 

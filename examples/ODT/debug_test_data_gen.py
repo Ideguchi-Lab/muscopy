@@ -1,8 +1,9 @@
 # %%
 import sys
-import numpy as np
+
 import matplotlib.pyplot as plt
-from ilabvis import SlicingVisualizer, CursorVisualizer
+import numpy as np
+from ilabvis import CursorVisualizer, SlicingVisualizer
 
 try:
     import cupy as xp

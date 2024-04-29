@@ -1,10 +1,10 @@
 # %%
 import sys
-import numpy as np
-import matplotlib.pyplot as plt
-from ilabvis import SlicingVisualizer, CursorVisualizer
-
 from itertools import product
+
+import matplotlib.pyplot as plt
+import numpy as np
+from ilabvis import CursorVisualizer, SlicingVisualizer
 
 try:
     import cupy as xp
@@ -23,23 +23,23 @@ sys.path.append("..")
 sys.path.append("../..")
 
 from generate_hologram_from3Dmap import (
-    generate_3D_sphere,
-    generate_test_data,
     extract3Dto2D_minimum,
-    generate_3D_slope,
-    generate_plate,
     generate_3d_gaussian,
+    generate_3D_slope,
+    generate_3D_sphere,
+    generate_plate,
+    generate_test_data,
 )
 
-from muscopy.dir_parser import numpy_parser
 from muscopy.aperture_synthesis import Synthesizer as QPISynthesizer
+from muscopy.dir_parser import numpy_parser
 from muscopy.odt import (
     ODTParameters,
     ODTSynthesizer,
+    calc_normalized_L2error,
     calc_refractive_index_square,
     discard_higher_kz,
     zeropad_higher_kz,
-    calc_normalized_L2error,
 )
 
 EDGE_SIZE = 0

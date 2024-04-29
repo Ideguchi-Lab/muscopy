@@ -57,8 +57,14 @@ class ODTParameters(QPIParameters):
 
             self.fz_extent = max(fz_extent_top, fz_extent_buttom)  # extent of kz axis in terms of pixel unit
             self.imgpx_unit_z = self.imgpx_unit * (
-                (2 * self.aperturesize + 1) / (2 * self.fz_extent + 1)
+                (2 * self.aperturesize + 1) / (2 * self.fz_extent + 1 + 6)
             )  # unit image pixel size along z axis on the cropped image plane
+
+    def S2Fz(self) -> float:
+        return (self.imgpx_unit_z / self.k_per_pixel) ** 0.5
+
+    def F2Sz(self) -> float:
+        return (self.k_per_pixel / self.imgpx_unit_z) ** 0.5
 
 
 Params = Union[QPIParameters, ODTParameters]
@@ -607,7 +613,9 @@ class Synthesizer:
         synthesized_weight -= synthesized_weight > 1
         synthesized_fft /= synthesized_weight
 
-        synthesized_array = xp.fft.ifftn(xp.fft.ifftshift(synthesized_fft)) * self.params.F2S() ** 3
+        synthesized_array = (
+            xp.fft.ifftn(xp.fft.ifftshift(synthesized_fft)) * self.params.F2S() ** 2 * self.params.F2Sz()
+        )
 
         return synthesized_array, synthesized_fft
 
@@ -637,17 +645,10 @@ class Synthesizer:
         err = np.inf
         count = 0
         while (err > epsilon) and (count < n_iter):
-            tmp_array[xp.real(tmp_array) > 0] = 0
-            tmp_fft = (
-                xp.fft.fftshift(xp.fft.fftn(tmp_array))
-                * self.params.S2F() ** 2
-                * self.params.imgpx_unit_z**0.5
-                / self.params.k_per_pixel**0.5
-            )
+            tmp_array[xp.real(tmp_array) < 0] = 0
+            tmp_fft = xp.fft.fftshift(xp.fft.fftn(tmp_array)) * self.params.S2F() ** 2 * self.params.S2Fz
             tmp_fft[array3dfft != 0] = array3dfft[array3dfft != 0]
-            tmp_array = xp.fft.ifftn(xp.fft.ifftshift(tmp_fft)) / (
-                self.params.S2F() ** 2 * self.params.imgpx_unit_z**0.5 / self.params.k_per_pixel**0.5
-            )
+            tmp_array = xp.fft.ifftn(xp.fft.ifftshift(tmp_fft)) * (self.params.F2S() ** 2 * self.params.F2Sz)
 
             err = calc_normalized_L2error(tmp_array, last_array)
             last_array = tmp_array.copy()
@@ -854,10 +855,10 @@ def discard_higher_kz(array: xp.ndarray, threshold: int) -> xp.ndarray:
     Returns:
         xp.ndarray: lowpassed array
     """
-    norm_factor = array.shape[2]
-    array_fft = xp.fft.fftshift(xp.fft.fftn(array, norm="backward"))
+    norm_factor = xp.sqrt((array.shape[2] - 2 * threshold) / array.shape[2])
+    array_fft = xp.fft.fftshift(xp.fft.fftn(array, norm="ortho"))
     discarded = discard_z(array_fft, threshold)
-    new_array = xp.fft.ifftn(xp.fft.ifftshift(discarded), norm="forward") / norm_factor**3
+    new_array = xp.fft.ifftn(xp.fft.ifftshift(discarded), norm="ortho") * norm_factor
     return new_array
 
 
@@ -871,8 +872,8 @@ def zeropad_higher_kz(array: xp.ndarray, extend: int) -> xp.ndarray:
     Returns:
         xp.ndarray: zero padded array
     """
-    norm_factor = array.shape[0] * array.shape[1] * array.shape[2]
-    array_fft = xp.fft.fftshift(xp.fft.fftn(array, norm="backward"))
+    norm_factor = xp.sqrt((array.shape[2] + 2 * extend) / array.shape[2])
+    array_fft = xp.fft.fftshift(xp.fft.fftn(array, norm="ortho"))
     new_array_fft = xp.zeros(
         (
             array_fft.shape[0],
@@ -886,7 +887,7 @@ def zeropad_higher_kz(array: xp.ndarray, extend: int) -> xp.ndarray:
         :,
         extend : array_fft.shape[2] + extend,
     ] = array_fft
-    new_array = xp.fft.ifftn(xp.fft.ifftshift(new_array_fft), norm="forward") / norm_factor
+    new_array = xp.fft.ifftn(xp.fft.ifftshift(new_array_fft), norm="ortho") * norm_factor
     return new_array
 
 

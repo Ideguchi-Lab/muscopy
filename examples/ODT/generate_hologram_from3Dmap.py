@@ -1,13 +1,13 @@
 # %%
 from __future__ import annotations
 
-import numpy as np
 import os
 import sys
 
-# from muscopy.odt import ODTParameters, find_max_args
-from muscopy.aperture_synthesis import ODTParameters
-from muscopy.qpi import make_disk
+import numpy as np
+
+import muscopy as mus
+from muscopy import ODTParameters, make_disk
 
 try:
     import cupy as xp
@@ -18,38 +18,36 @@ except ImportError:
 
     _cp = False
 
-EDGE_SIZE = 0
-
 # %%
 
+######################
+# Generate 3D object #
+######################
 
-def generate_3D_sphere(shape: tuple | int, radius: float, center: tuple | None = None) -> xp.ndarray:
+
+def generate_3D_sphere(shape: tuple[int, int, int], radius: float, center: tuple[int, int]) -> xp.ndarray:
     """Generate 3D sphere. The sphere is filled with 1, otherwise 0.
 
     Args:
-        shape (tuple): shape of the tensor
+        shape (tuple[int, int, int]): shape of the tensor
         radius (float): radius of the sphere
-        center (tuple, optional): center of the sphere. Defaults to None.
+        center (tuple[int, int]): center of the sphere.
 
     Returns:
         xp.ndarray: 3D sphere
     """
-    if isinstance(shape, int):
-        shape = (shape, shape, shape)
-    if center is None:
-        center = tuple([int(i / 2) for i in shape])
     xx, yy, zz = xp.meshgrid(xp.arange(shape[0]), xp.arange(shape[1]), xp.arange(shape[2]), indexing="ij")
     sphere = (xx - center[0]) ** 2 + (yy - center[1]) ** 2 + (zz - center[2]) ** 2
     sphere = sphere < radius**2
     return sphere
 
 
-def generate_3d_gaussian(shape: tuple, center: tuple, sigma: float) -> xp.ndarray:
+def generate_3d_gaussian(shape: tuple[int, int, int], center: tuple[int, int], sigma: float) -> xp.ndarray:
     """Generate 3D Gaussian distribution.
 
     Args:
-        shape (tuple): shape of the tensor
-        center (tuple): center of the Gaussian
+        shape (tuple[int, int, int]): shape of the tensor
+        center (tuple[int, int]): center of the Gaussian
         sigma (float): standard deviation of the Gaussian
 
     Returns:
@@ -60,7 +58,7 @@ def generate_3d_gaussian(shape: tuple, center: tuple, sigma: float) -> xp.ndarra
     return gaussian
 
 
-def generate_3D_slope(shape: tuple, axis: str) -> xp.ndarray:
+def generate_3D_slope(shape: tuple[int, int, int], axis: str) -> xp.ndarray:
     xx, yy, zz = xp.meshgrid(xp.arange(shape[0]), xp.arange(shape[1]), xp.arange(shape[2]), indexing="ij")
     if axis == "x":
         slope = xx
@@ -72,7 +70,7 @@ def generate_3D_slope(shape: tuple, axis: str) -> xp.ndarray:
     return slope
 
 
-def generate_plate(shape, center, length, depth):
+def generate_plate(shape: tuple[int, int, int], center: tuple[int, int], length: int, depth: int) -> xp.ndarray:
     plate = xp.zeros(shape, dtype=xp.float32)
     plate[
         center[0] - length // 2 : center[0] + length // 2,
@@ -82,11 +80,16 @@ def generate_plate(shape, center, length, depth):
     return plate
 
 
+##################################
+# Routines to generate test data #
+##################################
+
+
 def extract3Dto2D_minimum(
     array_3d_fft: xp.ndarray,
     params: ODTParameters,
     oblique_shift: tuple[int, int],
-    return_index_map=False,
+    return_index_map: bool = False,
 ) -> xp.ndarray:
     xx, yy = xp.meshgrid(
         xp.arange(array_3d_fft.shape[0]),
@@ -128,11 +131,6 @@ def extract3Dto2D_minimum(
 
     array_2d_fft = xp.sum(array_cropped, axis=2)
 
-    # print(Kz_circle.shape)
-    # print("norm of oblique_shift", oblique_shift[0] ** 2 + oblique_shift[1] ** 2)
-    # print("nonzero", xp.count_nonzero(Kz_circle))
-    # print("average", xp.mean(Kz_circle[Kz_circle != 0]) / params.k_per_pixel)
-
     Kz_circle[Kz_circle == 0] = 1
     array_2d_fft = array_2d_fft / Kz_circle
 
@@ -142,11 +140,9 @@ def extract3Dto2D_minimum(
 def generate_test_data(
     array_3d_fft: xp.ndarray,
     params: ODTParameters,
-    illumi_angle_step=30,
-    NA_illumi=1.0,
+    illumi_angle_step: int = 30,
     path: str = "odt_test_data",
-    approx="Rytov",
-    if_save=False,
+    approx: str = "Rytov",
 ):
     assert approx in ["Rytov", "Born"]
     num = int(360 / illumi_angle_step)
@@ -163,7 +159,6 @@ def generate_test_data(
         shutil.rmtree(path)
     os.mkdir(path)
 
-    # f_illumi = round(NA_illumi / params.wav / params.freq_per_pixel)  # + 1 why +1?
     for i in range(num):
         oblique_shift = (
             int(params.fi_lateral_mag * xp.cos(illumi_angle_step * i / 360 * 2 * xp.pi)),
@@ -171,20 +166,12 @@ def generate_test_data(
         )
         test_data_fft_cropped = extract3Dto2D_minimum(array_3d_fft, params, oblique_shift=oblique_shift)
         fft_extent = test_data_fft_cropped
-        norm_fft_extent = fft_extent * params.k_per_pixel
-        norm_test_data_extent = xp.fft.ifft2(xp.fft.ifftshift(norm_fft_extent), norm="backward")
-        test_data_extent = norm_test_data_extent / params.imgpx_unit
-        # test_data_extent[:EDGE_SIZE, :] = 1e-6
-        # test_data_extent[:, :EDGE_SIZE] = 1e-6
+        test_data_extent = xp.fft.ifft2(xp.fft.ifftshift(fft_extent), norm="backward") * params.F2S() ** 2  #  / xp.pi
         if approx == "Rytov":
             E_test = E_initial * xp.exp(test_data_extent)
         elif approx == "Born":
             E_test = E_initial + E_initial * test_data_extent
-        if if_save:
-            xp.save("./test_data_extent.npy", test_data_extent)
-        norm_E_test = E_test * params.imgpx_unit
-        norm_E_test_fft = xp.fft.fftshift(xp.fft.fft2(norm_E_test, norm="backward"))
-        E_test_fft = norm_E_test_fft / params.k_per_pixel
+        E_test_fft = xp.fft.fftshift(xp.fft.fft2(E_test, norm="backward")) * params.S2F() ** 2
         low_pass = make_disk(
             (
                 params.aperturesize + oblique_shift[0],
@@ -219,11 +206,10 @@ def generate_test_data(
             + 1,
         ]
 
-        xp.save(f"{path}/{int(illumi_angle_step * i):03}.npy", test_data_fft)
+        # xp.save(f"{path}/{int(illumi_angle_step * i):03}.npy", test_data_fft)
+        # xp.save(f"./test_data_fft_test.npy", test_data_fft)
 
-        # test_data = xp.fft.ifft2(xp.fft.ifftshift(test_data_fft))
-        # test_data[:2, :] = 0
-        # test_data[:, :2] = 0
+        test_data = xp.fft.ifft2(xp.fft.ifftshift(test_data_fft)) / params.Hologram2F() ** 2
 
         # save
-        # xp.save(f"{path}/{int(illumi_angle_step * i):03}.npy", test_data)
+        xp.save(f"{path}/{int(illumi_angle_step * i):03}.npy", test_data)

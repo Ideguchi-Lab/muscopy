@@ -1,9 +1,10 @@
 # %%
 import os
 import sys
-import numpy as np
+
 import matplotlib.pyplot as plt
-from ilabvis import SlicingVisualizer, CursorVisualizer
+import numpy as np
+from ilabvis import CursorVisualizer, SlicingVisualizer
 
 try:
     import cupy as xp
@@ -20,29 +21,28 @@ print(f"backend: {backend}")
 sys.path.append(".")
 
 from generate_hologram_from3Dmap import (
-    generate_3D_sphere,
-    generate_test_data,
     extract3Dto2D_minimum,
-    generate_3D_slope,
-    generate_plate,
     generate_3d_gaussian,
+    generate_3D_slope,
+    generate_3D_sphere,
+    generate_plate,
+    generate_test_data,
 )
 
 import muscopy as mus
-from muscopy.dir_parser import numpy_parser
 from muscopy.aperture_synthesis import (
-    Synthesizer,
     ODTParameters,
+    Synthesizer,
+    calc_normalized_L2error,
     calc_refractive_index_square,
     discard_higher_kz,
     zeropad_higher_kz,
-    calc_normalized_L2error,
 )
-
+from muscopy.dir_parser import numpy_parser
 
 # %%
 NA_i = 1.0
-step_angle = 360 / 10
+step_angle = 360 / 15
 params = ODTParameters(
     532e-9,
     1.2,
@@ -50,8 +50,8 @@ params = ODTParameters(
     (3.45 * 1e-6) * 3 / 200 / 5,
     # (3.45 * 1e-6) * 3 / 200 / 2,
     (612, 623),
-    1.33,
-    # 1.48,
+    # 1.33,
+    1.50,
     NA_i,
 )
 params.print_all_parameters()
@@ -73,23 +73,32 @@ mus.set_offset_regs(
 shape_3d = (
     params.aperturesize * 2 + 1,
     params.aperturesize * 2 + 1,
-    # params.fz_extent * 2 + 1,
     params.aperturesize * 2 + 1,
 )
 
-sample_index = 1.35  # PMMA=1.49, water=1.33
+sample_index = 1.48  # PMMA=1.49, water=1.33
 radius = 10
 hermite = True
-# hermite = False
+hermite = False
 
 print("real beads size:", 2 * radius * params.imgpx_unit * 1e6, "um")
 
 # make answer 3D refractive map
 sphere = generate_3D_sphere(
-    # shape=params.aperturesize * 2 + 1,
     shape=shape_3d,
     radius=radius,
     center=(params.aperturesize, params.aperturesize, params.aperturesize),
+)
+
+z_offset = 15
+double_sphere = generate_3D_sphere(
+    shape=shape_3d,
+    radius=radius,
+    center=(params.aperturesize, params.aperturesize, params.aperturesize + 15 + z_offset),
+) + generate_3D_sphere(
+    shape=shape_3d,
+    radius=radius,
+    center=(params.aperturesize, params.aperturesize, params.aperturesize - 15 + z_offset),
 )
 
 depth = 30
@@ -110,6 +119,7 @@ PT_gauss = generate_3d_gaussian(
 # slope = slope / slope.shape[0]  # normalize
 
 r_sample = sphere
+# r_sample = double_sphere
 # r_sample = gauss
 # r_sample = slope
 # r_sample = plate
@@ -133,36 +143,33 @@ ref_rindex = discard_higher_kz(ref_rindex, params.aperturesize - params.fz_exten
 # then calculate scattering potential based on refractive index
 scatter_potential = -1 * ((params.k_per_pixel * params.fi_mag)) ** 2 * (rindex**2 / uniform_background**2 - 1)
 
-norm_scatter_potential = scatter_potential * params.imgpx_unit * params.imgpx_unit_z**0.5
-norm_scatter_fft = xp.fft.fftshift(xp.fft.fftn(xp.fft.ifftshift(norm_scatter_potential, axes=(2)), norm="backward"))
-scatter_fft = norm_scatter_fft / params.k_per_pixel ** (3 / 2)
-# scatter_fft[0:EDGE_SIZE, :, :] = 0
-# scatter_fft[:, :, 0:EDGE_SIZE] = 0
-# scatter_fft[:, 0:EDGE_SIZE, :] = 0
+scatter_fft = (
+    (xp.fft.fftshift(xp.fft.fftn(xp.fft.ifftshift(scatter_potential, axes=(2)), norm="backward")))
+    * params.S2F() ** 2
+    * params.S2Fz()
+)
+
 ref_scatter_potential = -((params.k_per_pixel * params.fi_mag) ** 2) * (ref_rindex**2 / uniform_background**2 - 1)
 
-norm_ref_scatter_potential = ref_scatter_potential * params.imgpx_unit * params.imgpx_unit_z**0.5
-norm_ref_scatter_fft = xp.fft.fftshift(
-    xp.fft.fftn(xp.fft.ifftshift(norm_ref_scatter_potential, axes=(2)), norm="backward")
+ref_scatter_fft = (
+    xp.fft.fftshift(xp.fft.fftn(xp.fft.ifftshift(ref_scatter_potential, axes=(2)), norm="backward"))
+    * params.S2F() ** 2
+    * params.S2Fz()
 )
-ref_scatter_fft = norm_ref_scatter_fft / params.k_per_pixel ** (3 / 2)
-# ref_scatter_fft[0:EDGE_SIZE, :, :] = 0
-# ref_scatter_fft[:, 0:EDGE_SIZE, :] = 0
-# ref_scatter_fft[:, :, 0:EDGE_SIZE] = 0
 
-approx_field_fft = scatter_fft / 2j
-ref_approx_field_fft = ref_scatter_fft / 2j
+approx_field_fft = scatter_fft / 2j / xp.pi  # with pi, phase matches but it's not in the derivation
+ref_approx_field_fft = ref_scatter_fft / 2j / xp.pi
 
 # # %%
 # # show the given refractive index
 # print("original refractive index")
-# rindex_to_show = xp.asnumpy(rindex_original)
+# rindex_to_show = xp.asnumpy(rindex_original) - params.n_sol
 # slice_visualizer = SlicingVisualizer(rindex_to_show)
 # slice_visualizer.run()
 
 # # %%
 # print("truncated refractive index")
-# rindex_to_show = xp.asnumpy(xp.abs(rindex))
+# rindex_to_show = xp.asnumpy(xp.abs(rindex)) - params.n_sol
 # slice_visualizer = SlicingVisualizer(rindex_to_show)
 # slice_visualizer.run()
 
@@ -214,46 +221,43 @@ ret_array = norm_ret_array / (params.imgpx_unit * params.imgpx_unit_z**0.5)
 # %%
 # zero pad higher kz
 ret_array_padded = zeropad_higher_kz(ret_array, params.aperturesize - params.fz_extent)
-ret_ref_padded = xp.real(calc_refractive_index_square(ret_array_padded, params) ** 0.5)
+ret_ref_padded = xp.real(calc_refractive_index_square(ret_array_padded, params) ** 0.5) - params.n_sol
 if PT:
-    ret_ref_padded = ret_ref_padded - params.n_sol
+    ret_ref_padded = ret_ref_padded
 if _cp:
     ret_ref_padded = xp.asnumpy(ret_ref_padded)
 print("zeropad refractive index with true scatter potential and true index")
-slice_visualizer = SlicingVisualizer(ret_ref_padded)
+slice_visualizer = SlicingVisualizer(np.real(ret_ref_padded))
 slice_visualizer.run()
 
 # %%
 # generate hologram
 step_angle = step_angle
 NA_illumi = NA_i
-# approx = "Born"
+approx = "Born"
 approx = "Rytov"
 
-# # create dir if not exist
-# if not os.path.exists("odt_test_data"):
-#     os.mkdir("odt_test_data")
-#     os.mkdir("odt_test_data/sample")
-#     os.mkdir("odt_test_data/ref")
+# create dir if not exist
+if not os.path.exists("odt_test_data"):
+    os.mkdir("odt_test_data")
+    os.mkdir("odt_test_data/sample")
+    os.mkdir("odt_test_data/ref")
 
-# generate_test_data(
-#     approx_field_fft,
-#     params,
-#     step_angle,
-#     NA_illumi,
-#     "odt_test_data/sample",
-#     approx=approx,
-#     if_save=True,
-# )
-# generate_test_data(
-#     ref_approx_field_fft,
-#     params,
-#     step_angle,
-#     NA_illumi,
-#     "odt_test_data/ref",
-#     approx=approx,
-# )
-# print("generated test data!")
+generate_test_data(
+    approx_field_fft,
+    params,
+    step_angle,
+    "odt_test_data/sample",
+    approx=approx,
+)
+generate_test_data(
+    ref_approx_field_fft,
+    params,
+    step_angle,
+    "odt_test_data/ref",
+    approx=approx,
+)
+print("generated test data!")
 
 # # %%
 # # cursor visualizer
@@ -266,12 +270,10 @@ approx = "Rytov"
 
 # %%
 # execute synthetic aperture
-# load_fft = True
-# test_data = numpy_parser("odt_test_data/sample")
-# ref_data = numpy_parser("odt_test_data/ref")
-load_fft = False
-test_data_path_list = numpy_parser("../data/aperture_sample_beads")
-ref_data_path_list = numpy_parser("../data/aperture_ref_beads")
+test_data_path_list = numpy_parser("odt_test_data/sample")
+ref_data_path_list = numpy_parser("odt_test_data/ref")
+# test_data_path_list = numpy_parser("../data/aperture_sample_beads")
+# ref_data_path_list = numpy_parser("../data/aperture_ref_beads")
 
 synthesizer = Synthesizer(params)
 synthesizer.set_sample_data_from_path(test_data_path_list)
@@ -316,6 +318,7 @@ cursor_visualizer.run()
 
 
 # %%
+synthesizer.initialize_data()
 r_index_map, odt_fft = synthesizer.ODT(approx=approx, hermite=hermite)
 
 
@@ -372,7 +375,7 @@ else:
 # %%
 # plot
 print("synthesized ODT")
-slice_visualizer = SlicingVisualizer(odt_synthesized)
+slice_visualizer = SlicingVisualizer(np.real(odt_synthesized))
 slice_visualizer.run()
 
 # %%

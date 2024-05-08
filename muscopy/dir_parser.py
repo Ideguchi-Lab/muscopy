@@ -3,7 +3,7 @@ import pathlib
 
 
 def numpy_parser(dir_path):
-    """return list of numpy"""
+    """return path list of numpy arrays"""
     files = []
     for file in os.listdir(dir_path):
         if file.endswith(".npy"):

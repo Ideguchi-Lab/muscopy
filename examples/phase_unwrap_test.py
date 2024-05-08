@@ -6,7 +6,7 @@ from PIL import Image
 from skimage.restoration import unwrap_phase
 
 import muscopy as mus
-from muscopy.qpi import QPIParameters, QPI
+from muscopy.qpi import QPI, QPIParameters
 
 try:
     import cupy as xp

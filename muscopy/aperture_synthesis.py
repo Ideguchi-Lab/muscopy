@@ -654,6 +654,7 @@ class Synthesizer:
         n_iter: int = 100,
         epsilon: float = 0.1,
         interval: int = 100,
+        positive: bool = True,
     ) -> xp.ndarray:
         """Iterative reconstruction
 
@@ -663,6 +664,7 @@ class Synthesizer:
             n_iter (int, optional): maximum number of iterations. Defaults to 100.
             epsilon (float, optional): epsilon for the convergence. Defaults to 0.1.
             interval (int, optional): interval to print the error. Defaults to 100.
+            positive (bool, optional): whether to use positive constraint. Defaults to True.
 
         Returns:
             xp.ndarray: reconstructed 3D array
@@ -673,10 +675,22 @@ class Synthesizer:
         err = np.inf
         count = 0
         while (err > epsilon) and (count < n_iter):
-            tmp_array[xp.real(tmp_array) < 0] = 0
-            tmp_fft = xp.fft.fftshift(xp.fft.fftn(tmp_array)) * self.params.S2F() ** 2 * self.params.S2Fz
+            if positive:
+                tmp_array[xp.real(tmp_array) > 0] = 0
+            else:
+                tmp_array[xp.real(tmp_array) < 0] = 0
+            tmp_fft = (
+                xp.fft.fftshift(xp.fft.fftn(tmp_array, norm="ortho"))
+                * self.params.S2F() ** 2
+                * self.params.S2Fz()
+                * (2 * xp.pi) ** (3 / 2)
+            )
             tmp_fft[array3dfft != 0] = array3dfft[array3dfft != 0]
-            tmp_array = xp.fft.ifftn(xp.fft.ifftshift(tmp_fft)) * (self.params.F2S() ** 2 * self.params.F2Sz)
+            tmp_array = (
+                xp.fft.ifftn(xp.fft.ifftshift(tmp_fft), norm="ortho")
+                * (self.params.F2S() ** 2 * self.params.F2Sz())
+                / (2 * xp.pi) ** (3 / 2)
+            )
 
             err = calc_normalized_L2error(tmp_array, last_array)
             last_array = tmp_array.copy()
@@ -757,9 +771,9 @@ class Synthesizer:
 
         synthesized_array = xp.fft.fftshift(synthesized_array, axes=(2))
 
-        synthesized_array_pad = zeropad_higher_kz(synthesized_array, self.params.aperturesize - self.params.fz_extent)
+        # synthesized_array = zeropad_higher_kz(synthesized_array, self.params.aperturesize - self.params.fz_extent)
 
-        r_index = calc_refractive_index_square(synthesized_array_pad, self.params) ** 0.5 - self.params.n_sol
+        r_index = calc_refractive_index_square(synthesized_array, self.params) ** 0.5 - self.params.n_sol
 
         return r_index, synthesized_fft
 

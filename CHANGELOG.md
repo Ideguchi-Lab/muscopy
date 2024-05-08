@@ -1,0 +1,48 @@
+# Change log
+
+## Unreleased
+
+---
+
+## Version 0.1.4 [2024-05-08]
+
+### Fixed
+
+- $2\pi$ factor in ODT
+- Fixed iterative ODT reconstruction
+
+### Removed
+
+- Removed ODT demo because it will be hard to maintain
+
+---
+
+## Version 0.1.4 [2024-05-08]
+
+### Fixed
+
+- $2\pi$ factor in ODT
+- Fixed iterative ODT reconstruction
+
+### Removed
+
+- Removed ODT demo because it will be hard to maintain
+
+---
+
+## Version 0.1.2 [2024-04-07]
+
+### Added
+
+- Phase unwrapping func created by Horie-san
+- Options for `correct_offset` to choose whether correct phase and amplitude offsets.
+
+### Fixed
+
+- Add phase unwrapping func into Rytov approximation so that the ODT synthesizer is able to reconstruct refractive index map successfully
+
+---
+
+## Version 0.1.1 [2024-04-01]
+
+First release

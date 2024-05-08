@@ -42,8 +42,15 @@ class ODTParameters(QPIParameters):
 
         self._calc_odt_params()
 
-    def _calc_odt_params(self):
+    def _calc_odt_params(self, zmargin: int = 3):
+        """Calculate parameters for ODT calculation
+
+        Args:
+            zmargin (int, optional): Margin to avoid unexpected shift of embedding. Defaults to 3.
+        """
         super()._calc_params()
+
+        self.zmargin = zmargin
 
         if self.NA_illumi is not None:
             self.fi_lateral_mag = self.fi_mag * self.NA_illumi / self.n_sol  # |k_T| in terms of pixel unit
@@ -55,7 +62,9 @@ class ODTParameters(QPIParameters):
             fz_extent_top = int(self.fi_mag - self.fi_z)
             fz_extent_buttom = int(self.fi_mag * (self.n_sol - (self.n_sol**2 - self.NA**2) ** 0.5))
 
-            self.fz_extent = max(fz_extent_top, fz_extent_buttom)  # extent of kz axis in terms of pixel unit
+            self.fz_extent = (
+                max(fz_extent_top, fz_extent_buttom) + self.zmargin
+            )  # extent of kz axis in terms of pixel unit
             self.imgpx_unit_z = self.imgpx_unit * (
                 (2 * self.aperturesize + 1) / (2 * self.fz_extent + 1 + 6)
             )  # unit image pixel size along z axis on the cropped image plane
@@ -195,10 +204,12 @@ def preprocess_for_synthesis(
         array_div = correct_offset(array_div, mcfg.OFFSET_REGS)
 
     array_div_fft = xp.fft.fftshift(xp.fft.fft2(array_div)) * params.S2F() ** 2
+    center_x = params.aperturesize - mcfg.EDGE_SIZE // 2
+    center_y = params.aperturesize - mcfg.EDGE_SIZE // 2
     disk_for_synthesis = make_disk(
         (
-            params.aperturesize - oblique_shift[0],
-            params.aperturesize - oblique_shift[1],
+            center_x - oblique_shift[0],
+            center_y - oblique_shift[1],
         ),
         params.aperturesize // 2,
         array_field.shape,
@@ -209,7 +220,7 @@ def preprocess_for_synthesis(
     # for mipqpi
     if crop_center:
         mask_highpass = make_disk(
-            (params.aperturesize - oblique_shift[0], params.aperturesize - oblique_shift[1]),
+            (center_x - oblique_shift[0], center_y - oblique_shift[1]),
             c_r,
             array_div.shape,
             highpass=True,
@@ -243,6 +254,10 @@ def get_scattering_field(
         tuple[xp.ndarray, xp.ndarray]: scattering field and its Fourier transform
     """
     assert approx in ["Born", "Rytov"]
+
+    array_field = correct_offset(array_field, mcfg.OFFSET_REGS)
+    ref_array_field = correct_offset(ref_array_field, mcfg.OFFSET_REGS)
+    # print("mean", xp.mean(array_field), xp.mean(ref_array_field))
     if approx == "Born":
         scattering = (array_field - ref_array_field) / ref_array_field
     elif approx == "Rytov":
@@ -255,17 +270,21 @@ def get_scattering_field(
         array_log_imag_unwrap = phase_unwrap(array_log_imag)
         ref_array_log_imag_unwrap = phase_unwrap(ref_array_log_imag)
 
-        scattering = (array_log_real - ref_array_log_real) + 1j * (array_log_imag_unwrap - ref_array_log_imag_unwrap)
+        amplitude = array_log_real - ref_array_log_real
+        phase = array_log_imag_unwrap - ref_array_log_imag_unwrap
+
+        if mcfg.OFFSET_REGS is not None:
+            amplitude = correct_amplitude_offset(amplitude, mcfg.OFFSET_REGS)
+            phase = correct_phase_offset(phase, mcfg.OFFSET_REGS)
+
+        scattering = amplitude + 1j * phase
 
     else:
         raise ValueError("approx should be either 'Born' or 'Rytov'")
 
-    if mcfg.OFFSET_REGS is not None:
-        scattering = correct_scatter_offset(
-            scattering, mcfg.OFFSET_REGS, amplitude=False, phase=False
-        )  # TODO check or alter to correct_offset before applying scattering calc
-
-    scattering_fft = xp.fft.fftshift(xp.fft.fft2(scattering)) * params.S2F() ** 2
+    scattering_fft = (
+        xp.fft.fftshift(xp.fft.fft2(scattering, norm="ortho")) * params.S2F() ** 2 * (2 * xp.pi)
+    )  # last factor is to adjust to the non-Unitary derivation in Tamamitsu's paper
     disk_for_synthesis = make_disk(
         (
             params.aperturesize - oblique_shift[0],
@@ -288,37 +307,44 @@ def get_scattering_field(
     return scattering, scattering_fft
 
 
-def correct_scatter_offset(
-    array: xp.ndarray, offset_regs: Regions, phase: bool = True, amplitude: bool = True
-) -> xp.ndarray:
-    """internal method. correct phase and amplitude offset for the scattering field
+def correct_phase_offset(phase: xp.ndarray, offset_regs: Regions) -> xp.ndarray:
+    """internal method. correct phase offset for the scattering field
 
     Args:
-        array (xp.ndarray): input complex array
+        phase (xp.ndarray): input phase array
         offset_regs (Regions): regions for offset calculation
-        phase (bool, optional): whether to correct phase offset. Defaults to True.
-        amplitude (bool, optional): whether to correct amplitude offset. Defaults to True.
+
+    Returns:
+        xp.ndarray: corrected phase array
+    """
+    phase_offset_list = []
+    for region in offset_regs:
+        phase_offset_list.append(xp.mean(phase[region[0][0] : region[0][1], region[1][0] : region[1][1]]))
+    phase_offset = xp.mean(xp.array(phase_offset_list))
+
+    phase = phase - phase_offset
+
+    return phase
+
+
+def correct_amplitude_offset(amplitude: xp.ndarray, offset_regs: Regions) -> xp.ndarray:
+    """internal method. correct amplitude offset for the scattering field
+
+    Args:
+        amplitude (xp.ndarray): input complex array
+        offset_regs (Regions): regions for offset calculation
 
     Returns:
         xp.ndarray: corrected array
     """
-    phase_offset_list = []
     amplitude_offset_list = []
     for region in offset_regs:
-        phase_offset_list.append(xp.mean(xp.angle(array[region[0][0] : region[0][1], region[1][0] : region[1][1]])))
-        amplitude_offset_list.append(xp.mean(xp.abs(array[region[0][0] : region[0][1], region[1][0] : region[1][1]])))
-    if phase:
-        phase_offset = xp.mean(xp.array(phase_offset_list))
-    else:
-        phase_offset = 0
-    if amplitude:
-        amplitude_offset = xp.mean(xp.array(amplitude_offset_list))
-    else:
-        amplitude_offset = 0
+        amplitude_offset_list.append(xp.mean(amplitude[region[0][0] : region[0][1], region[1][0] : region[1][1]]))
+    amplitude_offset = xp.mean(xp.array(amplitude_offset_list))
 
-    array = array * xp.exp(-1j * phase_offset) - amplitude_offset
+    amplitude = amplitude - amplitude_offset
 
-    return array
+    return amplitude
 
 
 ############################################
@@ -580,7 +606,7 @@ class Synthesizer:
             (
                 2 * (self.params.aperturesize) + 1 - mcfg.EDGE_SIZE,
                 2 * (self.params.aperturesize) + 1 - mcfg.EDGE_SIZE,
-                self.params.fz_extent * 2 + 1 + 6,
+                self.params.fz_extent * 2 + 1,
             ),
             dtype=xp.complex128,
         )
@@ -614,8 +640,10 @@ class Synthesizer:
         synthesized_fft /= synthesized_weight
 
         synthesized_array = (
-            xp.fft.ifftn(xp.fft.ifftshift(synthesized_fft)) * self.params.F2S() ** 2 * self.params.F2Sz()
-        )
+            xp.fft.ifftn(xp.fft.ifftshift(synthesized_fft), norm="ortho") * self.params.F2S() ** 2 * self.params.F2Sz()
+        ) / (2 * xp.pi) ** (
+            3 / 2
+        )  # last factor is to adjust to the non-Unitary derivation in Tamamitsu's paper
 
         return synthesized_array, synthesized_fft
 
@@ -663,12 +691,12 @@ class Synthesizer:
 
     def QPI(self, pkl_format: bool = False) -> tuple[xp.ndarray, xp.ndarray]:
         """Quantitative phase imaging (QPI) calculation
-        ]
-                Args:
-                    pkl_format (bool, optional): whether to use the data in pickle format(compressed). Defaults to False.
 
-                Returns:
-                    tuple[xp.ndarray, xp.ndarray]: synthesized QPI and its Fourier transform
+        Args:
+            pkl_format (bool, optional): whether to use the data in pickle format(compressed). Defaults to False.
+
+        Returns:
+            tuple[xp.ndarray, xp.ndarray]: synthesized QPI and its Fourier transform
         """
         if pkl_format:
             self.get_field_from_compressed()
@@ -729,9 +757,7 @@ class Synthesizer:
 
         synthesized_array = xp.fft.fftshift(synthesized_array, axes=(2))
 
-        synthesized_array_pad = zeropad_higher_kz(
-            synthesized_array, self.params.aperturesize - self.params.fz_extent - 3
-        )
+        synthesized_array_pad = zeropad_higher_kz(synthesized_array, self.params.aperturesize - self.params.fz_extent)
 
         r_index = calc_refractive_index_square(synthesized_array_pad, self.params) ** 0.5 - self.params.n_sol
 
@@ -774,19 +800,19 @@ def map_aperture_to_Ewald(
         xp.arange(shape[2]),
         indexing="ij",
     )
-    circle = (xx - params.aperturesize + oblique_shift[0]) ** 2 + (yy - params.aperturesize + oblique_shift[1]) ** 2
+    center_x = params.aperturesize - mcfg.EDGE_SIZE // 2
+    center_y = params.aperturesize - mcfg.EDGE_SIZE // 2
+    circle = (xx - center_x + oblique_shift[0]) ** 2 + (yy - center_y + oblique_shift[1]) ** 2
     circle = circle < (params.aperturesize // 2) ** 2
     Fz_circle = xp.sqrt(
-        params.fi_mag**2
-        - (xx - params.aperturesize + oblique_shift[0]) ** 2
-        - (yy - params.aperturesize + oblique_shift[1]) ** 2
+        params.fi_mag**2 - (xx - center_x + oblique_shift[0]) ** 2 - (yy - center_y + oblique_shift[1]) ** 2
     ) - xp.sqrt(params.fi_mag**2 - oblique_shift[0] ** 2 - oblique_shift[1] ** 2)
 
     Fz_value = (Fz_circle + shape[2] // 2) * circle
     Fz_tile = xp.tile(Fz_value, (shape[2], 1, 1))
     Fz_tile = Fz_tile.transpose(1, 2, 0)
 
-    Fz_tile = Fz_tile.astype(xp.int64)
+    Fz_tile = Fz_tile.astype(xp.int16)
 
     Fz_tile -= Fz_tile == 0  # to avoid 0 index match with zz
 

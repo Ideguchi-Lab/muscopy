@@ -17,16 +17,17 @@
 
 ---
 
-## Version 0.1.4 [2024-05-08]
+## Version 0.1.3 [2024-04-16]
+
+### Added
+
+- Compressor for numpy arrays in `muscopy.compressor.py`
+- Ancillary methods for the above
+- Create options for loading compressed pickle data in aperture synthesis
 
 ### Fixed
 
-- $2\pi$ factor in ODT
-- Fixed iterative ODT reconstruction
-
-### Removed
-
-- Removed ODT demo because it will be hard to maintain
+- Import error in `phase_unwrap` module when importing in GPU less env
 
 ---
 

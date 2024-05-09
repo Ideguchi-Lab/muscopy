@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- Created dtype manager([#16](https://github.com/Ideguchi-Lab/microscopy_converters/issues/16))
+
 ---
 
 ## Version 0.1.4 [2024-05-08]

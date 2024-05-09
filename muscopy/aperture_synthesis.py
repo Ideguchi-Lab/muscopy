@@ -644,8 +644,12 @@ class Synthesizer:
             if hermite:
                 conj_scatter_potential_fft_3d = xp.conjugate(xp.flip(scatter_potential_fft3d, axis=(0, 1, 2)))
 
+                del scatter_potential_fft3d
+
                 synthesized_fft += conj_scatter_potential_fft_3d
                 synthesized_weight += conj_scatter_potential_fft_3d != 0
+
+                del conj_scatter_potential_fft_3d
 
         synthesized_weight -= synthesized_weight > 1
         synthesized_fft /= synthesized_weight

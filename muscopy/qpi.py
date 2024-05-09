@@ -14,7 +14,7 @@ except ImportError:
     _cp = False
 
 import muscopy.cfg as mcfg
-from muscopy.cfg import Regions
+from muscopy.cfg import OffsetRegions
 
 
 class QPIParameters:
@@ -170,16 +170,18 @@ def get_field(array: xp.array, params: QPIParameters, crop_center: bool = False,
     return array
 
 
-def correct_offset(array, offset_regs: Regions, phase: bool = True, amplitude: bool = True) -> xp.array:
+def correct_offset(array, offset_regs: OffsetRegions, phase: bool = True, amplitude: bool = True) -> xp.array:
     """internal method. correct phase and amplitude offset
 
     Args:
-        array (xp.array): input complex array
-        offset_regs (Regions): regions for offset calculation
+        array (NDArray): input complex array
+        offset_regs (OffsetRegions): regions for offset calculation
 
     Returns:
         xp.array: corrected array
     """
+    if offset_regs is None:
+        return array
     phase_offset_list = []
     amplitude_offset_list = []
     for region in offset_regs:

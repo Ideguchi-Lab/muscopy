@@ -597,40 +597,46 @@ class Synthesizer:
 
         return synthesized_array, synthesized_fft
 
-    def synthesize_on_3d(self, hermite: bool = False) -> tuple[NDArray, NDArray]:
+    def synthesize_on_3d(
+        self, hermite: bool = False, precision: ArrayPrecision | None = None
+    ) -> tuple[NDArray, NDArray]:
         """synthesize the spectrums on 3D
 
         Args:
             hermite (bool, optional): whether to use Hermite symmetry. Defaults to False.
+            precision (ArrayPrecision | None, optional): precision of the array. Defaults to None.
 
         Returns:
             tuple[NDArray, NDArray]: synthesized array and its Fourier transform
         """
         assert isinstance(self.params, ODTParameters)
+        if precision is None:
+            precision = ArrayPrecision(32, 64)
         synthesized_fft = xp.zeros(
             (
                 2 * (self.params.aperturesize) + 1 - mcfg.EDGE_SIZE,
                 2 * (self.params.aperturesize) + 1 - mcfg.EDGE_SIZE,
                 self.params.fz_extent * 2 + 1,
             ),
-            dtype=xp.complex128,
+            dtype=precision.get_complex_precision(),
         )
-        synthesized_weight = xp.ones(synthesized_fft.shape)
+        synthesized_weight = xp.ones(synthesized_fft.shape, dtype=precision.get_int_precision())
 
         print("ODT Synthesizing...")
         for i in tqdm(range(len(self.identifiers))):
             data = self.data[self.identifiers[i]]
-            fft_field = data.scattering_spectrum
-            kz_disk = calc_kz_value(self.params, data.oblique_shift)
+            fft_field = data.scattering_spectrum.astype(precision.get_complex_precision())
+            kz_disk = calc_kz_value(self.params, data.oblique_shift, precision)
 
             scatter_potential_fft = 2j * kz_disk * fft_field
 
+            # scatter_potential_fft = scatter_potential_fft.astype(precision.get_complex_precision())
+
             scatter_potential_fft3d = map_aperture_to_Ewald(
-                scatter_potential_fft,
-                synthesized_fft.shape,
-                data.oblique_shift,
-                self.params,
+                scatter_potential_fft, synthesized_fft.shape, data.oblique_shift, self.params, precision
             )
+
+            # TODO: make option to transfer to the host memory
 
             synthesized_fft += scatter_potential_fft3d
             synthesized_weight += scatter_potential_fft3d != 0
@@ -660,6 +666,7 @@ class Synthesizer:
         epsilon: float = 0.1,
         interval: int = 100,
         positive: bool = True,
+        precision: ArrayPrecision | None = None,
     ) -> NDArray:
         """Iterative reconstruction
 
@@ -670,14 +677,18 @@ class Synthesizer:
             epsilon (float, optional): epsilon for the convergence. Defaults to 0.1.
             interval (int, optional): interval to print the error. Defaults to 100.
             positive (bool, optional): whether to use positive constraint. Defaults to True.
+            precision (ArrayPrecision | None, optional): precision of the array. Defaults to None.
 
         Returns:
             NDArray: reconstructed 3D array
         """
         assert isinstance(self.params, ODTParameters)
+        assert array3d.dtype == precision.get_complex_precision()
+        assert array3dfft.dtype == precision.get_complex_precision()
         print("Iterative reconstruction...")
         tmp_array = array3d.copy()
         last_array = array3d.copy()
+
         err = np.inf
         count = 0
         while (err > epsilon) and (count < n_iter):
@@ -749,7 +760,13 @@ class Synthesizer:
         return synthesized_mipqpi, synthesized_fft
 
     def ODT(
-        self, approx: str = "Rytov", hermite=False, pkl_format: bool = False, iterative: bool = False, **kwargs
+        self,
+        approx: str = "Rytov",
+        hermite=False,
+        pkl_format: bool = False,
+        iterative: bool = False,
+        precision: ArrayPrecision | None = None,
+        **kwargs,
     ) -> tuple[NDArray, NDArray]:
         """Optical Diffraction Tomography (ODT) calculation
 
@@ -758,6 +775,7 @@ class Synthesizer:
             hermite (bool, optional): whether to use Hermite symmetry. Defaults to False.
             pkl_format (bool, optional): whether to use the data in pickle format(compressed). Defaults to False.
             iterative (bool, optional): whether to use iterative reconstruction. Defaults to False.
+            precision (ArrayPrecision | None, optional): precision of the array. Defaults to None.
 
         Returns:
             tuple[NDArray, NDArray]: synthesized complex refractive index and its Fourier transform
@@ -768,11 +786,11 @@ class Synthesizer:
         else:
             self.get_field()
         self.get_scattering_field(approx=approx)
-        synthesized_array, synthesized_fft = self.synthesize_on_3d(hermite=hermite)
+        synthesized_array, synthesized_fft = self.synthesize_on_3d(hermite=hermite, precision=precision)
 
         if iterative:
             synthesized_array, synthesized_fft = self.iterative_reconstruct(
-                synthesized_array, synthesized_fft, **kwargs
+                synthesized_array, synthesized_fft, precision=precision, **kwargs
             )
 
         synthesized_array = xp.fft.fftshift(synthesized_array, axes=(2))
@@ -792,11 +810,13 @@ class Synthesizer:
 ####################################################
 
 
+# TODO: make light-weight version of this method
 def map_aperture_to_Ewald(
     array: NDArray,
     shape: tuple[int, int, int],
     oblique_shift: tuple[int, int],
     params: ODTParameters,
+    precision: ArrayPrecision | None = None,
 ) -> NDArray:
     """map 2d array to 3d array(ODT)
 
@@ -805,6 +825,7 @@ def map_aperture_to_Ewald(
         shape (tuple[int, int, int]): shape of the output 3d array. xy shape must be consistent with the input array
         oblique_shift (tuple): oblique shift in the Fourier space
         params (ODTParameters): parameters for the ODT system
+        precision (ArrayPrecision, optional): precision of the array. Defaults to None.
 
     Returns:
         NDArray: 3D array projected to the Ewald sphere
@@ -832,7 +853,7 @@ def map_aperture_to_Ewald(
     Fz_tile = xp.tile(Fz_value, (shape[2], 1, 1))
     Fz_tile = Fz_tile.transpose(1, 2, 0)
 
-    Fz_tile = Fz_tile.astype(xp.int16)
+    Fz_tile = Fz_tile.astype(precision.get_int_precision())
 
     Fz_tile -= Fz_tile == 0  # to avoid 0 index match with zz
 
@@ -846,6 +867,7 @@ def map_aperture_to_Ewald(
 def calc_kz_value(
     params: ODTParameters,
     oblique_shift: tuple[int, int],
+    precision: ArrayPrecision | None = None,
 ) -> NDArray:
     xx, yy = xp.meshgrid(
         xp.arange(2 * params.aperturesize + 1 - mcfg.EDGE_SIZE),
@@ -857,6 +879,8 @@ def calc_kz_value(
     fz_disk = (params.fi_mag**2 - disk) * disk_mask
     fz_disk = fz_disk**0.5
     kz_disk = fz_disk * params.k_per_pixel
+
+    kz_disk = kz_disk.astype(precision.get_float_precision())
 
     return kz_disk
 

@@ -1,5 +1,5 @@
 import muscopy.cfg as mcfg
-from muscopy import QPIParameters, MIPQPI
+from muscopy import MIPQPI, QPIParameters
 
 if mcfg._cp:
     import cupy as xp
@@ -15,6 +15,9 @@ def decode_adimec(array):
 
 
 def mipqpi_converter_adimec(array1, array2):
+    if mcfg._cp:
+        array1 = xp.array(array1)
+        array2 = xp.array(array2)
     array1 = decode_adimec(array1)[:1439, :1439]
     array2 = decode_adimec(array2)[:1439, :1439]
     params = QPIParameters(

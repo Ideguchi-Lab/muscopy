@@ -1,20 +1,23 @@
-try:
-    import cupy as xp
+import muscopy.cfg as mcfg
+from muscopy import QPI, QPIParameters
 
-    _cp = True
-except:
+if mcfg._cp:
+    import cupy as xp
+else:
     import numpy as xp
 
-    _cp = False
 
-from qpi import QPIParameters, convert_to_png, decode_adimec, qpi
+def decode_adimec(array):
+    array_upper = array[::2, :]
+    array_buttom = array[1::2, :]
+    array_buttom = xp.flip(array_buttom, 0)
+    return xp.concatenate((array_upper, array_buttom))
 
 
 def qpi_converter(array, array_ref):
-    if _cp:
+    if mcfg._cp:
         array = xp.array(array)
         array_ref = xp.array(array_ref)
-    image_center = (719, 719)
     array = decode_adimec(array)[:1439, :1439]
     array_ref = decode_adimec(array_ref)[:1439, :1439]
 
@@ -22,16 +25,13 @@ def qpi_converter(array, array_ref):
         wavelength=532 * 10 ** (-9),
         NA=0.6,
         img_shape=(1439, 1439),
-        img_center=image_center,
         pixelsize=12 * 10 ** (-6) / 40 / 4,
-        center=(1238, 716),
+        offaxis_center=(1238, 716),
     )
-    params.calc_params()
-    result = qpi(array, array_ref, params)
-    result = convert_to_png(result, [0, 0.05])
+    result = QPI(array, array_ref, params)
 
     result = result[1:-2, 1:-2]
 
-    if _cp:
+    if mcfg._cp:
         result = xp.asnumpy(result)
     return [result]

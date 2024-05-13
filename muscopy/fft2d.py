@@ -1,11 +1,9 @@
-try:
+import muscopy.cfg as mcfg
+
+if mcfg._cp:
     import cupy as xp
-
-    _cp = True
-except:
+else:
     import numpy as xp
-
-    _cp = False
 
 
 def fft_log(array):

@@ -1,15 +1,12 @@
-try:
+import muscopy.cfg as mcfg
+
+if mcfg._cp:
     import cupy as xp
     from cupyx.scipy.fft import dct as cp_dct
     from cupyx.scipy.fft import idct as cp_idct
-
-    _cp = True
-
-except ImportError:
+else:
     import numpy as xp
     from scipy.fftpack import dct, idct
-
-    _cp = False
 
 
 def dct2(block):
@@ -55,7 +52,7 @@ def phase_unwrap(J):
 
 def solve_poisson(rho):
     # solve the Poisson equation using DCT
-    if _cp:
+    if mcfg._cp:
         dctRho = cp_dct2(rho)
     else:
         dctRho = dct2(rho)
@@ -63,7 +60,7 @@ def solve_poisson(rho):
     I, J = xp.meshgrid(xp.arange(0, M), xp.arange(0, N))
     dctPhi = dctRho / (2 * (xp.cos(xp.pi * I / M) + xp.cos(xp.pi * J / N) - 2))
     dctPhi[0, 0] = 0  # handling the inf/nan value
-    if _cp:
+    if mcfg._cp:
         phi = cp_idct2(dctPhi)
     else:
         phi = idct2(dctPhi)

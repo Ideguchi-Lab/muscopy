@@ -2,19 +2,9 @@ from __future__ import annotations
 
 import os
 import pickle
+import shutil
 import uuid
 from typing import NewType, Union
-
-try:
-    import cupy as xp
-
-    _cp = True
-except ImportError:
-    import numpy as xp
-
-    _cp = False
-
-import shutil
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -25,6 +15,11 @@ import muscopy.cfg as mcfg
 from muscopy.cfg import ArrayPrecision, OffsetRegions
 from muscopy.qpi import QPIParameters, correct_offset, make_disk
 from muscopy.unwrap_phase import phase_unwrap
+
+if mcfg._cp:
+    import cupy as xp
+else:
+    import numpy as xp
 
 
 class ODTParameters(QPIParameters):
@@ -544,7 +539,7 @@ class Synthesizer:
         print("saving...")
         for i in tqdm(range(len(self.identifiers))):
             data = self.data[self.identifiers[i]]
-            if _cp:
+            if mcfg._cp:
                 to_save = xp.asnumpy(xp.angle(data.div_field))
             else:
                 to_save = xp.angle(data.div_field)
@@ -562,7 +557,7 @@ class Synthesizer:
         print("saving...")
         for i in tqdm(range(len(self.identifiers))):
             data = self.data[self.identifiers[i]]
-            if _cp:
+            if mcfg._cp:
                 to_save = xp.asnumpy(xp.log(xp.abs(data.div_spectrum) + 1e-60))
             else:
                 to_save = xp.log(xp.abs(data.div_spectrum))
@@ -629,8 +624,6 @@ class Synthesizer:
             kz_disk = calc_kz_value(self.params, data.oblique_shift, precision)
 
             scatter_potential_fft = 2j * kz_disk * fft_field
-
-            # scatter_potential_fft = scatter_potential_fft.astype(precision.get_complex_precision())
 
             scatter_potential_fft3d = map_aperture_to_Ewald(
                 scatter_potential_fft, synthesized_fft.shape, data.oblique_shift, self.params, precision

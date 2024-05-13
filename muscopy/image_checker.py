@@ -2,17 +2,12 @@ import os
 
 import numpy as np
 
-try:
+import muscopy.cfg as mcfg
+
+if mcfg._cp:
     import cupy as xp
-
-    _cp = True
-except ImportError:
+else:
     import numpy as xp
-
-    _cp = False
-
-backend = "numpy" if not _cp else "cupy"
-print("backend: " + backend)
 
 
 def null_checker(path, remove=False):

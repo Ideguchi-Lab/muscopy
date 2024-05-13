@@ -5,6 +5,7 @@
 ### Added
 
 - Created dtype manager([#16](https://github.com/Ideguchi-Lab/microscopy_converters/issues/16))
+- Created `MUSCOPY_GPU` environment to switch CPU/GPU([#18](https://github.com/Ideguchi-Lab/microscopy_converters/issues/18))
 
 ---
 

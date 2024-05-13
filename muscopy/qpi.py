@@ -4,17 +4,13 @@ from typing import NewType
 
 import numpy as np
 
-try:
-    import cupy as xp
-
-    _cp = True
-except ImportError:
-    import numpy as xp
-
-    _cp = False
-
 import muscopy.cfg as mcfg
 from muscopy.cfg import OffsetRegions
+
+if mcfg._cp:
+    import cupy as xp
+else:
+    import numpy as xp
 
 
 class QPIParameters:

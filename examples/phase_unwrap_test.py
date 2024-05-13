@@ -6,18 +6,15 @@ from PIL import Image
 from skimage.restoration import unwrap_phase
 
 import muscopy as mus
-from muscopy.qpi import QPI, QPIParameters
+import muscopy.cfg as mcfg
+from muscopy import QPI, QPIParameters
 
-try:
+if mcfg._cp:
     import cupy as xp
-
-    _cp = True
-except:
+else:
     import numpy as xp
 
-    _cp = False
-
-backend = "numpy" if not _cp else "cupy"
+backend = "numpy" if not mcfg._cp else "cupy"
 print(f"Using {backend} backend")
 
 # %%
@@ -35,11 +32,10 @@ ref = xp.array(pil_ref)
 
 # %%
 
-image_center = (511, 511)
 array = array[:1023, :1023]
 ref = ref[:1023, :1023]
 
-params = mus.qpi.QPIParameters(
+params = QPIParameters(
     wavelength=532 * 10 ** (-9),
     NA=0.6,
     img_shape=(1023, 1023),
@@ -51,7 +47,7 @@ params = mus.qpi.QPIParameters(
 result = QPI(array, ref, params, mus.OFFSET_REGS)
 
 # %%
-if _cp:
+if mcfg._cp:
     result_np = xp.asnumpy(result)
 
 plt.imshow(result_np, cmap="gray")

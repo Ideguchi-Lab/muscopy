@@ -1,4 +1,22 @@
+import os
 from typing import NewType, Union
+
+gpu_on = os.environ.get("MUSCOPY_GPU", "False") == "True"
+
+if gpu_on:
+    try:
+        import cupy as xp
+
+        _cp = True
+    except ImportError:
+        import numpy as xp
+
+        _cp = False
+else:
+    import numpy as xp
+
+    _cp = False
+
 
 Regions = NewType("Regions", list[tuple[tuple[int, int], tuple[int, int]]])
 OffsetRegions = Union[Regions, None]

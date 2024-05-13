@@ -1,18 +1,15 @@
 import pickle
 
 import muscopy as mus
+import muscopy.cfg as mcfg
 
 from .aperture_synthesis import DataHolder, Params, get_oblique_field
 from .dir_parser import numpy_parser
 
-try:
+if mcfg._cp:
     import cupy as xp
-
-    _cp = True
-except ImportError:
+else:
     import numpy as xp
-
-    _cp = False
 
 
 class HologramCompressor:

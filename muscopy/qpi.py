@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import NewType
-
 import numpy as np
 
 import muscopy.cfg as mcfg
@@ -251,6 +249,15 @@ def MIPQPI(
     array_off_field = get_field(array_off, params, crop_center=crop_center, **kwargs)
 
     array_div = array_on_field / array_off_field
+
+    if mcfg.MIP_CENTER is not None:
+        center_phase = xp.mean(
+            xp.angle(
+                array_div[mcfg.MIP_CENTER[0][0] : mcfg.MIP_CENTER[0][1], mcfg.MIP_CENTER[1][0] : mcfg.MIP_CENTER[1][1]]
+            )
+        )
+        if center_phase < 0:
+            array_div = 1 / array_div
 
     # remove phase and amplitude offset
     if mcfg.OFFSET_REGS is not None:

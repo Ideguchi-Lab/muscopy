@@ -18,6 +18,7 @@ from muscopy.unwrap_phase import phase_unwrap
 
 if mcfg._cp:
     import cupy as xp
+    import cupy as cp
 else:
     import numpy as xp
 
@@ -178,6 +179,7 @@ def preprocess_for_synthesis(
     ref_array_field: NDArray,
     oblique_shift: tuple[int, int],
     params: Params,
+    MIP: bool = False,
     crop_center: bool = False,
     c_r: int = 5,
 ) -> tuple[NDArray, NDArray]:
@@ -188,6 +190,7 @@ def preprocess_for_synthesis(
         ref_array_field (NDArray): reference complex field
         params (Params): Parameters class
         oblique_shift (tuple[int, int]): oblique shift in the Fourier space
+        MIP (bool, optional): whether to correct on/off of MIR pump. Defaults to False.
         crop_center (bool, optional): whether to crop the center of the array for MIPQPI. Defaults to False.
         c_r (int, optional): radius of the center crop for MIPQPI. Defaults to 5.
 
@@ -198,6 +201,15 @@ def preprocess_for_synthesis(
 
     if mcfg.OFFSET_REGS is not None:
         array_div = correct_offset(array_div, mcfg.OFFSET_REGS)
+
+    if MIP and (mcfg.MIPRegion is not None):
+        center_phase = xp.mean(
+            xp.angle(
+                array_div[mcfg.MIP_CENTER[0][0] : mcfg.MIP_CENTER[0][1], mcfg.MIP_CENTER[1][0] : mcfg.MIP_CENTER[1][1]]
+            )
+        )
+        if center_phase < 0:
+            array_div = 1 / array_div
 
     array_div_fft = xp.fft.fftshift(xp.fft.fft2(array_div)) * params.S2F() ** 2
     center_x = params.aperturesize - mcfg.EDGE_SIZE // 2
@@ -232,6 +244,7 @@ def get_scattering_field(
     oblique_shift: tuple[int, int],
     params: Params,
     approx: str = "Rytov",
+    MIP: bool = False,
     crop_center: bool = False,
     c_r: int = 5,
 ) -> tuple[NDArray, NDArray]:
@@ -243,6 +256,7 @@ def get_scattering_field(
         oblique_shift (tuple[int, int]): oblique shift in the Fourier space
         params (Params): Parameters class
         approx (str, optional): approximation for the ODT calculation. Defaults to "Rytov".
+        MIP (bool, optional): whether to correct on/off of MIR pump. Defaults to False.
         crop_center (bool, optional): whether to crop the center of the array for MIPQPI. Defaults to False.
         c_r (int, optional): radius of the center crop for MIPQPI. Defaults to 5.
 
@@ -253,7 +267,17 @@ def get_scattering_field(
 
     array_field = correct_offset(array_field, mcfg.OFFSET_REGS)
     ref_array_field = correct_offset(ref_array_field, mcfg.OFFSET_REGS)
-    # print("mean", xp.mean(array_field), xp.mean(ref_array_field))
+
+    if MIP and (mcfg.MIPRegion is not None):
+        array_div = array_field / ref_array_field
+        center_phase = xp.mean(
+            xp.angle(
+                array_div[mcfg.MIP_CENTER[0][0] : mcfg.MIP_CENTER[0][1], mcfg.MIP_CENTER[1][0] : mcfg.MIP_CENTER[1][1]]
+            )
+        )
+        if center_phase < 0:
+            array_field, ref_array_field = ref_array_field, array_field
+
     if approx == "Born":
         scattering = (array_field - ref_array_field) / ref_array_field
     elif approx == "Rytov":
@@ -479,12 +503,14 @@ class Synthesizer:
 
     def get_div_field_and_spectrum(
         self,
+        MIP: bool = False,
         crop_center: bool = False,
         c_r: int = 5,
     ):
         """get the divided field and its Fourier transform
 
         Args:
+            MIP (bool, optional): whether to correct on/off of MIR pump. Defaults to False.
             crop_center (bool, optional): whether to crop the center of the array for MIPQPI. Defaults to False.
             c_r (int, optional): radius of the center crop for MIPQPI. Defaults to 5.
         """
@@ -496,6 +522,7 @@ class Synthesizer:
                 data.reference_field,
                 data.oblique_shift,
                 self.params,
+                MIP=MIP,
                 crop_center=crop_center,
                 c_r=c_r,
             )
@@ -503,11 +530,12 @@ class Synthesizer:
             data.div_field = array_div
             data.div_spectrum = array_div_fft
 
-    def get_scattering_field(self, approx: str = "Rytov", crop_center: bool = False, c_r: int = 5):
+    def get_scattering_field(self, approx: str = "Rytov", MIP: bool = False, crop_center: bool = False, c_r: int = 5):
         """get the scattering field
 
         Args:
             approx (str): approximation for the ODT calculation
+            MIP (bool, optional): whether to correct on/off of MIR pump. Defaults to False.
             crop_center (bool, optional): whether to crop the center of the array for MIPQPI. Defaults to False.
             c_r (int, optional): radius of the center crop for MIPQPI. Defaults to 5.
         """
@@ -520,6 +548,7 @@ class Synthesizer:
                 data.oblique_shift,
                 self.params,
                 approx,
+                MIP=MIP,
                 crop_center=crop_center,
                 c_r=c_r,
             )
@@ -563,18 +592,20 @@ class Synthesizer:
                 to_save = xp.log(xp.abs(data.div_spectrum))
             plt.imsave(f"{path}/{i:03}.png", to_save, cmap="gray")
 
-    def synthesize_spectrums(self) -> tuple[NDArray, NDArray]:
+    def synthesize_spectrums(self, precision: ArrayPrecision = None) -> tuple[NDArray, NDArray]:
         """synthesize the spectrums
 
         Returns:
             tuple[NDArray, NDArray]: synthesized array and its Fourier transform
         """
+        if precision is None:
+            precision = ArrayPrecision(32, 64)
         synthesized_fft = xp.zeros(
             (
                 2 * (self.params.aperturesize) + 1 - mcfg.EDGE_SIZE,
                 2 * (self.params.aperturesize) + 1 - mcfg.EDGE_SIZE,
             ),
-            dtype=xp.complex128,
+            dtype=precision.get_complex_precision(),
         )
         synthesized_weight = xp.ones(synthesized_fft.shape)
 
@@ -647,11 +678,19 @@ class Synthesizer:
         synthesized_weight -= synthesized_weight > 1
         synthesized_fft /= synthesized_weight
 
-        synthesized_array = (
-            xp.fft.ifftn(xp.fft.ifftshift(synthesized_fft), norm="ortho") * self.params.F2S() ** 2 * self.params.F2Sz()
-        ) / (2 * xp.pi) ** (
-            3 / 2
+        factor = xp.array(
+            [self.params.F2S() ** 2 * self.params.F2Sz() / (2 * xp.pi) ** (3 / 2)],
+            dtype=precision.get_complex_precision(),
         )  # last factor is to adjust to the non-Unitary derivation in Tamamitsu's paper
+
+        synthesized_array = (
+            xp.fft.ifftn(xp.fft.ifftshift(synthesized_fft), norm="ortho").astype(precision.get_complex_precision())
+            * factor
+        )
+
+        assert (
+            synthesized_array.dtype == precision.get_complex_precision()
+        ), f"{synthesized_array.dtype=}, {precision.get_complex_precision()=}"
 
         return synthesized_array, synthesized_fft
 
@@ -661,7 +700,7 @@ class Synthesizer:
         array3dfft: NDArray,
         n_iter: int = 100,
         epsilon: float = 0.1,
-        interval: int = 100,
+        interval: int = 10,
         positive: bool = True,
         precision: ArrayPrecision | None = None,
     ) -> NDArray:
@@ -685,6 +724,16 @@ class Synthesizer:
         print("Iterative reconstruction...")
         tmp_array = array3d.copy()
         last_array = array3d.copy()
+        del array3d
+
+        factorS2F = xp.array(
+            [self.params.S2F() ** 2 * self.params.S2Fz() * (2 * xp.pi) ** (3 / 2)],
+            dtype=precision.get_complex_precision(),
+        )
+        factorF2S = xp.array(
+            [self.params.F2S() ** 2 * self.params.F2Sz() / (2 * xp.pi) ** (3 / 2)],
+            dtype=precision.get_complex_precision(),
+        )
 
         err = np.inf
         count = 0
@@ -693,31 +742,26 @@ class Synthesizer:
                 tmp_array[xp.real(tmp_array) > 0] = 0
             else:
                 tmp_array[xp.real(tmp_array) < 0] = 0
-            tmp_fft = (
-                xp.fft.fftshift(xp.fft.fftn(tmp_array, norm="ortho"))
-                * self.params.S2F() ** 2
-                * self.params.S2Fz()
-                * (2 * xp.pi) ** (3 / 2)
-            )
+
+            tmp_fft = xp.fft.fftshift(xp.fft.fftn(tmp_array, norm="ortho")) * factorS2F
+            if tmp_fft.dtype != precision.get_complex_precision():
+                tmp_fft = tmp_fft.astype(precision.get_complex_precision())
             tmp_fft[array3dfft != 0] = array3dfft[array3dfft != 0]
-            tmp_array = (
-                xp.fft.ifftn(xp.fft.ifftshift(tmp_fft), norm="ortho")
-                * (self.params.F2S() ** 2 * self.params.F2Sz())
-                / (2 * xp.pi) ** (3 / 2)
-            )
+            tmp_array = xp.fft.ifftn(xp.fft.ifftshift(tmp_fft), norm="ortho") * factorF2S
+            if tmp_array.dtype != precision.get_complex_precision():
+                tmp_array = tmp_array.astype(precision.get_complex_precision())
 
             err = calc_normalized_L2error(tmp_array, last_array)
-            last_array = tmp_array.copy()
-            last_fft = tmp_fft.copy()
+            last_array = tmp_array
 
             count += 1
             if count % interval == 0:
                 # err = calc_normalized_L2error(array3d, last_array)
                 print(f"iter: {count}, error: {err}")
 
-        return last_array, last_fft
+        return tmp_array, tmp_fft
 
-    def QPI(self, pkl_format: bool = False) -> tuple[NDArray, NDArray]:
+    def QPI(self, pkl_format: bool = False, precision: ArrayPrecision | None = None) -> tuple[NDArray, NDArray]:
         """Quantitative phase imaging (QPI) calculation
 
         Args:
@@ -731,12 +775,14 @@ class Synthesizer:
         else:
             self.get_field()
         self.get_div_field_and_spectrum()
-        synthesized_array, synthesized_fft = self.synthesize_spectrums()
+        synthesized_array, synthesized_fft = self.synthesize_spectrums(precision)
         synthesized_qpi = xp.angle(synthesized_array)
 
         return synthesized_qpi, synthesized_fft
 
-    def MIPQPI(self, c_r: int = 5, pkl_format: bool = False) -> tuple[NDArray, NDArray]:
+    def MIPQPI(
+        self, c_r: int = 5, pkl_format: bool = False, precision: ArrayPrecision | None = None
+    ) -> tuple[NDArray, NDArray]:
         """Mid-infrared Photothermal Quantitative Phase imaging (MIPQPI) calculation
 
         Args:
@@ -750,8 +796,8 @@ class Synthesizer:
             self.get_field_from_compressed()
         else:
             self.get_field()
-        self.get_div_field_and_spectrum(crop_center=True, c_r=c_r)
-        synthesized_array, synthesized_fft = self.synthesize_spectrums()
+        self.get_div_field_and_spectrum(MIP=True, crop_center=True, c_r=c_r)
+        synthesized_array, synthesized_fft = self.synthesize_spectrums(precision)
         synthesized_mipqpi = xp.angle(synthesized_array)
 
         return synthesized_mipqpi, synthesized_fft
@@ -763,6 +809,7 @@ class Synthesizer:
         pkl_format: bool = False,
         iterative: bool = False,
         precision: ArrayPrecision | None = None,
+        expand: bool = False,
         **kwargs,
     ) -> tuple[NDArray, NDArray]:
         """Optical Diffraction Tomography (ODT) calculation
@@ -773,6 +820,7 @@ class Synthesizer:
             pkl_format (bool, optional): whether to use the data in pickle format(compressed). Defaults to False.
             iterative (bool, optional): whether to use iterative reconstruction. Defaults to False.
             precision (ArrayPrecision | None, optional): precision of the array. Defaults to None.
+            expand (bool, optional): whether to use z-zeropadding. Defaults to False.
 
         Returns:
             tuple[NDArray, NDArray]: synthesized complex refractive index and its Fourier transform
@@ -792,14 +840,57 @@ class Synthesizer:
 
         synthesized_array = xp.fft.fftshift(synthesized_array, axes=(2))
 
-        synthesized_array = zeropad_higher_kz(synthesized_array, self.params.aperturesize - self.params.fz_extent)
+        print("Calculating refractive index...")
+        r_index = (
+            calc_refractive_index_square(synthesized_array, self.params, precision=precision) ** 0.5 - self.params.n_sol
+        )
+        del synthesized_array
 
-        r_index = calc_refractive_index_square(synthesized_array, self.params) ** 0.5 - self.params.n_sol
+        if expand:
+            print("Expanding the z-axis...")
+            r_index = zeropad_higher_kz(r_index, self.params.aperturesize - self.params.fz_extent)
 
         return r_index, synthesized_fft
 
-    def MIPODT(self):
-        pass
+    def MIPODT(
+        self,
+        approx: str = "Rytov",
+        hermite=False,
+        crop_center=False,
+        c_r: int = 5,
+        pkl_format: bool = False,
+        iterative: bool = False,
+        precision: ArrayPrecision | None = None,
+        expand: bool = False,
+        **kwargs,
+    ):
+        assert isinstance(self.params, ODTParameters)
+        if pkl_format:
+            self.get_field_from_compressed()
+        else:
+            self.get_field()
+        self.get_scattering_field(approx=approx, MIP=True, crop_center=crop_center, c_r=c_r)
+
+        synthesized_array, synthesized_fft = self.synthesize_on_3d(hermite=hermite, precision=precision)
+
+        if iterative:
+            synthesized_array, synthesized_fft = self.iterative_reconstruct(
+                synthesized_array, synthesized_fft, precision=precision, **kwargs
+            )
+
+        synthesized_array = xp.fft.fftshift(synthesized_array, axes=(2))
+
+        print("Calculating refractive index...")
+        r_index = (
+            calc_refractive_index_square(synthesized_array, self.params, precision=precision) ** 0.5 - self.params.n_sol
+        )
+        del synthesized_array
+
+        if expand:
+            print("Expanding the z-axis...")
+            r_index = zeropad_higher_kz(r_index, self.params.aperturesize - self.params.fz_extent)
+
+        return r_index, synthesized_fft
 
 
 ####################################################
@@ -882,7 +973,9 @@ def calc_kz_value(
     return kz_disk
 
 
-def calc_refractive_index_square(array3d: NDArray, params: ODTParameters) -> NDArray:
+def calc_refractive_index_square(
+    array3d: NDArray, params: ODTParameters, precision: ArrayPrecision | None = None
+) -> NDArray:
     """calculate :math:`n^2` for the ODT calculation
 
     Args:
@@ -893,7 +986,8 @@ def calc_refractive_index_square(array3d: NDArray, params: ODTParameters) -> NDA
         NDArray: complex refractive index
     """
     r_3d_square = params.n_sol**2 * (
-        xp.ones(array3d.shape, dtype=xp.complex128) - array3d / (params.fi_mag * params.k_per_pixel) ** 2
+        xp.ones(array3d.shape, dtype=precision.get_complex_precision())
+        - array3d / (params.fi_mag * params.k_per_pixel) ** 2
     )
     return r_3d_square
 
@@ -929,33 +1023,37 @@ def discard_higher_kz(array: NDArray, threshold: int) -> NDArray:
     return new_array
 
 
-def zeropad_higher_kz(array: NDArray, extend: int) -> NDArray:
+def zeropad_higher_kz(array: NDArray, extend: int, precision: ArrayPrecision, gpu_on: bool = True) -> NDArray:
     """zero pad the higher z values
 
     Args:
         array (NDArray): original array
         extend (int): extend size
+        precision (ArrayPrecision): precision of the array
+        gpu_on (bool, optional): whether to use GPU if available. Defaults to True.
 
     Returns:
         NDArray: zero padded array
     """
-    norm_factor = xp.sqrt((array.shape[2] + 2 * extend) / array.shape[2])
-    array_fft = xp.fft.fftshift(xp.fft.fftn(array, norm="ortho"))
-    new_array_fft = xp.zeros(
-        (
-            array_fft.shape[0],
-            array_fft.shape[1],
-            array_fft.shape[2] + extend * 2,
-        ),
-        dtype=xp.complex128,
+    if gpu_on & mcfg._cp:
+        executor = cp
+    elif (not gpu_on) & mcfg._cp:
+        array = cp.asnumpy(array)
+        executor = np
+    else:
+        executor = xp
+    norm_factor = executor.array(
+        [executor.sqrt((array.shape[2] + 2 * extend) / array.shape[2])], dtype=precision.get_float_precision()
     )
-    new_array_fft[
-        :,
-        :,
-        extend : array_fft.shape[2] + extend,
-    ] = array_fft
-    new_array = xp.fft.ifftn(xp.fft.ifftshift(new_array_fft), norm="ortho") * norm_factor
-    return new_array
+    array_fft = executor.fft.fftshift(executor.fft.fftn(array, norm="ortho")).astype(precision.get_complex_precision())
+    del array
+    array_fft = executor.pad(array_fft, ((0, 0), (0, 0), (extend, extend)), mode="constant", constant_values=0)
+    assert array_fft.dtype == precision.get_complex_precision()
+    array = (
+        executor.fft.ifftn(executor.fft.ifftshift(array_fft), norm="ortho").astype(precision.get_complex_precision())
+        * norm_factor
+    )
+    return array
 
 
 def calc_full_volume(params: ODTParameters) -> xp.float:

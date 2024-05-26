@@ -18,11 +18,14 @@ else:
     _cp = False
 
 
-Regions = NewType("Regions", list[tuple[tuple[int, int], tuple[int, int]]])
+Region = NewType("Region", tuple[tuple[int, int], tuple[int, int]])
+Regions = NewType("Regions", list[Region])
 OffsetRegions = Union[Regions, None]
+MIPRegion = Union[Region, None]
 
 EDGE_SIZE = 0
 OFFSET_REGS = None
+MIP_CENTER = None
 
 
 def set_edge_size(size: int):
@@ -33,6 +36,11 @@ def set_edge_size(size: int):
 def set_offset_regs(offset_regs: OffsetRegions):
     global OFFSET_REGS
     OFFSET_REGS = offset_regs
+
+
+def set_mip_center(center: MIPRegion):
+    global MIP_CENTER
+    MIP_CENTER = center
 
 
 class ArrayPrecision:

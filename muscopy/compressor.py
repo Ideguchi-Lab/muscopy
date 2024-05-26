@@ -17,7 +17,11 @@ class HologramCompressor:
         self.params = params
 
     def load_holograms(self, hologram_dir_path: str):
-        self.hologram_paths = numpy_parser(hologram_dir_path)
+        hologram_paths = numpy_parser(hologram_dir_path)
+        self.holograms = [xp.load(hologram_path) for hologram_path in hologram_paths]
+
+    def load_holograms_from_list(self, hologram_list: list):
+        self.holograms = [xp.array(hologram) for hologram in hologram_list]
 
     def compress(self) -> DataHolder:
         shape = (
@@ -25,8 +29,7 @@ class HologramCompressor:
             2 * self.params.aperturesize + 1 - mus.cfg.EDGE_SIZE,
         )
         field = xp.zeros(shape, dtype=xp.complex128)
-        for hologram_path in self.hologram_paths:
-            hologram = xp.load(hologram_path)
+        for hologram in self.holograms:
             oblique_field, oblique_shift = get_oblique_field(hologram, self.params)
             field += oblique_field
 

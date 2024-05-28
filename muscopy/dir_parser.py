@@ -52,3 +52,11 @@ def recurcive_pkl_parser(dir_path):
     for path in p.glob("**/*.pkl"):
         files.append(path)
     return files
+
+
+def recurcive_file_parser(dir_path, file_name):
+    files = []
+    p = pathlib.Path(dir_path)
+    for path in p.glob(f"**/{file_name}"):  # TODO: adapt to regular expression
+        files.append(path)
+    return files

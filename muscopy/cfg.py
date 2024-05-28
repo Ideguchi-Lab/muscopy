@@ -43,6 +43,10 @@ def set_mip_center(center: MIPRegion):
     MIP_CENTER = center
 
 
+def print_backend():
+    print("Using cupy" if _cp else "Using numpy")
+
+
 class ArrayPrecision:
     def __init__(self, int_length: int, float_length: int):
         self.int_length = int_length

@@ -42,11 +42,7 @@ class ODTParameters(QPIParameters):
         self._calc_odt_params()
 
     def _calc_odt_params(self):
-        """Calculate parameters for ODT calculation
-
-        Args:
-            zmargin (int, optional): Margin to avoid unexpected shift of embedding. Defaults to 3.
-        """
+        """Calculate parameters for ODT calculation"""
         super()._calc_params()
 
         if self.NA_illumi is not None:
@@ -208,8 +204,8 @@ def preprocess_for_synthesis(
                 array_div[mcfg.MIP_CENTER[0][0] : mcfg.MIP_CENTER[0][1], mcfg.MIP_CENTER[1][0] : mcfg.MIP_CENTER[1][1]]
             )
         )
-        if center_phase < 0:
-            array_div = 1 / array_div
+        # if center_phase < 0:
+        #     array_div = 1 / array_div
 
     array_div_fft = xp.fft.fftshift(xp.fft.fft2(array_div)) * params.S2F() ** 2
     center_x = params.aperturesize - mcfg.EDGE_SIZE // 2
@@ -275,8 +271,8 @@ def get_scattering_field(
                 array_div[mcfg.MIP_CENTER[0][0] : mcfg.MIP_CENTER[0][1], mcfg.MIP_CENTER[1][0] : mcfg.MIP_CENTER[1][1]]
             )
         )
-        if center_phase < 0:
-            array_field, ref_array_field = ref_array_field, array_field
+        # if center_phase < 0:
+        #     array_field, ref_array_field = ref_array_field, array_field
 
     if approx == "Born":
         scattering = (array_field - ref_array_field) / ref_array_field
@@ -287,11 +283,12 @@ def get_scattering_field(
         ref_array_log = xp.log(ref_array_field)
         ref_array_log_real = xp.real(ref_array_log)
         ref_array_log_imag = xp.imag(ref_array_log)
-        array_log_imag_unwrap = phase_unwrap(array_log_imag)
-        ref_array_log_imag_unwrap = phase_unwrap(ref_array_log_imag)
+        # array_log_imag_unwrap = phase_unwrap(array_log_imag)
+        # ref_array_log_imag_unwrap = phase_unwrap(ref_array_log_imag)
 
         amplitude = array_log_real - ref_array_log_real
-        phase = array_log_imag_unwrap - ref_array_log_imag_unwrap
+        # phase = array_log_imag_unwrap - ref_array_log_imag_unwrap
+        phase = phase_unwrap(array_log_imag - ref_array_log_imag)
 
         if mcfg.OFFSET_REGS is not None:
             amplitude = correct_amplitude_offset(amplitude, mcfg.OFFSET_REGS)
@@ -499,6 +496,7 @@ class Synthesizer:
             self.identifiers.append(id)
             self.data[id] = data
 
+            data.oblique_shift = ref_data.oblique_shift
             data.reference_field = ref_data.sample_field
 
     def get_div_field_and_spectrum(
@@ -568,11 +566,41 @@ class Synthesizer:
         print("saving...")
         for i in tqdm(range(len(self.identifiers))):
             data = self.data[self.identifiers[i]]
+            qpi = xp.angle(data.div_field)
+            qpi_unwrap = phase_unwrap(qpi)
             if mcfg._cp:
-                to_save = xp.asnumpy(xp.angle(data.div_field))
+                to_save = xp.asnumpy(qpi_unwrap)
             else:
-                to_save = xp.angle(data.div_field)
-            plt.imsave(f"{path}/{i:03}.png", to_save, cmap="gray")
+                to_save = xp.angle(qpi_unwrap)
+            # plt.imsave(f"{path}/{i:03}.png", to_save, cmap="gray")
+            fig, ax = plt.subplots()
+            cax = ax.imshow(to_save, vmin=0)
+            fig.colorbar(cax, ax=ax)
+            plt.savefig(f"{path}/{i:03}.png")
+            plt.close(fig)
+
+    def save_scattering_field(self, path: str = "multiangle_scattering"):
+        """save scattering field images
+
+        Args:
+            path (str, optional): Path to save scattering field images. Defaults to "scattering_field".
+        """
+        if os.path.exists(path):
+            shutil.rmtree(path)
+        os.mkdir(path)
+        print("saving...")
+        for i in tqdm(range(len(self.identifiers))):
+            data = self.data[self.identifiers[i]]
+            if mcfg._cp:
+                to_save = xp.asnumpy(xp.abs(data.scattering))
+            else:
+                to_save = xp.imag(data.scattering)
+            # plt.imsave(f"{path}/{i:03}.png", to_save, cmap="gray")
+            fig, ax = plt.subplots()
+            cax = ax.imshow(to_save, vmin=0)
+            fig.colorbar(cax, ax=ax)
+            plt.savefig(f"{path}/{i:03}.png")
+            plt.close(fig)
 
     def save_multiangle_spectrum(self, path: str = "multiangle_spectrum"):
         """save multiangle spectrum images
@@ -649,7 +677,7 @@ class Synthesizer:
         synthesized_weight = xp.ones(synthesized_fft.shape, dtype=precision.get_int_precision())
 
         print("ODT Synthesizing...")
-        for i in tqdm(range(len(self.identifiers))):
+        for i in tqdm(range(0, len(self.identifiers), 1)):
             data = self.data[self.identifiers[i]]
             fft_field = data.scattering_spectrum.astype(precision.get_complex_precision())
             kz_disk = calc_kz_value(self.params, data.oblique_shift, precision)
@@ -781,11 +809,12 @@ class Synthesizer:
         return synthesized_qpi, synthesized_fft
 
     def MIPQPI(
-        self, c_r: int = 5, pkl_format: bool = False, precision: ArrayPrecision | None = None
+        self, crop_center: bool = False, c_r: int = 5, pkl_format: bool = False, precision: ArrayPrecision | None = None
     ) -> tuple[NDArray, NDArray]:
         """Mid-infrared Photothermal Quantitative Phase imaging (MIPQPI) calculation
 
         Args:
+            crop_center (bool, optional): whether to crop the center of the array for MIPQPI. Defaults to False.
             c_r (int, optional): radius of the center crop for MIPQPI. Defaults to 5.
             pkl_format (bool, optional): whether to use the data in pickle format(compressed). Defaults to False.
 
@@ -796,7 +825,7 @@ class Synthesizer:
             self.get_field_from_compressed()
         else:
             self.get_field()
-        self.get_div_field_and_spectrum(MIP=True, crop_center=True, c_r=c_r)
+        self.get_div_field_and_spectrum(MIP=True, crop_center=crop_center, c_r=c_r)
         synthesized_array, synthesized_fft = self.synthesize_spectrums(precision)
         synthesized_mipqpi = xp.angle(synthesized_array)
 

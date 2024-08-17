@@ -1012,13 +1012,21 @@ def calc_kz_value(
         xp.arange(2 * params.aperturesize + 1 - mcfg.EDGE_SIZE),
         indexing="ij",
     )
-    disk = (xx - params.aperturesize + oblique_shift[0]) ** 2 + (yy - params.aperturesize + oblique_shift[1]) ** 2
-    disk_mask = disk < (params.aperturesize // 2) ** 2
-    fz_disk = (params.fi_mag**2 - disk) * disk_mask
+    disk = (xx - params.aperturesize + oblique_shift[0]) ** 2 + (
+        yy - params.aperturesize + oblique_shift[1]
+    ) ** 2  # distance from the aperture center
+    disk_mask = disk < (params.aperturesize // 2) ** 2  # aperture mask
+    fz_disk = (params.fi_mag**2 - disk) * disk_mask  # fz value
+    fz_disk[fz_disk < 0] = 0  # fz never be negative
     fz_disk = fz_disk**0.5
     kz_disk = fz_disk * params.k_per_pixel
 
     kz_disk = kz_disk.astype(precision.get_float_precision())
+
+    # # count nan
+    # nan_count = xp.sum(xp.isnan(kz_disk))
+    # if nan_count > 0:
+    #     print(f"nan count: {nan_count}")
 
     return kz_disk
 

@@ -7,6 +7,10 @@
 - Created dtype manager([#16](https://github.com/Ideguchi-Lab/microscopy_converters/issues/16))
 - Created `MUSCOPY_GPU` environment to switch CPU/GPU([#18](https://github.com/Ideguchi-Lab/microscopy_converters/issues/18))
 
+### Changed
+
+- Refactor QPI/ODT parameters with dataclass ([#23](https://github.com/Ideguchi-Lab/microscopy_converters/issues/23))
+
 ---
 
 ## Version 0.1.4 [2024-05-08]

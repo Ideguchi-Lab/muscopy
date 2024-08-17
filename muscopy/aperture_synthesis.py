@@ -307,11 +307,8 @@ def get_scattering_field(
         ref_array_log = xp.log(ref_array_field)
         ref_array_log_real = xp.real(ref_array_log)
         ref_array_log_imag = xp.imag(ref_array_log)
-        # array_log_imag_unwrap = phase_unwrap(array_log_imag)
-        # ref_array_log_imag_unwrap = phase_unwrap(ref_array_log_imag)
 
         amplitude = array_log_real - ref_array_log_real
-        # phase = array_log_imag_unwrap - ref_array_log_imag_unwrap
         phase = phase_unwrap(array_log_imag - ref_array_log_imag)
 
         if mcfg.OFFSET_REGS is not None:

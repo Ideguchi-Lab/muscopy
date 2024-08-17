@@ -295,8 +295,8 @@ def get_scattering_field(
                 array_div[mcfg.MIP_CENTER[0][0] : mcfg.MIP_CENTER[0][1], mcfg.MIP_CENTER[1][0] : mcfg.MIP_CENTER[1][1]]
             )
         )
-        # if center_phase < 0:
-        #     array_field, ref_array_field = ref_array_field, array_field
+        if center_phase < 0:
+            array_field, ref_array_field = ref_array_field, array_field
 
     if approx == "Born":
         scattering = (array_field - ref_array_field) / ref_array_field

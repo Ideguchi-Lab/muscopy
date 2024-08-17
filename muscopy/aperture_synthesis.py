@@ -82,6 +82,16 @@ class ODTParameters(QPIParameters):
     def F2Sz(self) -> float:
         return (self.k_per_pixel / self.imgpx_unit_z) ** 0.5
 
+    def print_all_parameters(self):
+        self._print_all_parameters()
+        # calculated parameters
+        print(f"fi_lateral_mag: {self.fi_lateral_mag}")
+        print(f"fi_z: {self.fi_z}")
+        print(f"fz_extent: {self.fz_extent}")
+        print(f"imgpx_unit_z: {self.imgpx_unit_z}")
+        print(f"S2Fz: {self.S2Fz}")
+        print(f"F2Sz: {self.F2Sz}")
+
 
 Params = Union[QPIParameters, ODTParameters]
 

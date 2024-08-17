@@ -88,10 +88,25 @@ class QPIParameters:
         """
         return (self.k_per_pixel / self.imgpx_unit) ** 0.5
 
-    def print_all_parameters(self):
+    def _print_all_parameters(self):
         """print all parameters of the Parameters class"""
         for key, value in vars(self).items():
             print(f"{key}={value}")
+
+    def print_all_parameters(self):
+        """print all parameters of the Parameters class"""
+        self._print_all_parameters()
+        # calculated parameters
+        print(f"img_center={self.img_center}")
+        print(f"dim={self.dim}")
+        print(f"freq_per_pixel={self.freq_per_pixel}")
+        print(f"k_per_pixel={self.k_per_pixel}")
+        print(f"aperturesize={self.aperturesize}")
+        print(f"fi_mag={self.fi_mag}")
+        print(f"imgpx_unit={self.imgpx_unit}")
+        print(f"Hologram2F={self.Hologram2F}")
+        print(f"S2F={self.S2F}")
+        print(f"F2S={self.F2S}")
 
 
 def make_disk(center: tuple[int, int], radius: float, array_shape: tuple[int, int], highpass: bool = False) -> xp.array:

@@ -228,8 +228,8 @@ def preprocess_for_synthesis(
                 array_div[mcfg.MIP_CENTER[0][0] : mcfg.MIP_CENTER[0][1], mcfg.MIP_CENTER[1][0] : mcfg.MIP_CENTER[1][1]]
             )
         )
-        # if center_phase < 0:
-        #     array_div = 1 / array_div
+        if center_phase < 0:
+            array_div = 1 / array_div
 
     array_div_fft = xp.fft.fftshift(xp.fft.fft2(array_div)) * params.S2F**2
     center_x = params.aperturesize - mcfg.EDGE_SIZE // 2

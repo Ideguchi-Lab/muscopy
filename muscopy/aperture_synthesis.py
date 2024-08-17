@@ -56,49 +56,29 @@ class ODTParameters(QPIParameters):
     def F2Sz(self) -> float:
         return (self.k_per_pixel / self.imgpx_unit_z) ** 0.5
 
+    @cached_property
+    def fi_lateral_mag(self) -> float:
+        return self.fi_mag * self.NA_illumi / self.n_sol
 
-class oldODTParameters(QPIParameters):
-    def __init__(
-        self,
-        wavelength: float,
-        NA: float,
-        img_shape: tuple[int, int],
-        pixelsize: float,
-        offaxis_center: tuple[int, int],
-        n_sol: float = 1.33,
-        NA_illumi: float | None = None,
-        zmargin: int = 3,
-    ):
-        super().__init__(wavelength, NA, img_shape, pixelsize, offaxis_center, n_sol)
-        self.NA_illumi = NA_illumi
-        self.zmargin = zmargin
+    @cached_property
+    def fi_z(self) -> int:
+        return int(self.fi_mag * (1 - self.NA_illumi**2 / self.n_sol**2) ** 0.5)
 
-        self._calc_odt_params()
+    @cached_property
+    def fz_extent(self) -> int:
+        fz_extent_top = int(self.fi_mag - self.fi_z)
+        fz_extent_buttom = int(self.fi_mag * (self.n_sol - (self.n_sol**2 - self.NA**2) ** 0.5))
+        return max(fz_extent_top, fz_extent_buttom) + self.zmargin
 
-    def _calc_odt_params(self):
-        """Calculate parameters for ODT calculation"""
-        super()._calc_params()
+    @cached_property
+    def imgpx_unit_z(self) -> float:
+        return self.imgpx_unit * ((2 * self.aperturesize + 1) / (2 * self.fz_extent + 1 + 6))
 
-        if self.NA_illumi is not None:
-            self.fi_lateral_mag = self.fi_mag * self.NA_illumi / self.n_sol  # |k_T| in terms of pixel unit
-
-            self.fi_z = int(
-                self.fi_mag * (1 - self.NA_illumi**2 / self.n_sol**2) ** 0.5
-            )  # |k_z| in terms of pixel unit
-
-            fz_extent_top = int(self.fi_mag - self.fi_z)
-            fz_extent_buttom = int(self.fi_mag * (self.n_sol - (self.n_sol**2 - self.NA**2) ** 0.5))
-
-            self.fz_extent = (
-                max(fz_extent_top, fz_extent_buttom) + self.zmargin
-            )  # extent of kz axis in terms of pixel unit
-            self.imgpx_unit_z = self.imgpx_unit * (
-                (2 * self.aperturesize + 1) / (2 * self.fz_extent + 1 + 6)
-            )  # unit image pixel size along z axis on the cropped image plane
-
+    @cached_property
     def S2Fz(self) -> float:
         return (self.imgpx_unit_z / self.k_per_pixel) ** 0.5
 
+    @cached_property
     def F2Sz(self) -> float:
         return (self.k_per_pixel / self.imgpx_unit_z) ** 0.5
 

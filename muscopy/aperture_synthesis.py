@@ -30,6 +30,14 @@ class ODTParameters(QPIParameters):
     NA_illumi: float = 0
     zmargin: int = 3
 
+    def check_parameters(self):
+        if self.NA > self.n_sol:
+            raise ValueError("NA should be smaller than n_sol in ODT")
+        if self.NA_illumi > self.NA:
+            raise ValueError("NA_illumi should be smaller than NA")
+        if self.NA_illumi > self.n_sol:
+            raise ValueError("NA_illumi should be smaller than n_sol")
+
     @cached_property
     def fi_lateral_mag(self) -> float:
         return self.fi_mag * self.NA_illumi / self.n_sol
@@ -83,6 +91,7 @@ class ODTParameters(QPIParameters):
         return (self.k_per_pixel / self.imgpx_unit_z) ** 0.5
 
     def print_all_parameters(self):
+        self.check_parameters()
         self._print_all_parameters()
         # calculated parameters
         print(f"fi_lateral_mag: {self.fi_lateral_mag}")

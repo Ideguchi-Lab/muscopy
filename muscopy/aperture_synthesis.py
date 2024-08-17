@@ -30,31 +30,13 @@ class ODTParameters(QPIParameters):
     NA_illumi: float = 0
     zmargin: int = 3
 
-    @cached_property
-    def fi_lateral_mag(self) -> float:
-        return self.fi_mag * self.NA_illumi / self.n_sol
-
-    @cached_property
-    def fi_z(self) -> int:
-        return int(self.fi_mag * (1 - self.NA_illumi**2 / self.n_sol**2) ** 0.5)
-
-    @cached_property
-    def fz_extent(self) -> int:
-        fz_extent_top = int(self.fi_mag - self.fi_z)
-        fz_extent_buttom = int(self.fi_mag * (self.n_sol - (self.n_sol**2 - self.NA**2) ** 0.5))
-        return max(fz_extent_top, fz_extent_buttom) + self.zmargin
-
-    @cached_property
-    def imgpx_unit_z(self) -> float:
-        return self.imgpx_unit * ((2 * self.aperturesize + 1) / (2 * self.fz_extent + 1 + 6))
-
-    @cached_property
-    def S2Fz(self) -> float:
-        return (self.imgpx_unit_z / self.k_per_pixel) ** 0.5
-
-    @cached_property
-    def F2Sz(self) -> float:
-        return (self.k_per_pixel / self.imgpx_unit_z) ** 0.5
+    def check_parameters(self):
+        if self.NA > self.n_sol:
+            raise ValueError("NA should be smaller than n_sol in ODT")
+        if self.NA_illumi > self.NA:
+            raise ValueError("NA_illumi should be smaller than NA")
+        if self.NA_illumi > self.n_sol:
+            raise ValueError("NA_illumi should be smaller than n_sol")
 
     @cached_property
     def fi_lateral_mag(self) -> float:
@@ -81,6 +63,43 @@ class ODTParameters(QPIParameters):
     @cached_property
     def F2Sz(self) -> float:
         return (self.k_per_pixel / self.imgpx_unit_z) ** 0.5
+
+    @cached_property
+    def fi_lateral_mag(self) -> float:
+        return self.fi_mag * self.NA_illumi / self.n_sol
+
+    @cached_property
+    def fi_z(self) -> int:
+        return int(self.fi_mag * (1 - self.NA_illumi**2 / self.n_sol**2) ** 0.5)
+
+    @cached_property
+    def fz_extent(self) -> int:
+        fz_extent_top = int(self.fi_mag - self.fi_z)
+        fz_extent_buttom = int(self.fi_mag * (self.n_sol - (self.n_sol**2 - self.NA**2) ** 0.5))
+        return max(fz_extent_top, fz_extent_buttom) + self.zmargin
+
+    @cached_property
+    def imgpx_unit_z(self) -> float:
+        return self.imgpx_unit * ((2 * self.aperturesize + 1) / (2 * self.fz_extent + 1 + 6))
+
+    @cached_property
+    def S2Fz(self) -> float:
+        return (self.imgpx_unit_z / self.k_per_pixel) ** 0.5
+
+    @cached_property
+    def F2Sz(self) -> float:
+        return (self.k_per_pixel / self.imgpx_unit_z) ** 0.5
+
+    def print_all_parameters(self):
+        self.check_parameters()
+        self._print_all_parameters()
+        # calculated parameters
+        print(f"fi_lateral_mag: {self.fi_lateral_mag}")
+        print(f"fi_z: {self.fi_z}")
+        print(f"fz_extent: {self.fz_extent}")
+        print(f"imgpx_unit_z: {self.imgpx_unit_z}")
+        print(f"S2Fz: {self.S2Fz}")
+        print(f"F2Sz: {self.F2Sz}")
 
 
 Params = Union[QPIParameters, ODTParameters]
@@ -218,8 +237,8 @@ def preprocess_for_synthesis(
                 array_div[mcfg.MIP_CENTER[0][0] : mcfg.MIP_CENTER[0][1], mcfg.MIP_CENTER[1][0] : mcfg.MIP_CENTER[1][1]]
             )
         )
-        # if center_phase < 0:
-        #     array_div = 1 / array_div
+        if center_phase < 0:
+            array_div = 1 / array_div
 
     array_div_fft = xp.fft.fftshift(xp.fft.fft2(array_div)) * params.S2F**2
     center_x = params.aperturesize - mcfg.EDGE_SIZE // 2
@@ -285,8 +304,8 @@ def get_scattering_field(
                 array_div[mcfg.MIP_CENTER[0][0] : mcfg.MIP_CENTER[0][1], mcfg.MIP_CENTER[1][0] : mcfg.MIP_CENTER[1][1]]
             )
         )
-        # if center_phase < 0:
-        #     array_field, ref_array_field = ref_array_field, array_field
+        if center_phase < 0:
+            array_field, ref_array_field = ref_array_field, array_field
 
     if approx == "Born":
         scattering = (array_field - ref_array_field) / ref_array_field
@@ -297,11 +316,8 @@ def get_scattering_field(
         ref_array_log = xp.log(ref_array_field)
         ref_array_log_real = xp.real(ref_array_log)
         ref_array_log_imag = xp.imag(ref_array_log)
-        # array_log_imag_unwrap = phase_unwrap(array_log_imag)
-        # ref_array_log_imag_unwrap = phase_unwrap(ref_array_log_imag)
 
         amplitude = array_log_real - ref_array_log_real
-        # phase = array_log_imag_unwrap - ref_array_log_imag_unwrap
         phase = phase_unwrap(array_log_imag - ref_array_log_imag)
 
         if mcfg.OFFSET_REGS is not None:
@@ -1005,13 +1021,21 @@ def calc_kz_value(
         xp.arange(2 * params.aperturesize + 1 - mcfg.EDGE_SIZE),
         indexing="ij",
     )
-    disk = (xx - params.aperturesize + oblique_shift[0]) ** 2 + (yy - params.aperturesize + oblique_shift[1]) ** 2
-    disk_mask = disk < (params.aperturesize // 2) ** 2
-    fz_disk = (params.fi_mag**2 - disk) * disk_mask
+    disk = (xx - params.aperturesize + oblique_shift[0]) ** 2 + (
+        yy - params.aperturesize + oblique_shift[1]
+    ) ** 2  # distance from the aperture center
+    disk_mask = disk < (params.aperturesize // 2) ** 2  # aperture mask
+    fz_disk = (params.fi_mag**2 - disk) * disk_mask  # fz value
+    fz_disk[fz_disk < 0] = 0  # fz never be negative
     fz_disk = fz_disk**0.5
     kz_disk = fz_disk * params.k_per_pixel
 
     kz_disk = kz_disk.astype(precision.get_float_precision())
+
+    # # count nan
+    # nan_count = xp.sum(xp.isnan(kz_disk))
+    # if nan_count > 0:
+    #     print(f"nan count: {nan_count}")
 
     return kz_disk
 

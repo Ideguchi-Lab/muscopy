@@ -4,7 +4,9 @@ import os
 import pickle
 import shutil
 import uuid
-from typing import NewType, Union
+from dataclasses import dataclass
+from functools import cached_property
+from typing import Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -23,7 +25,39 @@ else:
     import numpy as xp
 
 
+@dataclass
 class ODTParameters(QPIParameters):
+    NA_illumi: float = 0
+    zmargin: int = 3
+
+    @cached_property
+    def fi_lateral_mag(self) -> float:
+        return self.fi_mag * self.NA_illumi / self.n_sol
+
+    @cached_property
+    def fi_z(self) -> int:
+        return int(self.fi_mag * (1 - self.NA_illumi**2 / self.n_sol**2) ** 0.5)
+
+    @cached_property
+    def fz_extent(self) -> int:
+        fz_extent_top = int(self.fi_mag - self.fi_z)
+        fz_extent_buttom = int(self.fi_mag * (self.n_sol - (self.n_sol**2 - self.NA**2) ** 0.5))
+        return max(fz_extent_top, fz_extent_buttom) + self.zmargin
+
+    @cached_property
+    def imgpx_unit_z(self) -> float:
+        return self.imgpx_unit * ((2 * self.aperturesize + 1) / (2 * self.fz_extent + 1 + 6))
+
+    @cached_property
+    def S2Fz(self) -> float:
+        return (self.imgpx_unit_z / self.k_per_pixel) ** 0.5
+
+    @cached_property
+    def F2Sz(self) -> float:
+        return (self.k_per_pixel / self.imgpx_unit_z) ** 0.5
+
+
+class oldODTParameters(QPIParameters):
     def __init__(
         self,
         wavelength: float,
@@ -165,7 +199,7 @@ def get_oblique_field(array: NDArray, params: Params) -> tuple[NDArray, tuple[in
     scale_factor = len(array_fft) / len(array)
     array_fft = array_fft * scale_factor
     # remove EDGE to avoid the edge effect
-    array_field = xp.fft.ifft2(xp.fft.ifftshift(array_fft))[mcfg.EDGE_SIZE :, mcfg.EDGE_SIZE :] * params.F2S() ** 2
+    array_field = xp.fft.ifft2(xp.fft.ifftshift(array_fft))[mcfg.EDGE_SIZE :, mcfg.EDGE_SIZE :] * params.F2S**2
 
     return array_field, oblique_shift
 
@@ -207,7 +241,7 @@ def preprocess_for_synthesis(
         # if center_phase < 0:
         #     array_div = 1 / array_div
 
-    array_div_fft = xp.fft.fftshift(xp.fft.fft2(array_div)) * params.S2F() ** 2
+    array_div_fft = xp.fft.fftshift(xp.fft.fft2(array_div)) * params.S2F**2
     center_x = params.aperturesize - mcfg.EDGE_SIZE // 2
     center_y = params.aperturesize - mcfg.EDGE_SIZE // 2
     disk_for_synthesis = make_disk(
@@ -300,7 +334,7 @@ def get_scattering_field(
         raise ValueError("approx should be either 'Born' or 'Rytov'")
 
     scattering_fft = (
-        xp.fft.fftshift(xp.fft.fft2(scattering, norm="ortho")) * params.S2F() ** 2 * (2 * xp.pi)
+        xp.fft.fftshift(xp.fft.fft2(scattering, norm="ortho")) * params.S2F**2 * (2 * xp.pi)
     )  # last factor is to adjust to the non-Unitary derivation in Tamamitsu's paper
     disk_for_synthesis = make_disk(
         (
@@ -647,7 +681,7 @@ class Synthesizer:
 
         synthesized_weight -= synthesized_weight > 1
         synthesized_fft /= synthesized_weight
-        synthesized_array = xp.fft.ifft2(xp.fft.ifftshift(synthesized_fft)) * self.params.F2S() ** 2
+        synthesized_array = xp.fft.ifft2(xp.fft.ifftshift(synthesized_fft)) * self.params.F2S**2
 
         return synthesized_array, synthesized_fft
 
@@ -707,7 +741,7 @@ class Synthesizer:
         synthesized_fft /= synthesized_weight
 
         factor = xp.array(
-            [self.params.F2S() ** 2 * self.params.F2Sz() / (2 * xp.pi) ** (3 / 2)],
+            [self.params.F2S**2 * self.params.F2Sz / (2 * xp.pi) ** (3 / 2)],
             dtype=precision.get_complex_precision(),
         )  # last factor is to adjust to the non-Unitary derivation in Tamamitsu's paper
 
@@ -755,11 +789,11 @@ class Synthesizer:
         del array3d
 
         factorS2F = xp.array(
-            [self.params.S2F() ** 2 * self.params.S2Fz() * (2 * xp.pi) ** (3 / 2)],
+            [self.params.S2F**2 * self.params.S2Fz * (2 * xp.pi) ** (3 / 2)],
             dtype=precision.get_complex_precision(),
         )
         factorF2S = xp.array(
-            [self.params.F2S() ** 2 * self.params.F2Sz() / (2 * xp.pi) ** (3 / 2)],
+            [self.params.F2S**2 * self.params.F2Sz / (2 * xp.pi) ** (3 / 2)],
             dtype=precision.get_complex_precision(),
         )
 

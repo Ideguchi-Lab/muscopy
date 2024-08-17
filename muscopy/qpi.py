@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from functools import cached_property
+
 import numpy as np
 
 import muscopy.cfg as mcfg
@@ -11,77 +14,84 @@ else:
     import numpy as xp
 
 
+@dataclass
 class QPIParameters:
-    def __init__(
-        self,
-        wavelength: float,
-        NA: float,
-        img_shape: tuple[int, int],
-        pixelsize: float,
-        offaxis_center: tuple[int, int],
-        n_sol: float = 1.33,
-    ):
-        """QPIParameters class for QPI calculation
+    wavelength: float
+    NA: float
+    img_shape: tuple[int, int]
+    pixelsize: float
+    offaxis_center: tuple[int, int]
+    n_sol: float = 1.33
 
-        Args:
-            wavelength (float): wavelength of the probe
-            NA (float): Numerical aperture of the objective
-            img_shape (tuple[int, int]): shape of the image
-            pixelsize (float): image pixel size
-            offaxis_center (tuple[int, int]): center position of the off axis holography in the Fourier domain
-            n_sol (float, optional): refractive index of the solvent. Defaults to 1.33.
-        """
-        self.wav = wavelength
-        self.NA = NA
-        self.img_shape = img_shape
-        self.pixelsize = pixelsize
-        self.offaxis_center = offaxis_center
-        self.n_sol = n_sol
+    @cached_property
+    def img_center(self) -> tuple[int, int]:
+        return (self.img_shape[0] // 2, self.img_shape[1] // 2)
 
-        self._calc_params()
+    @cached_property
+    def dim(self) -> int:
+        return self.img_shape[0]
 
-    def _calc_params(self):
-        """Calculate parameters for QPI calculation. This method is called in __init__ method."""
+    @cached_property
+    def freq_per_pixel(self) -> float:
+        return 1 / (self.pixelsize * self.dim)
 
-        self.img_center = (self.img_shape[0] // 2, self.img_shape[1] // 2)
-        self.dim = self.img_shape[0]
-        self.freq_per_pixel = 1 / (self.pixelsize * self.dim)  # 1 / L
-        self.k_per_pixel = 2 * np.pi * self.freq_per_pixel  # unit of k in terms of pixel unit
-        self.aperturesize = 2 * round(self.NA / self.wav / self.freq_per_pixel) + 1  # 2 * f_BW + 1
-        self.fi_mag = self.n_sol / self.wav / self.freq_per_pixel  # |k| in terms of pixel unit
+    @cached_property
+    def k_per_pixel(self) -> float:
+        return 2 * np.pi * self.freq_per_pixel
 
-        self.imgpx_unit = (
-            self.pixelsize * self.img_shape[0] / (2 * self.aperturesize + 1 - mcfg.EDGE_SIZE)
-        )  # unit image pixel size on the cropped image plane
+    @cached_property
+    def aperturesize(self) -> int:
+        return 2 * round(self.NA / self.wavelength / self.freq_per_pixel) + 1
 
-    def print_all_parameters(self):
-        """Print all parameters in the QPIParameters class"""
-        for key, value in vars(self).items():
-            print(f"{key}={value}")
-
-    def Hologram2F(self) -> float:
-        """Factor to convert the hologram to the Fourier space
+    @cached_property
+    def fi_mag(self) -> float:
+        """|f| of the light
 
         Returns:
-            float: FFT factor
+            float: the magnitude of the light vector
+        """
+        return self.n_sol / self.wavelength / self.freq_per_pixel
+
+    @cached_property
+    def imgpx_unit(self) -> float:
+        """The image pixel unit in the synthetic aperture plane
+
+        Returns:
+            float: the image pixel unit in the synthetic aperture plane
+        """
+        return self.pixelsize * self.img_shape[0] / (2 * self.aperturesize + 1 - mcfg.EDGE_SIZE)
+
+    @cached_property
+    def Hologram2F(self) -> float:
+        """Fourier factor from hologram to spectrum
+
+        Returns:
+            float: factor from hologram to spectrum
         """
         return (self.pixelsize / self.k_per_pixel) ** 0.5
 
+    @cached_property
     def S2F(self) -> float:
-        """Factor to convert the spatial domain to the Fourier space
+        """Fourier factor from spectrum to complex field
 
         Returns:
-            float: FFT factor
+            float: factor from spectrum to complex field
         """
         return (self.imgpx_unit / self.k_per_pixel) ** 0.5
 
+    @cached_property
     def F2S(self) -> float:
-        """Factor to convert the Fourier space to the spatial domain
+        """Fourier factor from complex field to spectrum
 
         Returns:
-            float: FFT factor
+            float: factor from complex field to spectrum
         """
         return (self.k_per_pixel / self.imgpx_unit) ** 0.5
+
+    def print_all_parameters(self):
+        """print all parameters of the Parameters class"""
+        for key, value in vars(self).items():
+            print(f"{key}={value}")
 
 
 def make_disk(center: tuple[int, int], radius: float, array_shape: tuple[int, int], highpass: bool = False) -> xp.array:

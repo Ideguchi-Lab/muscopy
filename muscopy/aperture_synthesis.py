@@ -56,6 +56,32 @@ class ODTParameters(QPIParameters):
     def F2Sz(self) -> float:
         return (self.k_per_pixel / self.imgpx_unit_z) ** 0.5
 
+    @cached_property
+    def fi_lateral_mag(self) -> float:
+        return self.fi_mag * self.NA_illumi / self.n_sol
+
+    @cached_property
+    def fi_z(self) -> int:
+        return int(self.fi_mag * (1 - self.NA_illumi**2 / self.n_sol**2) ** 0.5)
+
+    @cached_property
+    def fz_extent(self) -> int:
+        fz_extent_top = int(self.fi_mag - self.fi_z)
+        fz_extent_buttom = int(self.fi_mag * (self.n_sol - (self.n_sol**2 - self.NA**2) ** 0.5))
+        return max(fz_extent_top, fz_extent_buttom) + self.zmargin
+
+    @cached_property
+    def imgpx_unit_z(self) -> float:
+        return self.imgpx_unit * ((2 * self.aperturesize + 1) / (2 * self.fz_extent + 1 + 6))
+
+    @cached_property
+    def S2Fz(self) -> float:
+        return (self.imgpx_unit_z / self.k_per_pixel) ** 0.5
+
+    @cached_property
+    def F2Sz(self) -> float:
+        return (self.k_per_pixel / self.imgpx_unit_z) ** 0.5
+
 
 Params = Union[QPIParameters, ODTParameters]
 

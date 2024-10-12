@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from functools import cached_property
 
 import numpy as np
+from numpy.typing import NDArray
 
 import muscopy.cfg as mcfg
 from muscopy.cfg import OffsetRegions
@@ -291,3 +292,115 @@ def MIPQPI(
     dif_phase = xp.angle(array_div)
 
     return dif_phase
+
+
+def _get_dc_ac(
+    hologram: NDArray,
+    params: QPIParameters,
+) -> tuple[NDArray, NDArray]:
+    """Calculates the DC intensity of the object.
+
+    Args:
+        hologram (NDArray): The hologram of the object.
+        params (mus.QPIParameters): The parameters of the QPI.
+
+    Returns:
+        NDArray: The DC and AC component of the object.
+    """
+    scale_factor = params.aperturesize / params.img_shape[0]
+    fft = xp.fft.fftshift(xp.fft.fft2(hologram))
+    dc_disk = make_disk(params.img_center, params.aperturesize // 2, params.img_shape)
+    ac_disk = make_disk(params.offaxis_center, params.aperturesize // 2, params.img_shape)
+
+    dc_fft = fft * dc_disk
+    ac_fft = fft * ac_disk
+
+    dc_cropped = crop_array(dc_fft, params.img_center, params.aperturesize)
+    ac_cropped = crop_array(ac_fft, params.offaxis_center, params.aperturesize)
+
+    dc = xp.fft.ifft2(xp.fft.ifftshift(dc_cropped)) * scale_factor**2
+    ac = xp.fft.ifft2(xp.fft.ifftshift(ac_cropped)) * scale_factor**2
+
+    return dc, ac
+
+
+def _get_visibility(
+    dc: NDArray,
+    ac: NDArray,
+) -> NDArray:
+    """Calculates the visibility of the object.
+
+    Args:
+        dc (NDArray): dc component of the hologram
+        ac (NDArray): ac component of the hologram
+
+    Returns:
+        NDArray: pixel-wise visibility of the hologram
+    """
+    visibility = xp.abs(ac) / xp.abs(dc) * 2
+    return visibility
+
+
+def _get_phase_noise(
+    visibility: NDArray,
+    aperturesize: int,
+    dc_intensity: NDArray,
+    sensorsize: tuple[int, int],
+) -> NDArray:
+    """Calculates the phase noise in a given array.
+
+    Args:
+        visibility (NDArray): The visibility of the object.
+        aperturesize (int): The size of the aperture.
+        dc_intensity (NDArray): The DC intensity of the object.
+        sensorsize (tuple[int, int]): The size of the sensor.
+
+    Returns:
+        NDArray: The phase noise
+    """
+    if not visibility.shape == dc_intensity.shape:
+        raise ValueError("Visibility and DC intensity must have the same shape")
+    aperture_area = xp.pi * (aperturesize / 2) ** 2
+    sensor_area = sensorsize[0] * sensorsize[1]
+    phase_noise = xp.sqrt(2 * aperture_area / (visibility**2 * dc_intensity * sensor_area))
+
+    return phase_noise
+
+
+def calc_visibility(
+    hologram: NDArray,
+    params: QPIParameters,
+) -> NDArray:
+    """Calculates the visibility of the object.
+
+    Args:
+        hologram (NDArray): The hologram of the object.
+        params (mus.QPIParameters): The parameters of the QPI.
+
+    Returns:
+        NDArray: pixel-wise visibility of the hologram
+    """
+    dc, ac = _get_dc_ac(hologram, params)
+    visibility = _get_visibility(dc, ac)
+
+    return visibility
+
+
+def calc_phase_noise(
+    hologram: NDArray,
+    params: QPIParameters,
+) -> NDArray:
+    """Calculates the phase noise in a given array.
+
+    Args:
+        hologram (NDArray): The hologram of the object.
+        params (mus.QPIParameters): The parameters of the QPI.
+
+    Returns:
+        NDArray: The phase noise
+    """
+    dc, ac = _get_dc_ac(hologram, params)
+    visibility = _get_visibility(dc, ac)
+    phase_noise = _get_phase_noise(visibility, params.aperturesize, xp.abs(dc), params.img_shape)
+
+    return phase_noise

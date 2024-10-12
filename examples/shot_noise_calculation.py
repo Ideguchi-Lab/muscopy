@@ -4,9 +4,10 @@ import os
 os.environ["MUSCOPY_GPU"] = "False"
 
 import numpy as np
-from PIL import Image
-import muscopy as mus
 from ilabvis import ColorBar2d, CursorVisualizer
+from PIL import Image
+
+import muscopy as mus
 
 if mus.cfg._cp:
     import cupy as xp

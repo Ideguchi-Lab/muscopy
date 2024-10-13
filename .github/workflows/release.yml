@@ -30,7 +30,7 @@ jobs:
     - name: Extract release notes from CHANGLOG.md
       id: extract_changelog
       run: |
-        RELEASE_NOTES=$(sed -n '/## Version/,/## ---/p{## Version}' CHANGELOG.md))
+        RELEASE_NOTES=$(sed -n '/## Version/,/## ---/p{## Version}' CHANGELOG.md | sed "/$d")
         echo "RELEASE_NOTES=${RELEASE_NOTES}" >> $GITHUB_ENV
         echo ${RELEASE_NOTES}
 

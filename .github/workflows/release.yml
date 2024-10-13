@@ -40,7 +40,7 @@ jobs:
       uses: ncipollo/release-action@v1
       with:
         artifacts: "dist/*"  # upload all files in the dist folder
-        token: ${{ secrets.GITHUB_TOKEN }}
+        token: ${{ secrets.PAT_TOKEN }}
         tag: ${{ github.ref }}
         name: ${{ github.ref }}
         bodyFile: ./.github/workflows/release_template.md

@@ -41,6 +41,6 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
         tag: ${{ github.ref }}
         name: ${{ github.ref }}
-        body: ${{ steps.extract_changelog.outputs.RELEASE_NOTES }}
+        body: ${{ env.RELEASE_NOTES }}
         draft: false
         prerelease: false

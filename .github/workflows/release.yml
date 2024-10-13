@@ -31,7 +31,7 @@ jobs:
       id: extract_changelog
       run: |
         RELEASE_NOTES=$(sed -n '/## Version/,/---/{p; /---/q}' CHANGELOG.md | sed '$d')
-        echo "${RELEASE_NOTES}" > ./.github/workflows/release_template.md
+        echo "${RELEASE_NOTES}" >> ./.github/workflows/release_template.md
 
     - name: Display Release Notes
       run: cat ./.github/workflows/release_template.md

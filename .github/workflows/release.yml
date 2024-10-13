@@ -34,7 +34,7 @@ jobs:
         echo "${RELEASE_NOTES}" > ./.github/workflows/release_template.md
 
     - name: Display Release Notes
-      run: cat /.github/workflows/release_template.md
+      run: cat ./.github/workflows/release_template.md
 
     - name: Create Release and Upload Assets
       uses: ncipollo/release-action@v1
@@ -43,6 +43,6 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
         tag: ${{ github.ref }}
         name: ${{ github.ref }}
-        bodyFile: /.github/workflows/release_template.md
+        bodyFile: ./.github/workflows/release_template.md
         draft: false
         prerelease: false

@@ -43,6 +43,6 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
         tag: ${{ github.ref }}
         name: ${{ github.ref }}
-        body_file: /.github/workflows/release_template.md
+        bodyFile: /.github/workflows/release_template.md
         draft: false
         prerelease: false

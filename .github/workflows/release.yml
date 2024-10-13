@@ -31,8 +31,10 @@ jobs:
       id: extract_changelog
       run: |
         RELEASE_NOTES=$(sed -n '/## Version/,/---/{p; /---/q}' CHANGELOG.md | sed '$d')
-        echo "RELEASE_NOTES=${RELEASE_NOTES}" >> $GITHUB_ENV
-        echo ${RELEASE_NOTES}
+        echo "${RELEASE_NOTES}" > release_notes.md
+
+    - name: Display Release Notes
+      run: cat release_notes.md
 
     - name: Create Release and Upload Assets
       uses: ncipollo/release-action@v1
@@ -41,6 +43,6 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
         tag: ${{ github.ref }}
         name: ${{ github.ref }}
-        body: ${{ env.RELEASE_NOTES }}
+        body_path: release_notes.md
         draft: false
         prerelease: false

@@ -645,10 +645,10 @@ class Synthesizer:
         for i in tqdm(range(len(self.identifiers))):
             data = self.data[self.identifiers[i]]
             if mcfg._cp:
-                to_save = xp.asnumpy(xp.log(xp.abs(data.div_spectrum) + 1e-60))
+                to_save = xp.asnumpy(xp.log(xp.abs(data.div_spectrum) + 1e-10))
             else:
-                to_save = xp.log(xp.abs(data.div_spectrum))
-            plt.imsave(f"{path}/{i:03}.png", to_save, cmap="gray")
+                to_save = xp.log(xp.abs(data.div_spectrum) + 1e-10)
+            plt.imsave(f"{path}/{i:03}.png", to_save)
 
     def synthesize_spectrums(self, precision: ArrayPrecision = None) -> tuple[NDArray, NDArray]:
         """synthesize the spectrums

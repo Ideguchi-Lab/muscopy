@@ -349,6 +349,8 @@ def _get_phase_noise(
 ) -> NDArray:
     """Calculates the phase noise in a given array.
 
+    Here, dc_intensity is the photon number of DC components, as the shot noise is proportional to the square root of the photon number.
+
     Args:
         visibility (NDArray): The visibility of the object.
         aperturesize (int): The size of the aperture.

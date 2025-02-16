@@ -6,6 +6,10 @@
 
 - Modified lower bound of spectrum on `save_multiangle_spectrum` [[#32](https://github.com/Ideguchi-Lab/microscopy_converters/issues/32)]
 
+### Fixed
+
+- No-precision errors in `aperture_synthesis.py`[[#34](https://github.com/Ideguchi-Lab/microscopy_converters/pull/34)]
+
 ---
 
 ## Version 0.1.5 [2024-10-13]

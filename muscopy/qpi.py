@@ -407,7 +407,7 @@ def calc_phase_noise(
     """
     dc, ac = _get_dc_ac(hologram, params)
     visibility = _get_visibility(dc, ac)
-    dc_factor = fullwell * quantum_eff / (2**bit_depth)
+    dc_factor = fullwell / quantum_eff / (2**bit_depth)
     phase_noise = _get_phase_noise(visibility, params.aperturesize, dc_factor * xp.abs(dc), params.img_shape)
 
     return phase_noise

@@ -5,6 +5,7 @@
 ### Changed
 
 - Modified lower bound of spectrum on `save_multiangle_spectrum` [[#32](https://github.com/Ideguchi-Lab/microscopy_converters/issues/32)]
+- Made phase noise calculator to use photon number instead of electron[[#35](https://github.com/Ideguchi-Lab/microscopy_converters/issues/35)]
 
 ### Fixed
 

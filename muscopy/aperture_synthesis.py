@@ -907,7 +907,7 @@ class Synthesizer:
 
         if expand:
             print("Expanding the z-axis...")
-            r_index = zeropad_higher_kz(r_index, self.params.aperturesize - self.params.fz_extent)
+            r_index = zeropad_higher_kz(r_index, self.params.aperturesize - self.params.fz_extent, precision=precision)
 
         return r_index, synthesized_fft
 
@@ -947,7 +947,7 @@ class Synthesizer:
 
         if expand:
             print("Expanding the z-axis...")
-            r_index = zeropad_higher_kz(r_index, self.params.aperturesize - self.params.fz_extent)
+            r_index = zeropad_higher_kz(r_index, self.params.aperturesize - self.params.fz_extent, precision=precision)
 
         return r_index, synthesized_fft
 

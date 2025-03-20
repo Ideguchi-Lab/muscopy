@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Changed
+
+- Added sensor noise factor in phase calculation [[#37](https://github.com/Ideguchi-Lab/microscopy_converters/issues/37)].
+
+### Fixed
+
+- Fix release workflow.
+
 ---
 
 ## Version 0.2.0 [2025-02-16]

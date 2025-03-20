@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*.*.*'  # tag starting with 'v' and followed by version number
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest

@@ -27,7 +27,7 @@ jobs:
       run: |
         python -m build
 
-    - name: Extract release notes from CHANGLOG.md
+    - name: Extract release notes from CHANGELOG.md
       id: extract_changelog
       run: |
         RELEASE_NOTES=$(sed -n '/## Version/,/---/{p; /---/q}' CHANGELOG.md | sed '$d')
@@ -40,7 +40,6 @@ jobs:
       uses: ncipollo/release-action@v1
       with:
         artifacts: "dist/*"  # upload all files in the dist folder
-        token: ${{ secrets.PAT_TOKEN }}
         tag: ${{ github.ref }}
         name: ${{ github.ref }}
         bodyFile: ./.github/workflows/release_template.md

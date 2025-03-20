@@ -346,6 +346,7 @@ def _get_phase_noise(
     aperturesize: int,
     dc_intensity: NDArray,
     sensorsize: tuple[int, int],
+    sensor_noise: int = 0,
 ) -> NDArray:
     """Calculates the phase noise in a given array.
 
@@ -356,6 +357,7 @@ def _get_phase_noise(
         aperturesize (int): The size of the aperture.
         dc_intensity (NDArray): The DC intensity of the object.
         sensorsize (tuple[int, int]): The size of the sensor.
+        sensor_noise (int, optional): The sensor noise (unit: e-). Defaults to 0.
 
     Returns:
         NDArray: The phase noise
@@ -364,7 +366,9 @@ def _get_phase_noise(
         raise ValueError("Visibility and DC intensity must have the same shape")
     aperture_area = xp.pi * (aperturesize / 2) ** 2
     sensor_area = sensorsize[0] * sensorsize[1]
-    phase_noise = xp.sqrt(2 * aperture_area / (visibility**2 * dc_intensity * sensor_area))
+    phase_noise = xp.sqrt(
+        2 * aperture_area * (dc_intensity + sensor_noise**2) / (visibility**2 * dc_intensity**2 * sensor_area)
+    )
 
     return phase_noise
 
@@ -392,8 +396,8 @@ def calc_phase_noise(
     hologram: NDArray,
     params: QPIParameters,
     fullwell: float,
-    quantum_eff: float,
     bit_depth: int,
+    sensor_noise: int = 0,
 ) -> NDArray:
     """Calculates the phase noise in a given array.
 
@@ -401,15 +405,17 @@ def calc_phase_noise(
         hologram (NDArray): The hologram of the object.
         params (mus.QPIParameters): The parameters of the QPI.
         fullwell (float): The full well capacity of the sensor.
-        quantum_eff (float): The quantum efficiency of the sensor
         bit_depth (int): The bit depth of the sensor.
+        sensor_noise (int): The sensor noise (unit: e-). Defaults to 0.
 
     Returns:
         NDArray: The phase noise
     """
     dc, ac = _get_dc_ac(hologram, params)
     visibility = _get_visibility(dc, ac)
-    dc_factor = fullwell / quantum_eff / (2**bit_depth)
-    phase_noise = _get_phase_noise(visibility, params.aperturesize, dc_factor * xp.abs(dc), params.img_shape)
+    dc_factor = fullwell / (2**bit_depth)
+    phase_noise = _get_phase_noise(
+        visibility, params.aperturesize, dc_factor * xp.abs(dc), params.img_shape, sensor_noise
+    )
 
     return phase_noise

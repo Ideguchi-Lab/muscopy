@@ -392,7 +392,6 @@ def calc_phase_noise(
     hologram: NDArray,
     params: QPIParameters,
     fullwell: float,
-    quantum_eff: float,
     bit_depth: int,
 ) -> NDArray:
     """Calculates the phase noise in a given array.
@@ -401,7 +400,6 @@ def calc_phase_noise(
         hologram (NDArray): The hologram of the object.
         params (mus.QPIParameters): The parameters of the QPI.
         fullwell (float): The full well capacity of the sensor.
-        quantum_eff (float): The quantum efficiency of the sensor
         bit_depth (int): The bit depth of the sensor.
 
     Returns:
@@ -409,7 +407,7 @@ def calc_phase_noise(
     """
     dc, ac = _get_dc_ac(hologram, params)
     visibility = _get_visibility(dc, ac)
-    dc_factor = fullwell / quantum_eff / (2**bit_depth)
+    dc_factor = fullwell / (2**bit_depth)
     phase_noise = _get_phase_noise(visibility, params.aperturesize, dc_factor * xp.abs(dc), params.img_shape)
 
     return phase_noise

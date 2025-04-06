@@ -49,10 +49,10 @@ class ODTParameters(QPIParameters):
     @cached_property
     def fz_extent(self) -> int:
         fz_extent_top = int(self.fi_mag - self.fi_z)
-        fz_extent_buttom = int(
+        fz_extent_bottom = int(
             self.fi_mag * (self.n_sol - (self.n_sol**2 - self.NA**2) ** 0.5)
         )
-        return max(fz_extent_top, fz_extent_buttom) + self.zmargin
+        return max(fz_extent_top, fz_extent_bottom) + self.zmargin
 
     @cached_property
     def imgpx_unit_z(self) -> float:
@@ -79,10 +79,10 @@ class ODTParameters(QPIParameters):
     @cached_property
     def fz_extent(self) -> int:
         fz_extent_top = int(self.fi_mag - self.fi_z)
-        fz_extent_buttom = int(
+        fz_extent_bottom = int(
             self.fi_mag * (self.n_sol - (self.n_sol**2 - self.NA**2) ** 0.5)
         )
-        return max(fz_extent_top, fz_extent_buttom) + self.zmargin
+        return max(fz_extent_top, fz_extent_bottom) + self.zmargin
 
     @cached_property
     def imgpx_unit_z(self) -> float:

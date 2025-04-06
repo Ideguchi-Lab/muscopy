@@ -957,13 +957,14 @@ class Synthesizer:
 ####################################################
 
 
-# TODO: make light-weight version of this method
 def map_aperture_to_Ewald(
     array: NDArray,
     shape: tuple[int, int, int],
     oblique_shift: tuple[int, int],
     params: ODTParameters,
     precision: ArrayPrecision | None = None,
+    *,
+    mode: str = "Forward"
 ) -> NDArray:
     """map 2d array to 3d array(ODT)
 
@@ -973,6 +974,8 @@ def map_aperture_to_Ewald(
         oblique_shift (tuple): oblique shift in the Fourier space
         params (ODTParameters): parameters for the ODT system
         precision (ArrayPrecision, optional): precision of the array. Defaults to None.
+        mode (str, optional): mode of the projection. Defaults to "Forward".
+            "Forward" for forward scattering, "Backward" for backward scattering.
 
     Returns:
         NDArray: 3D array projected to the Ewald sphere
@@ -995,6 +998,13 @@ def map_aperture_to_Ewald(
     Fz_circle = xp.sqrt(
         params.fi_mag**2 - (xx - center_x + oblique_shift[0]) ** 2 - (yy - center_y + oblique_shift[1]) ** 2
     ) - xp.sqrt(params.fi_mag**2 - oblique_shift[0] ** 2 - oblique_shift[1] ** 2)
+
+    if mode == "Backward":
+        Fz_circle = -Fz_circle
+    elif mode == "Forward":
+        pass
+    else:
+        raise ValueError("mode should be either 'Forward' or 'Backward'")
 
     Fz_value = (Fz_circle + shape[2] // 2) * circle
     Fz_tile = xp.tile(Fz_value, (shape[2], 1, 1))

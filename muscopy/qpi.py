@@ -110,7 +110,12 @@ class QPIParameters:
         print(f"F2S={self.F2S}")
 
 
-def make_disk(center: tuple[int, int], radius: float, array_shape: tuple[int, int], highpass: bool = False) -> xp.array:
+def make_disk(
+    center: tuple[int, int],
+    radius: float,
+    array_shape: tuple[int, int],
+    highpass: bool = False,
+) -> xp.array:
     """make disk mask for filtering
 
     Args:
@@ -279,7 +284,10 @@ def MIPQPI(
     if mcfg.MIP_CENTER is not None:
         center_phase = xp.mean(
             xp.angle(
-                array_div[mcfg.MIP_CENTER[0][0] : mcfg.MIP_CENTER[0][1], mcfg.MIP_CENTER[1][0] : mcfg.MIP_CENTER[1][1]]
+                array_div[
+                    mcfg.MIP_CENTER[0][0] : mcfg.MIP_CENTER[0][1],
+                    mcfg.MIP_CENTER[1][0] : mcfg.MIP_CENTER[1][1],
+                ]
             )
         )
         if center_phase < 0:
@@ -415,7 +423,11 @@ def calc_phase_noise(
     visibility = _get_visibility(dc, ac)
     dc_factor = fullwell / (2**bit_depth)
     phase_noise = _get_phase_noise(
-        visibility, params.aperturesize, dc_factor * xp.abs(dc), params.img_shape, sensor_noise
+        visibility,
+        params.aperturesize,
+        dc_factor * xp.abs(dc),
+        params.img_shape,
+        sensor_noise,
     )
 
     return phase_noise

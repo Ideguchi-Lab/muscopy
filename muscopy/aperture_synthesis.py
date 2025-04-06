@@ -234,7 +234,10 @@ def preprocess_for_synthesis(
     if MIP and (mcfg.MIPRegion is not None):
         center_phase = xp.mean(
             xp.angle(
-                array_div[mcfg.MIP_CENTER[0][0] : mcfg.MIP_CENTER[0][1], mcfg.MIP_CENTER[1][0] : mcfg.MIP_CENTER[1][1]]
+                array_div[
+                    mcfg.MIP_CENTER[0][0] : mcfg.MIP_CENTER[0][1],
+                    mcfg.MIP_CENTER[1][0] : mcfg.MIP_CENTER[1][1],
+                ]
             )
         )
         if center_phase < 0:
@@ -301,7 +304,10 @@ def get_scattering_field(
         array_div = array_field / ref_array_field
         center_phase = xp.mean(
             xp.angle(
-                array_div[mcfg.MIP_CENTER[0][0] : mcfg.MIP_CENTER[0][1], mcfg.MIP_CENTER[1][0] : mcfg.MIP_CENTER[1][1]]
+                array_div[
+                    mcfg.MIP_CENTER[0][0] : mcfg.MIP_CENTER[0][1],
+                    mcfg.MIP_CENTER[1][0] : mcfg.MIP_CENTER[1][1],
+                ]
             )
         )
         if center_phase < 0:
@@ -344,7 +350,10 @@ def get_scattering_field(
 
     if crop_center:
         mask_highpass = make_disk(
-            (params.aperturesize - oblique_shift[0], params.aperturesize - oblique_shift[1]),
+            (
+                params.aperturesize - oblique_shift[0],
+                params.aperturesize - oblique_shift[1],
+            ),
             c_r,
             scattering.shape,
             highpass=True,
@@ -558,7 +567,13 @@ class Synthesizer:
             data.div_field = array_div
             data.div_spectrum = array_div_fft
 
-    def get_scattering_field(self, approx: str = "Rytov", MIP: bool = False, crop_center: bool = False, c_r: int = 5):
+    def get_scattering_field(
+        self,
+        approx: str = "Rytov",
+        MIP: bool = False,
+        crop_center: bool = False,
+        c_r: int = 5,
+    ):
         """get the scattering field
 
         Args:
@@ -715,7 +730,11 @@ class Synthesizer:
             scatter_potential_fft = 2j * kz_disk * fft_field
 
             scatter_potential_fft3d = map_aperture_to_Ewald(
-                scatter_potential_fft, synthesized_fft.shape, data.oblique_shift, self.params, precision
+                scatter_potential_fft,
+                synthesized_fft.shape,
+                data.oblique_shift,
+                self.params,
+                precision,
             )
 
             # TODO: make option to transfer to the host memory
@@ -839,7 +858,11 @@ class Synthesizer:
         return synthesized_qpi, synthesized_fft
 
     def MIPQPI(
-        self, crop_center: bool = False, c_r: int = 5, pkl_format: bool = False, precision: ArrayPrecision | None = None
+        self,
+        crop_center: bool = False,
+        c_r: int = 5,
+        pkl_format: bool = False,
+        precision: ArrayPrecision | None = None,
     ) -> tuple[NDArray, NDArray]:
         """Mid-infrared Photothermal Quantitative Phase imaging (MIPQPI) calculation
 
@@ -907,7 +930,11 @@ class Synthesizer:
 
         if expand:
             print("Expanding the z-axis...")
-            r_index = zeropad_higher_kz(r_index, self.params.aperturesize - self.params.fz_extent, precision=precision)
+            r_index = zeropad_higher_kz(
+                r_index,
+                self.params.aperturesize - self.params.fz_extent,
+                precision=precision,
+            )
 
         return r_index, synthesized_fft
 
@@ -947,7 +974,11 @@ class Synthesizer:
 
         if expand:
             print("Expanding the z-axis...")
-            r_index = zeropad_higher_kz(r_index, self.params.aperturesize - self.params.fz_extent, precision=precision)
+            r_index = zeropad_higher_kz(
+                r_index,
+                self.params.aperturesize - self.params.fz_extent,
+                precision=precision,
+            )
 
         return r_index, synthesized_fft
 
@@ -964,7 +995,7 @@ def map_aperture_to_Ewald(
     params: ODTParameters,
     precision: ArrayPrecision | None = None,
     *,
-    mode: str = "Forward"
+    mode: str = "Forward",
 ) -> NDArray:
     """map 2d array to 3d array(ODT)
 
@@ -1120,11 +1151,17 @@ def zeropad_higher_kz(array: NDArray, extend: int, precision: ArrayPrecision, gp
     else:
         executor = xp
     norm_factor = executor.array(
-        [executor.sqrt((array.shape[2] + 2 * extend) / array.shape[2])], dtype=precision.get_float_precision()
+        [executor.sqrt((array.shape[2] + 2 * extend) / array.shape[2])],
+        dtype=precision.get_float_precision(),
     )
     array_fft = executor.fft.fftshift(executor.fft.fftn(array, norm="ortho")).astype(precision.get_complex_precision())
     del array
-    array_fft = executor.pad(array_fft, ((0, 0), (0, 0), (extend, extend)), mode="constant", constant_values=0)
+    array_fft = executor.pad(
+        array_fft,
+        ((0, 0), (0, 0), (extend, extend)),
+        mode="constant",
+        constant_values=0,
+    )
     assert array_fft.dtype == precision.get_complex_precision()
     array = (
         executor.fft.ifftn(executor.fft.ifftshift(array_fft), norm="ortho").astype(precision.get_complex_precision())

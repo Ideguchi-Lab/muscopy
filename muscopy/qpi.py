@@ -60,7 +60,11 @@ class QPIParameters:
         Returns:
             float: the image pixel unit in the synthetic aperture plane
         """
-        return self.pixelsize * self.img_shape[0] / (2 * self.aperturesize + 1 - mcfg.EDGE_SIZE)
+        return (
+            self.pixelsize
+            * self.img_shape[0]
+            / (2 * self.aperturesize + 1 - mcfg.EDGE_SIZE)
+        )
 
     @cached_property
     def Hologram2F(self) -> float:
@@ -129,7 +133,9 @@ def make_disk(
     """
     if isinstance(array_shape, int):
         array_shape = (array_shape, array_shape)
-    xx, yy = xp.meshgrid(xp.arange(array_shape[0]), xp.arange(array_shape[1]), indexing="ij")
+    xx, yy = xp.meshgrid(
+        xp.arange(array_shape[0]), xp.arange(array_shape[1]), indexing="ij"
+    )
     circle = (xx - center[0]) ** 2 + (yy - center[1]) ** 2
     if highpass:
         disk = circle > radius**2
@@ -155,7 +161,9 @@ def crop_array(array: xp.array, center: tuple[int, int], width: int) -> xp.array
     ]
 
 
-def get_spectrum(array: xp.array, params: QPIParameters, crop_center: bool = False, c_r: int = 5) -> xp.array:
+def get_spectrum(
+    array: xp.array, params: QPIParameters, crop_center: bool = False, c_r: int = 5
+) -> xp.array:
     """internal method. get the spectrum of the hologram array
 
     Args:
@@ -171,7 +179,9 @@ def get_spectrum(array: xp.array, params: QPIParameters, crop_center: bool = Fal
     array_fft = array_fft * mask
 
     if crop_center:
-        mask_highpass = make_disk(params.offaxis_center, c_r, params.img_shape, highpass=True)
+        mask_highpass = make_disk(
+            params.offaxis_center, c_r, params.img_shape, highpass=True
+        )
         array_fft = array_fft * mask_highpass
 
     array_fft = crop_array(array_fft, params.offaxis_center, params.aperturesize)
@@ -179,7 +189,9 @@ def get_spectrum(array: xp.array, params: QPIParameters, crop_center: bool = Fal
     return array_fft
 
 
-def get_field(array: xp.array, params: QPIParameters, crop_center: bool = False, c_r: int = 5) -> xp.array:
+def get_field(
+    array: xp.array, params: QPIParameters, crop_center: bool = False, c_r: int = 5
+) -> xp.array:
     """internal method. get the electric field from the hologram array
 
     Args:
@@ -195,7 +207,9 @@ def get_field(array: xp.array, params: QPIParameters, crop_center: bool = False,
     return array
 
 
-def correct_offset(array, offset_regs: OffsetRegions, phase: bool = True, amplitude: bool = True) -> xp.array:
+def correct_offset(
+    array, offset_regs: OffsetRegions, phase: bool = True, amplitude: bool = True
+) -> xp.array:
     """internal method. correct phase and amplitude offset
 
     Args:
@@ -210,8 +224,18 @@ def correct_offset(array, offset_regs: OffsetRegions, phase: bool = True, amplit
     phase_offset_list = []
     amplitude_offset_list = []
     for region in offset_regs:
-        phase_offset_list.append(xp.mean(xp.angle(array[region[0][0] : region[0][1], region[1][0] : region[1][1]])))
-        amplitude_offset_list.append(xp.mean(xp.abs(array[region[0][0] : region[0][1], region[1][0] : region[1][1]])))
+        phase_offset_list.append(
+            xp.mean(
+                xp.angle(
+                    array[region[0][0] : region[0][1], region[1][0] : region[1][1]]
+                )
+            )
+        )
+        amplitude_offset_list.append(
+            xp.mean(
+                xp.abs(array[region[0][0] : region[0][1], region[1][0] : region[1][1]])
+            )
+        )
     if phase:
         phase_offset = xp.mean(xp.array(phase_offset_list))  #  - xp.pi / 2
     else:
@@ -318,7 +342,9 @@ def _get_dc_ac(
     scale_factor = params.aperturesize / params.img_shape[0]
     fft = xp.fft.fftshift(xp.fft.fft2(hologram))
     dc_disk = make_disk(params.img_center, params.aperturesize // 2, params.img_shape)
-    ac_disk = make_disk(params.offaxis_center, params.aperturesize // 2, params.img_shape)
+    ac_disk = make_disk(
+        params.offaxis_center, params.aperturesize // 2, params.img_shape
+    )
 
     dc_fft = fft * dc_disk
     ac_fft = fft * ac_disk
@@ -375,7 +401,10 @@ def _get_phase_noise(
     aperture_area = xp.pi * (aperturesize / 2) ** 2
     sensor_area = sensorsize[0] * sensorsize[1]
     phase_noise = xp.sqrt(
-        2 * aperture_area * (dc_intensity + sensor_noise**2) / (visibility**2 * dc_intensity**2 * sensor_area)
+        2
+        * aperture_area
+        * (dc_intensity + sensor_noise**2)
+        / (visibility**2 * dc_intensity**2 * sensor_area)
     )
 
     return phase_noise

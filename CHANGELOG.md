@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- Supported backward scattering wave for ODT reconstruction [[#42](https://github.com/Ideguchi-Lab/muscopy/issues/42)]
+
 ---
 
 ## Version 0.2.1 [2025-03-20]

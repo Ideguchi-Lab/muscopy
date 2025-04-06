@@ -39,10 +39,20 @@ def wraptopi(x):
 def phase_unwrap(J):
     # get the wrapped differences of the wrapped values
     dx = xp.concatenate(
-        (xp.zeros((J.shape[0], 1)), wraptopi(xp.diff(J, axis=1, n=1)), xp.zeros((J.shape[0], 1))), axis=1
+        (
+            xp.zeros((J.shape[0], 1)),
+            wraptopi(xp.diff(J, axis=1, n=1)),
+            xp.zeros((J.shape[0], 1)),
+        ),
+        axis=1,
     )
     dy = xp.concatenate(
-        (xp.zeros((1, J.shape[1])), wraptopi(xp.diff(J, axis=0, n=1)), xp.zeros((1, J.shape[1]))), axis=0
+        (
+            xp.zeros((1, J.shape[1])),
+            wraptopi(xp.diff(J, axis=0, n=1)),
+            xp.zeros((1, J.shape[1])),
+        ),
+        axis=0,
     )
     rho = xp.diff(dx, axis=1, n=1) + xp.diff(dy, axis=0, n=1)
     # get the result by solving the poisson equation

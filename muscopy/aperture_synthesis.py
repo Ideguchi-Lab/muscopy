@@ -697,13 +697,14 @@ class Synthesizer:
         return synthesized_array, synthesized_fft
 
     def synthesize_on_3d(
-        self, hermite: bool = False, precision: ArrayPrecision | None = None
+        self, hermite: bool = False, precision: ArrayPrecision | None = None, *, mode: str = "Forward"
     ) -> tuple[NDArray, NDArray]:
         """synthesize the spectrums on 3D
 
         Args:
             hermite (bool, optional): whether to use Hermite symmetry. Defaults to False.
             precision (ArrayPrecision | None, optional): precision of the array. Defaults to None.
+            mode (str, optional): mode of the synthesis. Defaults to "Forward". ["Forward" or "Backward"]
 
         Returns:
             tuple[NDArray, NDArray]: synthesized array and its Fourier transform
@@ -735,6 +736,7 @@ class Synthesizer:
                 data.oblique_shift,
                 self.params,
                 precision,
+                mode=mode,
             )
 
             # TODO: make option to transfer to the host memory
@@ -891,8 +893,10 @@ class Synthesizer:
         pkl_format: bool = False,
         iterative: bool = False,
         precision: ArrayPrecision | None = None,
+        *,
         expand: bool = False,
-        **kwargs,
+        mode: str = "Forward",
+        **kwargs
     ) -> tuple[NDArray, NDArray]:
         """Optical Diffraction Tomography (ODT) calculation
 
@@ -903,6 +907,7 @@ class Synthesizer:
             iterative (bool, optional): whether to use iterative reconstruction. Defaults to False.
             precision (ArrayPrecision | None, optional): precision of the array. Defaults to None.
             expand (bool, optional): whether to use z-zeropadding. Defaults to False.
+            mode (str, optional): mode of the synthesis. Defaults to "Forward". ["Forward" or "Backward"]
 
         Returns:
             tuple[NDArray, NDArray]: synthesized complex refractive index and its Fourier transform
@@ -913,7 +918,7 @@ class Synthesizer:
         else:
             self.get_field()
         self.get_scattering_field(approx=approx)
-        synthesized_array, synthesized_fft = self.synthesize_on_3d(hermite=hermite, precision=precision)
+        synthesized_array, synthesized_fft = self.synthesize_on_3d(hermite=hermite, precision=precision, mode=mode)
 
         if iterative:
             synthesized_array, synthesized_fft = self.iterative_reconstruct(
@@ -947,7 +952,9 @@ class Synthesizer:
         pkl_format: bool = False,
         iterative: bool = False,
         precision: ArrayPrecision | None = None,
+        *,
         expand: bool = False,
+        mode: str = "Forward",
         **kwargs,
     ):
         assert isinstance(self.params, ODTParameters)
@@ -957,7 +964,7 @@ class Synthesizer:
             self.get_field()
         self.get_scattering_field(approx=approx, MIP=True, crop_center=crop_center, c_r=c_r)
 
-        synthesized_array, synthesized_fft = self.synthesize_on_3d(hermite=hermite, precision=precision)
+        synthesized_array, synthesized_fft = self.synthesize_on_3d(hermite=hermite, precision=precision, mode=mode)
 
         if iterative:
             synthesized_array, synthesized_fft = self.iterative_reconstruct(
@@ -1005,8 +1012,7 @@ def map_aperture_to_Ewald(
         oblique_shift (tuple): oblique shift in the Fourier space
         params (ODTParameters): parameters for the ODT system
         precision (ArrayPrecision, optional): precision of the array. Defaults to None.
-        mode (str, optional): mode of the projection. Defaults to "Forward".
-            "Forward" for forward scattering, "Backward" for backward scattering.
+        mode (str, optional): mode of the synthesis. Defaults to "Forward". ["Forward" or "Backward"]
 
     Returns:
         NDArray: 3D array projected to the Ewald sphere

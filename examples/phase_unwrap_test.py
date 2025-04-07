@@ -24,12 +24,8 @@ mus.cfg.set_offset_regs([((5, 15), (5, 15))])
 
 # %%
 # Load data
-pil_array = Image.open(
-    r"source\Basler_acA2440-75um__22770929__20230303_161937637_0099.tiff"
-)
-pil_ref = Image.open(
-    r"source\Basler_acA2440-75um__22770929__20230303_162019973_0000 (1).tiff"
-)
+pil_array = Image.open(r"source\Basler_acA2440-75um__22770929__20230303_161937637_0099.tiff")
+pil_ref = Image.open(r"source\Basler_acA2440-75um__22770929__20230303_162019973_0000 (1).tiff")
 
 array = xp.array(pil_array)
 ref = xp.array(pil_ref)

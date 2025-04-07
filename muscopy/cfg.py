@@ -9,10 +9,8 @@ if gpu_on:
 
         _cp = True
     except ImportError:
-
         _cp = False
 else:
-
     _cp = False
 
 

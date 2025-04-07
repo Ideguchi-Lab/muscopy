@@ -48,7 +48,8 @@ class QPIParameters:
     def fi_mag(self) -> float:
         """|f| of the light
 
-        Returns:
+        Returns
+        -------
             float: the magnitude of the light vector
         """
         return self.n_sol / self.wavelength / self.freq_per_pixel
@@ -57,20 +58,18 @@ class QPIParameters:
     def imgpx_unit(self) -> float:
         """The image pixel unit in the synthetic aperture plane
 
-        Returns:
+        Returns
+        -------
             float: the image pixel unit in the synthetic aperture plane
         """
-        return (
-            self.pixelsize
-            * self.img_shape[0]
-            / (2 * self.aperturesize + 1 - mcfg.EDGE_SIZE)
-        )
+        return self.pixelsize * self.img_shape[0] / (2 * self.aperturesize + 1 - mcfg.EDGE_SIZE)
 
     @cached_property
     def Hologram2F(self) -> float:
         """Fourier factor from hologram to spectrum
 
-        Returns:
+        Returns
+        -------
             float: factor from hologram to spectrum
         """
         return (self.pixelsize / self.k_per_pixel) ** 0.5
@@ -79,7 +78,8 @@ class QPIParameters:
     def S2F(self) -> float:
         """Fourier factor from spectrum to complex field
 
-        Returns:
+        Returns
+        -------
             float: factor from spectrum to complex field
         """
         return (self.imgpx_unit / self.k_per_pixel) ** 0.5
@@ -88,18 +88,19 @@ class QPIParameters:
     def F2S(self) -> float:
         """Fourier factor from complex field to spectrum
 
-        Returns:
+        Returns
+        -------
             float: factor from complex field to spectrum
         """
         return (self.k_per_pixel / self.imgpx_unit) ** 0.5
 
     def _print_all_parameters(self):
-        """print all parameters of the Parameters class"""
+        """Print all parameters of the Parameters class"""
         for key, value in vars(self).items():
             print(f"{key}={value}")
 
     def print_all_parameters(self):
-        """print all parameters of the Parameters class"""
+        """Print all parameters of the Parameters class"""
         self._print_all_parameters()
         # calculated parameters
         print(f"img_center={self.img_center}")
@@ -120,7 +121,7 @@ def make_disk(
     array_shape: tuple[int, int],
     highpass: bool = False,
 ) -> xp.array:
-    """make disk mask for filtering
+    """Make disk mask for filtering
 
     Args:
         center (tuple[int, int]): center position of the disk mask
@@ -128,14 +129,13 @@ def make_disk(
         array_shape (tuple[int, int]): shape of the array
         highpass (bool, optional): Filter low frequency or not. Defaults to False.
 
-    Returns:
+    Returns
+    -------
         xp.array: disk mask
     """
     if isinstance(array_shape, int):
         array_shape = (array_shape, array_shape)
-    xx, yy = xp.meshgrid(
-        xp.arange(array_shape[0]), xp.arange(array_shape[1]), indexing="ij"
-    )
+    xx, yy = xp.meshgrid(xp.arange(array_shape[0]), xp.arange(array_shape[1]), indexing="ij")
     circle = (xx - center[0]) ** 2 + (yy - center[1]) ** 2
     if highpass:
         disk = circle > radius**2
@@ -145,14 +145,15 @@ def make_disk(
 
 
 def crop_array(array: xp.array, center: tuple[int, int], width: int) -> xp.array:
-    """internal method. crop the array with specified center and width.
+    """Internal method. crop the array with specified center and width.
 
     Args:
         array (xp.array): array to be cropped
         center (tuple of int): center position of the cropped array
         width (int): width of the cropped array
 
-    Returns:
+    Returns
+    -------
         xp.array: cropped array
     """
     return array[
@@ -161,17 +162,16 @@ def crop_array(array: xp.array, center: tuple[int, int], width: int) -> xp.array
     ]
 
 
-def get_spectrum(
-    array: xp.array, params: QPIParameters, crop_center: bool = False, c_r: int = 5
-) -> xp.array:
-    """internal method. get the spectrum of the hologram array
+def get_spectrum(array: xp.array, params: QPIParameters, crop_center: bool = False, c_r: int = 5) -> xp.array:
+    """Internal method. get the spectrum of the hologram array
 
     Args:
         array (xp.array): input array
         params (QPIParameters): QPIParameters class
         crop_center (bool, optional): crop the center of the array or not. Defaults to False.
 
-    Returns:
+    Returns
+    -------
         xp.array: cropped spectrum of the hologram array
     """
     array_fft = xp.fft.fftshift(xp.fft.fft2(array))
@@ -179,9 +179,7 @@ def get_spectrum(
     array_fft = array_fft * mask
 
     if crop_center:
-        mask_highpass = make_disk(
-            params.offaxis_center, c_r, params.img_shape, highpass=True
-        )
+        mask_highpass = make_disk(params.offaxis_center, c_r, params.img_shape, highpass=True)
         array_fft = array_fft * mask_highpass
 
     array_fft = crop_array(array_fft, params.offaxis_center, params.aperturesize)
@@ -189,17 +187,16 @@ def get_spectrum(
     return array_fft
 
 
-def get_field(
-    array: xp.array, params: QPIParameters, crop_center: bool = False, c_r: int = 5
-) -> xp.array:
-    """internal method. get the electric field from the hologram array
+def get_field(array: xp.array, params: QPIParameters, crop_center: bool = False, c_r: int = 5) -> xp.array:
+    """Internal method. get the electric field from the hologram array
 
     Args:
         array (xp.array): input array
         params (QPIParameters): QPIParameters class
         crop_center (bool, optional): crop the center of the array or not. Defaults to False.
 
-    Returns:
+    Returns
+    -------
         xp.array: field from the hologram array
     """
     array_fft = get_spectrum(array, params, crop_center, c_r)
@@ -207,16 +204,15 @@ def get_field(
     return array
 
 
-def correct_offset(
-    array, offset_regs: OffsetRegions, phase: bool = True, amplitude: bool = True
-) -> xp.array:
-    """internal method. correct phase and amplitude offset
+def correct_offset(array, offset_regs: OffsetRegions, phase: bool = True, amplitude: bool = True) -> xp.array:
+    """Internal method. correct phase and amplitude offset
 
     Args:
         array (NDArray): input complex array
         offset_regs (OffsetRegions): regions for offset calculation
 
-    Returns:
+    Returns
+    -------
         xp.array: corrected array
     """
     if offset_regs is None:
@@ -224,20 +220,10 @@ def correct_offset(
     phase_offset_list = []
     amplitude_offset_list = []
     for region in offset_regs:
-        phase_offset_list.append(
-            xp.mean(
-                xp.angle(
-                    array[region[0][0] : region[0][1], region[1][0] : region[1][1]]
-                )
-            )
-        )
-        amplitude_offset_list.append(
-            xp.mean(
-                xp.abs(array[region[0][0] : region[0][1], region[1][0] : region[1][1]])
-            )
-        )
+        phase_offset_list.append(xp.mean(xp.angle(array[region[0][0] : region[0][1], region[1][0] : region[1][1]])))
+        amplitude_offset_list.append(xp.mean(xp.abs(array[region[0][0] : region[0][1], region[1][0] : region[1][1]])))
     if phase:
-        phase_offset = xp.mean(xp.array(phase_offset_list))  #  - xp.pi / 2
+        phase_offset = xp.mean(xp.array(phase_offset_list))  # - xp.pi / 2
     else:
         phase_offset = 0
     if amplitude:
@@ -262,7 +248,8 @@ def QPI(
         reference (xp.array): off-axis hologram
         params (QPIParameters): QPIParameters class
 
-    Returns:
+    Returns
+    -------
         xp.array: QPI phase image
     """
     assert array.shape == reference.shape
@@ -296,7 +283,8 @@ def MIPQPI(
         params (QPIParameters): QPIParameters class
         crop_center (bool, optional): crop the center of the array or not. Defaults to False.
 
-    Returns:
+    Returns
+    -------
         xp.array: MIP-QPI phase image
     """
     assert array_on.shape == array_off.shape
@@ -336,15 +324,14 @@ def _get_dc_ac(
         hologram (NDArray): The hologram of the object.
         params (mus.QPIParameters): The parameters of the QPI.
 
-    Returns:
+    Returns
+    -------
         NDArray: The DC and AC component of the object.
     """
     scale_factor = params.aperturesize / params.img_shape[0]
     fft = xp.fft.fftshift(xp.fft.fft2(hologram))
     dc_disk = make_disk(params.img_center, params.aperturesize // 2, params.img_shape)
-    ac_disk = make_disk(
-        params.offaxis_center, params.aperturesize // 2, params.img_shape
-    )
+    ac_disk = make_disk(params.offaxis_center, params.aperturesize // 2, params.img_shape)
 
     dc_fft = fft * dc_disk
     ac_fft = fft * ac_disk
@@ -368,7 +355,8 @@ def _get_visibility(
         dc (NDArray): dc component of the hologram
         ac (NDArray): ac component of the hologram
 
-    Returns:
+    Returns
+    -------
         NDArray: pixel-wise visibility of the hologram
     """
     visibility = xp.abs(ac) / xp.abs(dc) * 2
@@ -393,7 +381,8 @@ def _get_phase_noise(
         sensorsize (tuple[int, int]): The size of the sensor.
         sensor_noise (int, optional): The sensor noise (unit: e-). Defaults to 0.
 
-    Returns:
+    Returns
+    -------
         NDArray: The phase noise
     """
     if not visibility.shape == dc_intensity.shape:
@@ -401,10 +390,7 @@ def _get_phase_noise(
     aperture_area = xp.pi * (aperturesize / 2) ** 2
     sensor_area = sensorsize[0] * sensorsize[1]
     phase_noise = xp.sqrt(
-        2
-        * aperture_area
-        * (dc_intensity + sensor_noise**2)
-        / (visibility**2 * dc_intensity**2 * sensor_area)
+        2 * aperture_area * (dc_intensity + sensor_noise**2) / (visibility**2 * dc_intensity**2 * sensor_area)
     )
 
     return phase_noise
@@ -420,7 +406,8 @@ def calc_visibility(
         hologram (NDArray): The hologram of the object.
         params (mus.QPIParameters): The parameters of the QPI.
 
-    Returns:
+    Returns
+    -------
         NDArray: pixel-wise visibility of the hologram
     """
     dc, ac = _get_dc_ac(hologram, params)
@@ -445,7 +432,8 @@ def calc_phase_noise(
         bit_depth (int): The bit depth of the sensor.
         sensor_noise (int): The sensor noise (unit: e-). Defaults to 0.
 
-    Returns:
+    Returns
+    -------
         NDArray: The phase noise
     """
     dc, ac = _get_dc_ac(hologram, params)

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Added
+
+- Introduced Ruff as a project formatter and linter [[#38](https://github.com/Ideguchi-Lab/muscopy/issues/38)]
+- pre-commit config file
+
+### Removed
+
+- Removed black, isort, and flake8.
+
 ---
 
 ## Version 0.3.0 [2025-04-06]

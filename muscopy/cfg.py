@@ -1,17 +1,10 @@
 import os
+from importlib.util import find_spec
 from typing import NewType, Union
 
 gpu_on = os.environ.get("MUSCOPY_GPU", "False") == "True"
 
-if gpu_on:
-    try:
-        import cupy as xp
-
-        _cp = True
-    except ImportError:
-        _cp = False
-else:
-    _cp = False
+_cp = bool(gpu_on & find_spec("cupy"))
 
 
 Region = NewType("Region", tuple[tuple[int, int], tuple[int, int]])

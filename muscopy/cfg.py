@@ -9,11 +9,9 @@ if gpu_on:
 
         _cp = True
     except ImportError:
-        import numpy as xp
 
         _cp = False
 else:
-    import numpy as xp
 
     _cp = False
 

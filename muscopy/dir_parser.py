@@ -3,7 +3,7 @@ import pathlib
 
 
 def numpy_parser(dir_path):
-    """return path list of numpy arrays"""
+    """Return path list of numpy arrays"""
     files = []
     for file in os.listdir(dir_path):
         if file.endswith(".npy"):
@@ -20,7 +20,7 @@ def recurcive_numpy_parser(dir_path):
 
 
 def png_parser(dir_path):
-    """return list of png"""
+    """Return list of png"""
     files = []
     for file in os.listdir(dir_path):
         if file.endswith(".png"):
@@ -29,7 +29,7 @@ def png_parser(dir_path):
 
 
 def tiff_parser(dir_path):
-    """return list of tiff"""
+    """Return list of tiff"""
     files = []
     for file in os.listdir(dir_path):
         if file.endswith(".tiff"):
@@ -38,7 +38,7 @@ def tiff_parser(dir_path):
 
 
 def pkl_parser(dir_path):
-    """return list of pkl"""
+    """Return list of pkl"""
     files = []
     for file in os.listdir(dir_path):
         if file.endswith(".pkl"):

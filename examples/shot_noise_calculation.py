@@ -3,8 +3,7 @@ import os
 
 os.environ["MUSCOPY_GPU"] = "False"
 
-import numpy as np
-from ilabvis import ColorBar2d, CursorVisualizer
+from ilabvis import CursorVisualizer
 from PIL import Image
 
 import muscopy as mus

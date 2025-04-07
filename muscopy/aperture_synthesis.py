@@ -19,8 +19,8 @@ from muscopy.qpi import QPIParameters, correct_offset, make_disk
 from muscopy.unwrap_phase import phase_unwrap
 
 if mcfg._cp:
-    import cupy as xp
     import cupy as cp
+    import cupy as xp
 else:
     import numpy as xp
 
@@ -31,7 +31,7 @@ class ODTParameters(QPIParameters):
     zmargin: int = 3
 
     def check_parameters(self):
-        if self.NA > self.n_sol:
+        if self.n_sol < self.NA:
             raise ValueError("NA should be smaller than n_sol in ODT")
         if self.NA_illumi > self.NA:
             raise ValueError("NA_illumi should be smaller than NA")
@@ -119,7 +119,8 @@ def find_max_args(array: NDArray) -> tuple[int, int, float]:
     Args:
         array (NDArray): array to find maximum value
 
-    Returns:
+    Returns
+    -------
         tuple[int, int, float]: position of max value, and max value itself
     """
     max_value = xp.max(array)
@@ -140,7 +141,8 @@ def crop_oblique_array(
         oblique_center (tuple[int, int]): center of the oblique array
         aperturesize (int): size of the aperturesize
 
-    Returns:
+    Returns
+    -------
         NDArray: cropped array
         tuple[int, int]: oblique shift in the Fourier space
     """
@@ -173,13 +175,14 @@ def crop_oblique_array(
 def get_oblique_spectrum(
     array: NDArray, params: Params
 ) -> tuple[NDArray, tuple[int, int]]:
-    """internal method. get the spectrum from the hologram array
+    """Internal method. get the spectrum from the hologram array
 
     Args:
         array (NDArray): input array
         params (Params): Parameters class
 
-    Returns:
+    Returns
+    -------
         NDArray: spectrum from the hologram array
         tuple[int, int]: oblique shift in the Fourier space
     """
@@ -197,13 +200,14 @@ def get_oblique_spectrum(
 def get_oblique_field(
     array: NDArray, params: Params
 ) -> tuple[NDArray, tuple[int, int]]:
-    """internal method. get the electric field from the hologram array
+    """Internal method. get the electric field from the hologram array
 
     Args:
         array (NDArray): input array
         params (Params): Parameters class
 
-    Returns:
+    Returns
+    -------
         NDArray: field from the hologram array
         tuple[int, int]: oblique shift in the Fourier space
     """
@@ -229,7 +233,7 @@ def preprocess_for_synthesis(
     crop_center: bool = False,
     c_r: int = 5,
 ) -> tuple[NDArray, NDArray]:
-    """internal method. preprocess the array for synthesis
+    """Internal method. preprocess the array for synthesis
 
     Args:
         array_field (NDArray): sample complex field
@@ -240,7 +244,8 @@ def preprocess_for_synthesis(
         crop_center (bool, optional): whether to crop the center of the array for MIPQPI. Defaults to False.
         c_r (int, optional): radius of the center crop for MIPQPI. Defaults to 5.
 
-    Returns:
+    Returns
+    -------
         tuple[NDArray, NDArray]: preprocessed array and its Fourier transform
     """
     array_div = array_field / ref_array_field
@@ -297,7 +302,7 @@ def get_scattering_field(
     crop_center: bool = False,
     c_r: int = 5,
 ) -> tuple[NDArray, NDArray]:
-    """internal method. get the scattering field
+    """Internal method. get the scattering field
 
     Args:
         array_field (NDArray): sample complex field
@@ -309,7 +314,8 @@ def get_scattering_field(
         crop_center (bool, optional): whether to crop the center of the array for MIPQPI. Defaults to False.
         c_r (int, optional): radius of the center crop for MIPQPI. Defaults to 5.
 
-    Returns:
+    Returns
+    -------
         tuple[NDArray, NDArray]: scattering field and its Fourier transform
     """
     assert approx in ["Born", "Rytov"]
@@ -383,13 +389,14 @@ def get_scattering_field(
 
 
 def correct_phase_offset(phase: NDArray, offset_regs: OffsetRegions) -> NDArray:
-    """internal method. correct phase offset for the scattering field
+    """Internal method. correct phase offset for the scattering field
 
     Args:
         phase (NDArray): input phase array
         offset_regs (OffsetRegions): regions for offset calculation
 
-    Returns:
+    Returns
+    -------
         NDArray: corrected phase array
     """
     if offset_regs is None:
@@ -407,13 +414,14 @@ def correct_phase_offset(phase: NDArray, offset_regs: OffsetRegions) -> NDArray:
 
 
 def correct_amplitude_offset(amplitude: NDArray, offset_regs: OffsetRegions) -> NDArray:
-    """internal method. correct amplitude offset for the scattering field
+    """Internal method. correct amplitude offset for the scattering field
 
     Args:
         amplitude (NDArray): input complex array
         offset_regs (OffsetRegions): regions for offset calculation
 
-    Returns:
+    Returns
+    -------
         NDArray: corrected array
     """
     if offset_regs is None:
@@ -473,12 +481,12 @@ class Synthesizer:
         self.data: dict[str, DataHolder] = dict()
 
     def initialize_data(self):
-        """initialize the data"""
+        """Initialize the data"""
         self.data = dict()
         self.identifiers = list()
 
     def set_sample_data(self, sample_data: list[NDArray]):
-        """set sample data
+        """Set sample data
 
         Args:
             sample_data (list[NDArray]): sample holograms
@@ -486,7 +494,7 @@ class Synthesizer:
         self.sample = sample_data
 
     def set_reference_data(self, reference_data: list[NDArray]):
-        """set reference data
+        """Set reference data
 
         Args:
             reference_data (list[NDArray]): reference holograms
@@ -494,7 +502,7 @@ class Synthesizer:
         self.reference = reference_data
 
     def set_sample_data_from_path(self, path: list[str]):
-        """set sample data from the path
+        """Set sample data from the path
 
         Args:
             path (str): path to the sample holograms
@@ -503,7 +511,7 @@ class Synthesizer:
         self.sample = [xp.load(path) for path in path]
 
     def set_reference_data_from_path(self, path: list[str]):
-        """set reference data from the path
+        """Set reference data from the path
 
         Args:
             path (str): path to the reference holograms
@@ -512,7 +520,7 @@ class Synthesizer:
         self.reference = [xp.load(path) for path in path]
 
     def set_sample_compressed_from_path(self, path: list[str]):
-        """set sample data from the path
+        """Set sample data from the path
 
         Args:
             path (str): path to the pickle file of the compressed sample holograms
@@ -521,7 +529,7 @@ class Synthesizer:
         self.sample_dh = [pickle.load(open(pkl_path, "rb")) for pkl_path in path]
 
     def set_reference_compressed_from_path(self, path: list[str]):
-        """set reference data from the path
+        """Set reference data from the path
 
         Args:
             path (str): path to the pickle file of the compressed reference holograms
@@ -530,7 +538,7 @@ class Synthesizer:
         self.reference_dh = [pickle.load(open(pkl_path, "rb")) for pkl_path in path]
 
     def get_field(self):
-        """get the field from the hologram arrays"""
+        """Get the field from the hologram arrays"""
         print("get field...")
         for i in tqdm(range(len(self.sample))):
             data = DataHolder()
@@ -549,7 +557,7 @@ class Synthesizer:
             data.oblique_shift = oblique_shift
 
     def get_field_from_compressed(self):
-        """get the field from the compressed hologram arrays"""
+        """Get the field from the compressed hologram arrays"""
         print("get field...")
         for i in tqdm(range(len(self.sample_dh))):
             data = self.sample_dh[i]
@@ -567,7 +575,7 @@ class Synthesizer:
         crop_center: bool = False,
         c_r: int = 5,
     ):
-        """get the divided field and its Fourier transform
+        """Get the divided field and its Fourier transform
 
         Args:
             MIP (bool, optional): whether to correct on/off of MIR pump. Defaults to False.
@@ -597,7 +605,7 @@ class Synthesizer:
         crop_center: bool = False,
         c_r: int = 5,
     ):
-        """get the scattering field
+        """Get the scattering field
 
         Args:
             approx (str): approximation for the ODT calculation
@@ -623,7 +631,7 @@ class Synthesizer:
             data.scattering_spectrum = scattering_fft
 
     def save_multiangle_qpi(self, path: str = "multiangle_qpi"):
-        """save multiangle QPI images
+        """Save multiangle QPI images
 
         Args:
             path (str, optional): Path to save QPIs. Defaults to "multiangle_qpi".
@@ -648,7 +656,7 @@ class Synthesizer:
             plt.close(fig)
 
     def save_scattering_field(self, path: str = "multiangle_scattering"):
-        """save scattering field images
+        """Save scattering field images
 
         Args:
             path (str, optional): Path to save scattering field images. Defaults to "scattering_field".
@@ -671,7 +679,7 @@ class Synthesizer:
             plt.close(fig)
 
     def save_multiangle_spectrum(self, path: str = "multiangle_spectrum"):
-        """save multiangle spectrum images
+        """Save multiangle spectrum images
 
         Args:
             path (str, optional): Path to save spectrum images. Defaults to "multiangle_spectrum".
@@ -691,9 +699,10 @@ class Synthesizer:
     def synthesize_spectrums(
         self, precision: ArrayPrecision = None
     ) -> tuple[NDArray, NDArray]:
-        """synthesize the spectrums
+        """Synthesize the spectrums
 
-        Returns:
+        Returns
+        -------
             tuple[NDArray, NDArray]: synthesized array and its Fourier transform
         """
         if precision is None:
@@ -730,14 +739,15 @@ class Synthesizer:
         *,
         mode: str = "Forward",
     ) -> tuple[NDArray, NDArray]:
-        """synthesize the spectrums on 3D
+        """Synthesize the spectrums on 3D
 
         Args:
             hermite (bool, optional): whether to use Hermite symmetry. Defaults to False.
             precision (ArrayPrecision | None, optional): precision of the array. Defaults to None.
             mode (str, optional): mode of the synthesis. Defaults to "Forward". ["Forward" or "Backward"]
 
-        Returns:
+        Returns
+        -------
             tuple[NDArray, NDArray]: synthesized array and its Fourier transform
         """
         assert isinstance(self.params, ODTParameters)
@@ -833,7 +843,8 @@ class Synthesizer:
             positive (bool, optional): whether to use positive constraint. Defaults to True.
             precision (ArrayPrecision | None, optional): precision of the array. Defaults to None.
 
-        Returns:
+        Returns
+        -------
             NDArray: reconstructed 3D array
         """
         assert isinstance(self.params, ODTParameters)
@@ -889,7 +900,8 @@ class Synthesizer:
         Args:
             pkl_format (bool, optional): whether to use the data in pickle format(compressed). Defaults to False.
 
-        Returns:
+        Returns
+        -------
             tuple[NDArray, NDArray]: synthesized QPI and its Fourier transform
         """
         if pkl_format:
@@ -916,7 +928,8 @@ class Synthesizer:
             c_r (int, optional): radius of the center crop for MIPQPI. Defaults to 5.
             pkl_format (bool, optional): whether to use the data in pickle format(compressed). Defaults to False.
 
-        Returns:
+        Returns
+        -------
             tuple[NDArray, NDArray]: synthesized MIPQPI and its Fourier transform
         """
         if pkl_format:
@@ -952,7 +965,8 @@ class Synthesizer:
             expand (bool, optional): whether to use z-zeropadding. Defaults to False.
             mode (str, optional): mode of the synthesis. Defaults to "Forward". ["Forward" or "Backward"]
 
-        Returns:
+        Returns
+        -------
             tuple[NDArray, NDArray]: synthesized complex refractive index and its Fourier transform
         """
         assert isinstance(self.params, ODTParameters)
@@ -1061,7 +1075,7 @@ def map_aperture_to_Ewald(
     *,
     mode: str = "Forward",
 ) -> NDArray:
-    """map 2d array to 3d array(ODT)
+    """Map 2d array to 3d array(ODT)
 
     Args:
         array (NDArray): 2D array to be projected. array size should be 2*aperturesize+1 square.
@@ -1071,7 +1085,8 @@ def map_aperture_to_Ewald(
         precision (ArrayPrecision, optional): precision of the array. Defaults to None.
         mode (str, optional): mode of the synthesis. Defaults to "Forward". ["Forward" or "Backward"]
 
-    Returns:
+    Returns
+    -------
         NDArray: 3D array projected to the Ewald sphere
     """
     xx, yy = xp.meshgrid(
@@ -1151,13 +1166,14 @@ def calc_kz_value(
 def calc_refractive_index_square(
     array3d: NDArray, params: ODTParameters, precision: ArrayPrecision | None = None
 ) -> NDArray:
-    """calculate :math:`n^2` for the ODT calculation
+    """Calculate :math:`n^2` for the ODT calculation
 
     Args:
         array3d (NDArray): Array to calculate refractive index square
         params (ODTParameters): parameters for the ODT system
 
-    Returns:
+    Returns
+    -------
         NDArray: complex refractive index
     """
     r_3d_square = params.n_sol**2 * (
@@ -1168,13 +1184,14 @@ def calc_refractive_index_square(
 
 
 def discard_z(array: NDArray, threshold: int) -> NDArray:
-    """internal method for `discard_higher_kz`. discard the higher z values
+    """Internal method for `discard_higher_kz`. discard the higher z values
 
     Args:
         array (NDArray): original array(usually Fourier transformed array)
         threshold (int): cut off threshold
 
-    Returns:
+    Returns
+    -------
         NDArray: lowpassed array
     """
     array = array[:, :, threshold : array.shape[2] - threshold]
@@ -1182,13 +1199,14 @@ def discard_z(array: NDArray, threshold: int) -> NDArray:
 
 
 def discard_higher_kz(array: NDArray, threshold: int) -> NDArray:
-    """discard the higher z values
+    """Discard the higher z values
 
     Args:
         array (NDArray): original array
         threshold (int): cut off threshold
 
-    Returns:
+    Returns
+    -------
         NDArray: lowpassed array
     """
     norm_factor = xp.sqrt((array.shape[2] - 2 * threshold) / array.shape[2])
@@ -1201,7 +1219,7 @@ def discard_higher_kz(array: NDArray, threshold: int) -> NDArray:
 def zeropad_higher_kz(
     array: NDArray, extend: int, precision: ArrayPrecision, gpu_on: bool = True
 ) -> NDArray:
-    """zero pad the higher z values
+    """Zero pad the higher z values
 
     Args:
         array (NDArray): original array
@@ -1209,7 +1227,8 @@ def zeropad_higher_kz(
         precision (ArrayPrecision): precision of the array
         gpu_on (bool, optional): whether to use GPU if available. Defaults to True.
 
-    Returns:
+    Returns
+    -------
         NDArray: zero padded array
     """
     if gpu_on & mcfg._cp:
@@ -1243,13 +1262,14 @@ def zeropad_higher_kz(
     return array
 
 
-def calc_full_volume(params: ODTParameters) -> xp.float:
+def calc_full_volume(params: ODTParameters) -> float:
     """Calculate the volume which can be filled with FW light under the given parameters
 
     Args:
         params (ODTParameters): parameters for the ODT system
 
-    Returns:
+    Returns
+    -------
         xp.float : Volume
     """
     theta = xp.arcsin(params.aperturesize / (2 * params.fi_mag))
@@ -1267,7 +1287,8 @@ def calc_normalized_L2error(array: NDArray, ref_array: NDArray) -> float:
         array (NDArray): array to be compared
         ref_array (NDArray): reference array
 
-    Returns:
+    Returns
+    -------
         float: normalized L2 error
     """
     error = xp.sum(xp.abs(array - ref_array)) / xp.sum(xp.abs(ref_array))

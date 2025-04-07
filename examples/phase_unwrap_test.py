@@ -28,7 +28,7 @@ pil_array = Image.open(
     r"source\Basler_acA2440-75um__22770929__20230303_161937637_0099.tiff"
 )
 pil_ref = Image.open(
-    "source\Basler_acA2440-75um__22770929__20230303_162019973_0000 (1).tiff"
+    r"source\Basler_acA2440-75um__22770929__20230303_162019973_0000 (1).tiff"
 )
 
 array = xp.array(pil_array)

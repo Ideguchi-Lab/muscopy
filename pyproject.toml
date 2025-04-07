@@ -9,7 +9,7 @@ description = "A library for microscopy analyze functions"
 readme = "README.md"
 authors = [{name="Masato Fukushima", email="masato63fuk@g.ecc.u-tokyo.ac.jp"}]
 license = {file = "LICENSE"}
-requires-python = ">=3.8.0"
+requires-python = ">=3.9.0"
 dynamic = ["dependencies"]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -20,20 +20,73 @@ classifiers = [
 [tool.setuptools.dynamic]
 dependencies = {file = "requirements.txt"}
 
-[tool.black]
+[tool.ruff]
+target-version = "py39"
 line-length = 120
 
-[tool.isort]
-profile = "black"
-line_length = 120
-multi_line_output = 3
-include_trailing_comma = true
+[tool.ruff.lint]
+preview = true
+select = ["ALL"]
+ignore = [
+  # Conflicts with ruff format
+  "COM812",
+  "COM819",
+  "D206",
+  "D300",
+  "E111",
+  "E114",
+  "E117",
+  "ISC001",
+  "ISC002",
+  "Q000",
+  "Q001",
+  "Q002",
+  "Q003",
+  "W191",
 
-[tool.flake8]
-max-line-length = 120
-max-complexity = 18
-ignore = "E203,E266,W503,"
+  # Not necessary for this project
+  "AIR",
+  "ASYNC",
+  "DJ",
+  "PD",
+
+  # Manually disabled
+  "CPY",     # copyright missing
+  "D105",    # undocumented magic method
+  "ERA",     # commented-out code
+  "FBT",     # boolean-trap
+  "FIX",     # fixme
+  "PLR0904", # too-many-public-methods
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*.py" = [
+  "S101",    # `assert` detected
+  "D100",
+  "D103",
+  "D104",
+  "D400",
+]
+"examples/*.py" = [
+  "T201", # print
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["muscopy"]
+testpaths = ["tests"]
+filterwarnings = "ignore::DeprecationWarning"
+markers = "slow: mark test as slow"
 
 [tool.mypy]
+strict = true
 ignore_missing_imports = true
-check_untyped_defs = true
+files = ["muscopy", "tests", "examples"]
+
+[tool.pyright]
+include = ["muscopy", "tests", "examples"]

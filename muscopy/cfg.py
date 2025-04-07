@@ -4,7 +4,7 @@ from typing import NewType, Union
 
 gpu_on = os.environ.get("MUSCOPY_GPU", "False") == "True"
 
-_cp = bool(gpu_on & find_spec("cupy"))
+_cp = gpu_on and bool(find_spec("cupy"))
 
 
 Region = NewType("Region", tuple[tuple[int, int], tuple[int, int]])

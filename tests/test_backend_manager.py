@@ -58,6 +58,7 @@ def test_get_backend_cupy(monkeypatch) -> None:  # noqa: ANN001
     bm.use_cupy()
     module = bm.get_backend()
 
+    assert bm.backend == "cupy"
     assert module.__name__ == cupy_module.__name__
 
 

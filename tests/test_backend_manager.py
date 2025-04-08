@@ -1,10 +1,10 @@
 import importlib.util
-import sys
 import types
 
 import numpy as np
 import pytest
 
+import muscopy as mus
 from muscopy.backend_manager import BackendManager
 
 
@@ -54,8 +54,9 @@ def test_use_cupy_not_available(monkeypatch) -> None:  # noqa: ANN001
     bm = BackendManager()
 
     # Override find_spec to simulate cupy is not available
+    original_find_spec = importlib.util.find_spec
     monkeypatch.setattr(
-        importlib.util, "find_spec", lambda name: None if name == "cupy" else importlib.util.find_spec(name)
+        mus.backend_manager, "find_spec", lambda name: False if name == "cupy" else original_find_spec(name)
     )
     with pytest.raises(ImportError) as excinfo:
         bm.use_cupy()

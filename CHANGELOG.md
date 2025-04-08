@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+---
+
+## Version 0.3.1 [2025-04-08]
+
 ### Added
 
 - Introduced Ruff as a project formatter and linter [[#38](https://github.com/Ideguchi-Lab/muscopy/issues/38)]

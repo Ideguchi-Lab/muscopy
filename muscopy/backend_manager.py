@@ -32,7 +32,7 @@ class BackendManager:
         if not bool(find_spec("cupy")):
             msg = "Cupy is not available. Please install cupy to use the GPU backend."
             raise ImportError(msg)
-        self._backend = "cupy"
+        self.__backend = "cupy"
 
     def get_backend(self) -> types.ModuleType:
         """Get the current backend module.
@@ -42,12 +42,12 @@ class BackendManager:
         types.ModuleType
             The current backend module (numpy or cupy).
         """
-        if self._backend == "numpy":
+        if self.__backend == "numpy":
             import numpy as np  # noqa: PLC0415
 
             return np
-        if self._backend == "cupy":
+        if self.__backend == "cupy":
             import cupy as cp  # noqa: PLC0415
 
             return cp
-        typing_extensions.assert_never(self._backend)
+        typing_extensions.assert_never(self.__backend)

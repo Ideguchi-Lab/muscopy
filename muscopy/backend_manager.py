@@ -1,22 +1,25 @@
 """Backend manager for Muscopy."""
 
+import types
 from importlib.util import find_spec
+
+import typing_extensions
 
 
 class BackendManager:
     """Backend manager for Muscopy."""
 
     def __init__(self) -> None:
-        self._backend = "numpy"
+        self.__backend = "numpy"
 
     @property
     def backend(self) -> str:
         """Get the current backend."""
-        return self._backend
+        return self.__backend
 
     def use_numpy(self) -> None:
         """Set the backend to numpy."""
-        self._backend = "numpy"
+        self.__backend = "numpy"
 
     def use_cupy(self) -> None:
         """Set the backend to cupy.
@@ -30,3 +33,21 @@ class BackendManager:
             msg = "Cupy is not available. Please install cupy to use the GPU backend."
             raise ImportError(msg)
         self._backend = "cupy"
+
+    def get_backend(self) -> types.ModuleType:
+        """Get the current backend module.
+
+        Returns
+        -------
+        types.ModuleType
+            The current backend module (numpy or cupy).
+        """
+        if self._backend == "numpy":
+            import numpy as np  # noqa: PLC0415
+
+            return np
+        if self._backend == "cupy":
+            import cupy as cp  # noqa: PLC0415
+
+            return cp
+        typing_extensions.assert_never(self._backend)

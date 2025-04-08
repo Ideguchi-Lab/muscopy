@@ -10,7 +10,7 @@ readme = "README.md"
 authors = [{name="Masato Fukushima", email="masato63fuk@g.ecc.u-tokyo.ac.jp"}]
 license = {file = "LICENSE"}
 requires-python = ">=3.9.0"
-dynamic = ["dependencies"]
+dynamic = ["dependencies", "optional-dependencies"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: Apache Software License",
@@ -19,6 +19,9 @@ classifiers = [
 
 [tool.setuptools.dynamic]
 dependencies = {file = "requirements.txt"}
+
+[tool.setuptools.dynamic.optional-dependencies]
+dev = { file = ["requirements-dev.txt"] }
 
 [tool.ruff]
 target-version = "py39"

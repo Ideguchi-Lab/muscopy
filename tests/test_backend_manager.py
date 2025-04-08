@@ -1,4 +1,5 @@
 import importlib.util
+import sys
 import types
 
 import numpy as np
@@ -42,6 +43,22 @@ def test_get_backend_numpy() -> None:
     module = bm.get_backend()
 
     assert module.__name__ == np.__name__
+
+
+def test_get_backend_cupy(monkeypatch) -> None:  # noqa: ANN001
+    """Test that get_backend() returns the cupy module when __backend is 'cupy'."""
+    bm = BackendManager()
+    # Simulate cupy being available
+    monkeypatch.setattr("muscopy.backend_manager.find_spec", lambda name: name == "cupy")
+
+    # Create a dummy cupy module for testing purposes
+    cupy_module = dummy_cupy_module()
+    monkeypatch.setitem(sys.modules, "cupy", cupy_module)
+
+    bm.use_cupy()
+    module = bm.get_backend()
+
+    assert module.__name__ == cupy_module.__name__
 
 
 def test_use_cupy_not_available(monkeypatch) -> None:  # noqa: ANN001

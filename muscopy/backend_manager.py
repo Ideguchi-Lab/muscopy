@@ -5,6 +5,7 @@ This module provides:
 - `BackendManager`: A class to manage the backend for Muscopy.
 - `ArrayProtocol`: A protocol for array-like objects.
 """
+
 from __future__ import annotations
 
 from importlib.util import find_spec
@@ -70,11 +71,11 @@ class BackendManager:
 
 
 # Generic type variable for array elements (covariant)
-T_co = TypeVar("T_co", covariant=True)
+_T = TypeVar("_T")
 
 
 @runtime_checkable
-class ArrayProtocol(Protocol[T_co]):
+class ArrayProtocol(Protocol[_T]):
     """
     A protocol for array-like objects that supports both NumPy and CuPy arrays.
 
@@ -104,59 +105,95 @@ class ArrayProtocol(Protocol[T_co]):
     size: int
 
     @property
-    def T(self) -> ArrayProtocol[T_co]:  # noqa: N802
+    def T(self) -> ArrayProtocol[_T]:  # noqa: N802
         """Read-only property returning the transposed array."""
         ...
 
     # __getitem__ overloads based on the type of index (int, slice, or tuple of ints)
     @overload
-    def __getitem__(self, index: int) -> T_co:
-        ...
+    def __getitem__(self, index: int) -> _T: ...
 
     @overload
-    def __getitem__(self, index: slice) -> ArrayProtocol[T_co]:
-        ...
+    def __getitem__(self, index: slice) -> ArrayProtocol[_T]: ...
 
     @overload
-    def __getitem__(self, index: tuple[int, ...]) -> ArrayProtocol[T_co]:
-        ...
+    def __getitem__(self, index: tuple[int, ...]) -> ArrayProtocol[_T]: ...
 
-    def __getitem__(self, index: int | slice | tuple[int, ...]) -> T_co | ArrayProtocol[T_co]:
-        ...
+    @overload
+    def __getitem__(self, index: tuple[slice, ...]) -> ArrayProtocol[_T]: ...
 
-    def __array__(self) -> ArrayProtocol[T_co]:  # noqa: PLW3201
+    def __getitem__(self, index: int | slice | tuple[int, ...] | tuple[slice, ...]) -> _T | ArrayProtocol[_T]: ...
+
+    def __array__(self) -> ArrayProtocol[_T]:  # noqa: PLW3201
         """Convert the object to a NumPy ndarray."""
         ...
 
-    def astype(self, dtype: DTypeLike) -> ArrayProtocol[T_co]:
+    @overload
+    def __add__(self, other: ArrayProtocol[_T]) -> ArrayProtocol[_T]: ...
+
+    @overload
+    def __add__(self, other: _T) -> ArrayProtocol[_T]: ...
+
+    def __add__(self, other: _T | ArrayProtocol[_T]) -> ArrayProtocol[_T]:
+        """Return the element-wise addition of self and other."""
+        ...
+
+    @overload
+    def __sub__(self, other: ArrayProtocol[_T]) -> ArrayProtocol[_T]: ...
+
+    @overload
+    def __sub__(self, other: _T) -> ArrayProtocol[_T]: ...
+
+    def __sub__(self, other: _T | ArrayProtocol[_T]) -> ArrayProtocol[_T]:
+        """Return the element-wise subtraction of other from self."""
+        ...
+
+    @overload
+    def __mul__(self, other: ArrayProtocol[_T]) -> ArrayProtocol[_T]: ...
+
+    @overload
+    def __mul__(self, other: _T) -> ArrayProtocol[_T]: ...
+
+    def __mul__(self, other: _T | ArrayProtocol[_T]) -> ArrayProtocol[_T]:
+        """Return the element-wise multiplication of self and other."""
+        ...
+
+    @overload
+    def __truediv__(self, other: ArrayProtocol[_T]) -> ArrayProtocol[_T]: ...
+
+    @overload
+    def __truediv__(self, other: _T) -> ArrayProtocol[_T]: ...
+
+    def __truediv__(self, other: _T | ArrayProtocol[_T]) -> ArrayProtocol[_T]:
+        """Return the element-wise division of self by other."""
+        ...
+
+    def astype(self, dtype: DTypeLike) -> ArrayProtocol[DTypeLike]:
         """Return a copy of the array cast to the specified dtype."""
         ...
 
-    def reshape(self, shape: tuple[int, ...]) -> ArrayProtocol[T_co]:
+    def reshape(self, shape: tuple[int, ...]) -> ArrayProtocol[_T]:
         """Return a reshaped view of the array."""
         ...
 
-    def copy(self) -> ArrayProtocol[T_co]:
+    def copy(self) -> ArrayProtocol[_T]:
         """Return a copy of the array."""
         ...
 
     @overload
-    def sum(self, axis: None = None) -> T_co:
-        ...
+    def sum(self, axis: None = None) -> _T: ...
 
     @overload
-    def sum(self, axis: int) -> ArrayProtocol[T_co]:
-        ...
+    def sum(self, axis: int) -> ArrayProtocol[_T]: ...
 
     @overload
-    def sum(self, axis: tuple[int, ...]) -> ArrayProtocol[T_co]:
-        ...
+    def sum(self, axis: tuple[int, ...]) -> ArrayProtocol[_T]: ...
 
-    def sum(self, axis: int | tuple[int, ...] | None = None) -> T_co | ArrayProtocol[T_co]:
+    def sum(self, axis: int | tuple[int, ...] | None = None) -> _T | ArrayProtocol[T]:
         """
         Return the sum of the array elements over a given axis.
 
-        If `axis` is None, returns a scalar of type T_co.
+        If `axis` is None, returns a scalar of type T.
         Otherwise, returns an array-like object with the summed values.
         """
         ...

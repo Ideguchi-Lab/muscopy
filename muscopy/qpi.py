@@ -1,6 +1,9 @@
+"""Quantitative Phase Imaging (QPI) and MIP-QPI."""
+
 from __future__ import annotations
 
-from dataclasses import dataclass
+import inspect
+from dataclasses import dataclass, fields
 from functools import cached_property
 
 import numpy as np
@@ -9,110 +12,158 @@ from numpy.typing import NDArray
 import muscopy.cfg as mcfg
 from muscopy.cfg import OffsetRegions
 
-if mcfg._cp:
-    import cupy as xp
-else:
-    import numpy as xp
-
 
 @dataclass
 class QPIParameters:
-    wavelength: float
-    NA: float
-    img_shape: tuple[int, int]
-    pixelsize: float
-    offaxis_center: tuple[int, int]
-    n_sol: float = 1.33
+    r"""QPI parameters.
+
+    Parameters
+    ----------
+    na : `float`
+        Numerical aperture of the objective lens
+    wavelength_m : `float`
+        Wavelength of the light in meters
+    img_size_px : `int`
+        Size of the image in pixels. We assume square image.
+    px_size_m : `float`
+        Pixel size in meters
+    n_sol : `float`
+        Refractive index of the solution
+    """
+
+    na: float
+    wavelength_m: float
+    img_size_px: int
+    px_size_m: float
+    n_sol: float
 
     @cached_property
     def img_center(self) -> tuple[int, int]:
-        return (self.img_shape[0] // 2, self.img_shape[1] // 2)
-
-    @cached_property
-    def dim(self) -> int:
-        return self.img_shape[0]
-
-    @cached_property
-    def freq_per_pixel(self) -> float:
-        return 1 / (self.pixelsize * self.dim)
-
-    @cached_property
-    def k_per_pixel(self) -> float:
-        return 2 * np.pi * self.freq_per_pixel
-
-    @cached_property
-    def aperturesize(self) -> int:
-        return 2 * round(self.NA / self.wavelength / self.freq_per_pixel) + 1
-
-    @cached_property
-    def fi_mag(self) -> float:
-        """|f| of the light
+        r"""Get the center position of the image.
 
         Returns
         -------
-            float: the magnitude of the light vector
+        `tuple`\[`int`, `int`\]
+            The center position of the image
         """
-        return self.n_sol / self.wavelength / self.freq_per_pixel
+        return (self.img_size_px // 2, self.img_size_px // 2)
 
     @cached_property
-    def imgpx_unit(self) -> float:
-        """The image pixel unit in the synthetic aperture plane
+    def freq_per_px(self) -> float:
+        """Frequency(1/meter) per pixel in the Fourier space.
 
         Returns
         -------
-            float: the image pixel unit in the synthetic aperture plane
+        `float`
+            Frequency(1/meter) per pixel in the Fourier space
         """
-        return self.pixelsize * self.img_shape[0] / (2 * self.aperturesize + 1 - mcfg.EDGE_SIZE)
+        return 1 / (self.px_size_m * self.img_size_px)
 
     @cached_property
-    def Hologram2F(self) -> float:
-        """Fourier factor from hologram to spectrum
+    def k_per_px(self) -> float:
+        r"""Get the wave vector per pixel in the Fourier space.
 
         Returns
         -------
-            float: factor from hologram to spectrum
+        `float`
+            the wave vector per pixel in the Fourier space
         """
-        return (self.pixelsize / self.k_per_pixel) ** 0.5
+        return 2 * np.pi * self.freq_per_px
 
     @cached_property
-    def S2F(self) -> float:
-        """Fourier factor from spectrum to complex field
+    def aperturesize_px(self) -> int:
+        """Get the size of the aperture in pixel unit.
 
         Returns
         -------
-            float: factor from spectrum to complex field
+        `int`
+            The size of the aperture in pixel unit
         """
-        return (self.imgpx_unit / self.k_per_pixel) ** 0.5
+        return 2 * round(self.na / self.wavelength_m / self.freq_per_px) + 1
 
     @cached_property
-    def F2S(self) -> float:
-        """Fourier factor from complex field to spectrum
+    def light_freq_px(self) -> float:
+        r"""Get the light frequency in pixel unit.
 
         Returns
         -------
-            float: factor from complex field to spectrum
+        `float`
+            the magnitude of the light frequency in the pixel unit
         """
-        return (self.k_per_pixel / self.imgpx_unit) ** 0.5
+        return self.n_sol / self.wavelength_m / self.freq_per_px
 
-    def _print_all_parameters(self):
-        """Print all parameters of the Parameters class"""
-        for key, value in vars(self).items():
-            print(f"{key}={value}")
+    @cached_property
+    def imgpx_m_per_px(self) -> float:
+        """Get the size of the imaging pixel(QPI pixel) in meter unit.
 
-    def print_all_parameters(self):
-        """Print all parameters of the Parameters class"""
-        self._print_all_parameters()
-        # calculated parameters
-        print(f"img_center={self.img_center}")
-        print(f"dim={self.dim}")
-        print(f"freq_per_pixel={self.freq_per_pixel}")
-        print(f"k_per_pixel={self.k_per_pixel}")
-        print(f"aperturesize={self.aperturesize}")
-        print(f"fi_mag={self.fi_mag}")
-        print(f"imgpx_unit={self.imgpx_unit}")
-        print(f"Hologram2F={self.Hologram2F}")
-        print(f"S2F={self.S2F}")
-        print(f"F2S={self.F2S}")
+        Returns
+        -------
+        `float`
+            The size of the imaging pixel(QPI pixel) in meter unit
+        """
+        return self.px_size_m * self.img_size_px / self.aperturesize_px
+
+    @cached_property
+    def hologram2fourier(self) -> float:
+        """Fourier factor from hologram to spectrum.
+
+        Returns
+        -------
+        `float`
+            factor from hologram to spectrum
+        """
+        return (self.px_size_m / self.freq_per_px) ** 0.5
+
+    @cached_property
+    def fourier2cpfield(self) -> float:
+        """Fourier factor from spectrum to complex field.
+
+        Returns
+        -------
+        `float`
+            factor from spectrum to complex field
+        """
+        return (self.freq_per_px / self.imgpx_m_per_px) ** 0.5
+
+    @cached_property
+    def cpfield2spectrum(self) -> float:
+        """Fourier factor from complex field to spectrum.
+
+        Returns
+        -------
+        `float`
+            factor from complex field to spectrum
+        """
+        return (self.imgpx_m_per_px / self.freq_per_px) ** 0.5
+
+
+def print_qpi_all_parameters(param: QPIParameters, *, show_properties: bool = False) -> None:
+    """Print all parameters of QPIParameters dataclass.
+
+    Parameters
+    ----------
+    param : `QPIParameters`
+        QPIParameters dataclass instance
+    show_properties : `bool`, optional
+        Show properties or not, by default `False`
+    """
+    print("=== Dataclass Parameters ===")  # noqa: T201
+    for field_obj in fields(param):
+        name = field_obj.name
+        value = getattr(param, name)
+        print(f"{name}: {value}")  # noqa: T201
+
+    if show_properties:
+        # print property and cached_property
+        print("\n=== Properties ===")  # noqa: T201
+        # detect properties and cached_properties
+        prop_members = dict(inspect.getmembers(type(param), lambda m: isinstance(m, (property, cached_property))))
+
+        dataclass_field_names = {field_obj.name for field_obj in fields(param)}
+        for name in prop_members:
+            # check if the name is not in dataclass fields
+            if name not in dataclass_field_names:
+                print(f"{name}: {getattr(param, name)}")  # noqa: T201
 
 
 def make_disk(

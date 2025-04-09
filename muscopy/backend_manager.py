@@ -3,8 +3,6 @@
 import types
 from importlib.util import find_spec
 
-import typing_extensions
-
 
 class BackendManager:
     """Backend manager for Muscopy."""
@@ -41,6 +39,11 @@ class BackendManager:
         -------
         types.ModuleType
             The current backend module (numpy or cupy).
+
+        Raises
+        ------
+        ValueError
+            If the backend is not numpy or cupy.
         """
         if self.__backend == "numpy":
             import numpy as np  # noqa: PLC0415
@@ -50,4 +53,5 @@ class BackendManager:
             import cupy as cp  # noqa: PLC0415
 
             return cp
-        typing_extensions.assert_never(self.__backend)
+        msg = f"Unexpected backend: {self.__backend}"
+        raise ValueError(msg)

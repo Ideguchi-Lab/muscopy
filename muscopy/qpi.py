@@ -22,7 +22,6 @@ from functools import cached_property
 from typing import TYPE_CHECKING
 
 import numpy as np
-from numpy.typing import NDArray
 
 if TYPE_CHECKING:
     import types

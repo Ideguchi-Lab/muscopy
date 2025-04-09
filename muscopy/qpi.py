@@ -1,4 +1,17 @@
-"""Quantitative Phase Imaging (QPI) and MIP-QPI."""
+"""Quantitative Phase Imaging (QPI) and MIP-QPI.
+
+This module provides:
+
+- `QPIParameters`: A dataclass to hold QPI parameters.
+- `print_qpi_all_parameters`: A function to print all parameters of QPIParameters dataclass.
+- `make_disk`: A function to create a disk mask.
+- `crop_array`: A function to crop an array.
+- `get_spectrum`: A function to get the spectrum of the hologram array.
+- `get_spectrums`: A function to get the spectrums of the complex fields.
+- `correct_offset`: A function to correct the phase and amplitude offset of the array.
+- `qpi`: A function to calculate the QPI phase image.
+- `mip_qpi`: A function to calculate the MIP-QPI phase image.
+"""
 
 from __future__ import annotations
 
@@ -206,7 +219,23 @@ def make_disk(
     return circle > radius**2 if highpass else circle < radius**2
 
 
-def _crop_array(array: ArrayProtocol[_T], center: tuple[int, int], width: int) -> ArrayProtocol[_T]:
+def crop_array(array: ArrayProtocol[_T], center: tuple[int, int], width: int) -> ArrayProtocol[_T]:
+    r"""Crop the array to the specified width around the center.
+
+    Parameters
+    ----------
+    array : `ArrayProtocol`
+        The array to be cropped
+    center : `tuple`\[`int`, `int`\]
+        The center position of the crop
+    width : `int`
+        The width of the crop
+
+    Returns
+    -------
+    `ArrayProtocol`
+        The cropped array
+    """
     return array[
         center[0] - width // 2 : center[0] + width // 2 + 1,
         center[1] - width // 2 : center[1] + width // 2 + 1,
@@ -252,7 +281,7 @@ def get_spectrum(  # noqa: PLR0913
         mask_highpass = make_disk(backend, offaxis_center, c_r, params.img_size_px, highpass=True)
         ft_array *= mask_highpass
 
-    return _crop_array(ft_array, offaxis_center, params.aperturesize_px)
+    return crop_array(ft_array, offaxis_center, params.aperturesize_px)
 
 
 def get_spectrums(  # noqa: PLR0913
@@ -463,139 +492,3 @@ def mip_qpi(  # noqa: PLR0913
             array_div = 1 / array_div
 
     return backend.angle(array_div)
-
-
-def _get_dc_ac(
-    hologram: NDArray,
-    params: QPIParameters,
-) -> tuple[NDArray, NDArray]:
-    """Calculates the DC intensity of the object.
-
-    Args:
-        hologram (NDArray): The hologram of the object.
-        params (mus.QPIParameters): The parameters of the QPI.
-
-    Returns
-    -------
-        NDArray: The DC and AC component of the object.
-    """
-    scale_factor = params.aperturesize / params.img_shape[0]
-    fft = xp.fft.fftshift(xp.fft.fft2(hologram))
-    dc_disk = make_disk(params.img_center, params.aperturesize // 2, params.img_shape)
-    ac_disk = make_disk(params.offaxis_center, params.aperturesize // 2, params.img_shape)
-
-    dc_fft = fft * dc_disk
-    ac_fft = fft * ac_disk
-
-    dc_cropped = crop_array(dc_fft, params.img_center, params.aperturesize)
-    ac_cropped = crop_array(ac_fft, params.offaxis_center, params.aperturesize)
-
-    dc = xp.fft.ifft2(xp.fft.ifftshift(dc_cropped)) * scale_factor**2
-    ac = xp.fft.ifft2(xp.fft.ifftshift(ac_cropped)) * scale_factor**2
-
-    return dc, ac
-
-
-def _get_visibility(
-    dc: NDArray,
-    ac: NDArray,
-) -> NDArray:
-    """Calculates the visibility of the object.
-
-    Args:
-        dc (NDArray): dc component of the hologram
-        ac (NDArray): ac component of the hologram
-
-    Returns
-    -------
-        NDArray: pixel-wise visibility of the hologram
-    """
-    visibility = xp.abs(ac) / xp.abs(dc) * 2
-    return visibility
-
-
-def _get_phase_noise(
-    visibility: NDArray,
-    aperturesize: int,
-    dc_intensity: NDArray,
-    sensorsize: tuple[int, int],
-    sensor_noise: int = 0,
-) -> NDArray:
-    """Calculates the phase noise in a given array.
-
-    Here, dc_intensity is the photon number of DC components, as the shot noise is proportional to the square root of the photon number.
-
-    Args:
-        visibility (NDArray): The visibility of the object.
-        aperturesize (int): The size of the aperture.
-        dc_intensity (NDArray): The DC intensity of the object.
-        sensorsize (tuple[int, int]): The size of the sensor.
-        sensor_noise (int, optional): The sensor noise (unit: e-). Defaults to 0.
-
-    Returns
-    -------
-        NDArray: The phase noise
-    """
-    if not visibility.shape == dc_intensity.shape:
-        raise ValueError("Visibility and DC intensity must have the same shape")
-    aperture_area = xp.pi * (aperturesize / 2) ** 2
-    sensor_area = sensorsize[0] * sensorsize[1]
-    phase_noise = xp.sqrt(
-        2 * aperture_area * (dc_intensity + sensor_noise**2) / (visibility**2 * dc_intensity**2 * sensor_area)
-    )
-
-    return phase_noise
-
-
-def calc_visibility(
-    hologram: NDArray,
-    params: QPIParameters,
-) -> NDArray:
-    """Calculates the visibility of the object.
-
-    Args:
-        hologram (NDArray): The hologram of the object.
-        params (mus.QPIParameters): The parameters of the QPI.
-
-    Returns
-    -------
-        NDArray: pixel-wise visibility of the hologram
-    """
-    dc, ac = _get_dc_ac(hologram, params)
-    visibility = _get_visibility(dc, ac)
-
-    return visibility
-
-
-def calc_phase_noise(
-    hologram: NDArray,
-    params: QPIParameters,
-    fullwell: float,
-    bit_depth: int,
-    sensor_noise: int = 0,
-) -> NDArray:
-    """Calculates the phase noise in a given array.
-
-    Args:
-        hologram (NDArray): The hologram of the object.
-        params (mus.QPIParameters): The parameters of the QPI.
-        fullwell (float): The full well capacity of the sensor.
-        bit_depth (int): The bit depth of the sensor.
-        sensor_noise (int): The sensor noise (unit: e-). Defaults to 0.
-
-    Returns
-    -------
-        NDArray: The phase noise
-    """
-    dc, ac = _get_dc_ac(hologram, params)
-    visibility = _get_visibility(dc, ac)
-    dc_factor = fullwell / (2**bit_depth)
-    phase_noise = _get_phase_noise(
-        visibility,
-        params.aperturesize,
-        dc_factor * xp.abs(dc),
-        params.img_shape,
-        sensor_noise,
-    )
-
-    return phase_noise

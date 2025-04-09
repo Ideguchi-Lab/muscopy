@@ -2,15 +2,21 @@
 
 from __future__ import annotations
 
+import cmath
 import inspect
 from dataclasses import dataclass, fields
 from functools import cached_property
+from typing import TYPE_CHECKING
 
 import numpy as np
 from numpy.typing import NDArray
 
-import muscopy.cfg as mcfg
-from muscopy.cfg import OffsetRegions
+if TYPE_CHECKING:
+    import types
+    from collections.abc import Iterable
+
+    from muscopy.backend_manager import _T, ArrayProtocol
+    from muscopy.cfg import OffsetRegions, Region
 
 
 @dataclass
@@ -167,202 +173,296 @@ def print_qpi_all_parameters(param: QPIParameters, *, show_properties: bool = Fa
 
 
 def make_disk(
+    backend: types.ModuleType,
     center: tuple[int, int],
     radius: float,
-    array_shape: tuple[int, int],
+    array_shape: int | tuple[int, int],
     highpass: bool = False,
-) -> xp.array:
-    """Make disk mask for filtering
+) -> ArrayProtocol[bool]:
+    r"""Make a disk mask with specified center and radius.
 
-    Args:
-        center (tuple[int, int]): center position of the disk mask
-        radius (float): radius of the disk mask
-        array_shape (tuple[int, int]): shape of the array
-        highpass (bool, optional): Filter low frequency or not. Defaults to False.
+    Parameters
+    ----------
+    backend : `types.ModuleType`
+        numpy or cupy module
+    center : `tuple`\[`int`, `int`\]
+        The center position of the disk mask
+    radius : `float`
+        The radius of the disk mask
+    array_shape : `int` | `tuple`\[`int`, `int`\]
+        The shape of the array. If int, it is assumed to be square.
+    highpass : `bool`, optional
+        Apply highpass mask or not, by default False
 
     Returns
     -------
-        xp.array: disk mask
+    `ArrayProtocol`\[`bool`\]
+        The disk mask with specified center and radius
     """
     if isinstance(array_shape, int):
         array_shape = (array_shape, array_shape)
-    xx, yy = xp.meshgrid(xp.arange(array_shape[0]), xp.arange(array_shape[1]), indexing="ij")
+    xx, yy = backend.meshgrid(backend.arange(array_shape[0]), backend.arange(array_shape[1]), indexing="ij")
     circle = (xx - center[0]) ** 2 + (yy - center[1]) ** 2
-    if highpass:
-        disk = circle > radius**2
-    else:
-        disk = circle < radius**2
-    return disk
+    return circle > radius**2 if highpass else circle < radius**2
 
 
-def crop_array(array: xp.array, center: tuple[int, int], width: int) -> xp.array:
-    """Internal method. crop the array with specified center and width.
-
-    Args:
-        array (xp.array): array to be cropped
-        center (tuple of int): center position of the cropped array
-        width (int): width of the cropped array
-
-    Returns
-    -------
-        xp.array: cropped array
-    """
+def _crop_array(array: ArrayProtocol[_T], center: tuple[int, int], width: int) -> ArrayProtocol[_T]:
     return array[
         center[0] - width // 2 : center[0] + width // 2 + 1,
         center[1] - width // 2 : center[1] + width // 2 + 1,
     ]
 
 
-def get_spectrum(array: xp.array, params: QPIParameters, crop_center: bool = False, c_r: int = 5) -> xp.array:
-    """Internal method. get the spectrum of the hologram array
+def get_spectrum(  # noqa: PLR0913
+    backend: types.ModuleType,
+    ft_array: ArrayProtocol,
+    params: QPIParameters,
+    offaxis_center: tuple[int, int],
+    *,
+    crop_center: bool = False,
+    c_r: int = 5,
+) -> ArrayProtocol:
+    r"""Get the spectrum of the hologram array.
 
-    Args:
-        array (xp.array): input array
-        params (QPIParameters): QPIParameters class
-        crop_center (bool, optional): crop the center of the array or not. Defaults to False.
+    Parameters
+    ----------
+    backend : `types.ModuleType`
+        numpy or cupy module
+    ft_array : `ArrayProtocol`
+        Fourier spectrum of the hologram array
+    params : `QPIParameters`
+        QPIParameters class
+    offaxis_center : `tuple`\[`int`, `int`\]
+        The crop center of off-axis digital holography
+    crop_center : `bool`, optional
+        Whether to crop center or not, by default False
+        This option is used for MIP-QPI
+    c_r : `int`, optional
+        The crop radius, by default 5
 
     Returns
     -------
-        xp.array: cropped spectrum of the hologram array
+    `ArrayProtocol`
+        The spectrum of complex amplitude
     """
-    array_fft = xp.fft.fftshift(xp.fft.fft2(array))
-    mask = make_disk(params.offaxis_center, params.aperturesize / 2, params.img_shape)
-    array_fft = array_fft * mask
+    mask = make_disk(backend, offaxis_center, params.aperturesize_px // 2, params.img_size_px)
+    ft_array *= mask
 
     if crop_center:
-        mask_highpass = make_disk(params.offaxis_center, c_r, params.img_shape, highpass=True)
-        array_fft = array_fft * mask_highpass
+        mask_highpass = make_disk(backend, offaxis_center, c_r, params.img_size_px, highpass=True)
+        ft_array *= mask_highpass
 
-    array_fft = crop_array(array_fft, params.offaxis_center, params.aperturesize)
-
-    return array_fft
+    return _crop_array(ft_array, offaxis_center, params.aperturesize_px)
 
 
-def get_field(array: xp.array, params: QPIParameters, crop_center: bool = False, c_r: int = 5) -> xp.array:
-    """Internal method. get the electric field from the hologram array
+def get_spectrums(  # noqa: PLR0913
+    backend: types.ModuleType,
+    array: ArrayProtocol,
+    params: QPIParameters,
+    offaxis_centers: Iterable[tuple[int, int]],
+    *,
+    crop_center: bool = False,
+    c_r: int = 5,
+) -> list[ArrayProtocol]:
+    r"""Get the spectrums of the complex fileds.
 
-    Args:
-        array (xp.array): input array
-        params (QPIParameters): QPIParameters class
-        crop_center (bool, optional): crop the center of the array or not. Defaults to False.
+    Parameters
+    ----------
+    backend : `types.ModuleType`
+        numpy or cupy module
+    array : `ArrayProtocol`
+        Hologram array
+    params : `QPIParameters`
+        QPIParameters class
+    offaxis_centers : `Iterable`\[`tuple`\[`int`, `int`\]\]
+        The crop centers of off-axis digital holography
+    crop_center : `bool`, optional
+        Whether to crop center or not, by default False
+        This option is used for MIP-QPI
+    c_r : `int`, optional
+        The crop radius, by default 5
 
     Returns
     -------
-        xp.array: field from the hologram array
+    `list`\[`ArrayProtocol`\]
+        The spectrums of complex amplitude
     """
-    array_fft = get_spectrum(array, params, crop_center, c_r)
-    array = xp.fft.ifft2(xp.fft.ifftshift(array_fft))
-    return array
+    hologram_fft = backend.fft.fftshift(backend.fft.fft2(array)) * params.hologram2fourier
+    cp_spectrums = []
+    for offaxis_center in offaxis_centers:
+        cp_spectrum = get_spectrum(backend, hologram_fft, params, offaxis_center, crop_center=crop_center, c_r=c_r)
+        cp_spectrums.append(cp_spectrum)
+    return cp_spectrums
 
 
-def correct_offset(array, offset_regs: OffsetRegions, phase: bool = True, amplitude: bool = True) -> xp.array:
-    """Internal method. correct phase and amplitude offset
+def correct_offset(
+    backend: types.ModuleType,
+    array: ArrayProtocol,
+    offset_regs: OffsetRegions,
+    *,
+    phase: bool = True,
+    amplitude: bool = True,
+) -> ArrayProtocol:
+    """Correct the phase and amplitude offset of the array.
 
-    Args:
-        array (NDArray): input complex array
-        offset_regs (OffsetRegions): regions for offset calculation
+    Parameters
+    ----------
+    backend : `types.ModuleType`
+        numpy or cupy module
+    array : `ArrayProtocol`
+        Complex amplitude array
+    offset_regs : `OffsetRegions`
+        The regions to calculate the offset
+    phase : `bool`, optional
+        Correct Phase offset, by default True
+    amplitude : `bool`, optional
+        Correct Amplitude scaling, by default True
 
     Returns
     -------
-        xp.array: corrected array
+    `ArrayProtocol`
+        The corrected array
     """
     if offset_regs is None:
         return array
+
     phase_offset_list = []
     amplitude_offset_list = []
     for region in offset_regs:
-        phase_offset_list.append(xp.mean(xp.angle(array[region[0][0] : region[0][1], region[1][0] : region[1][1]])))
-        amplitude_offset_list.append(xp.mean(xp.abs(array[region[0][0] : region[0][1], region[1][0] : region[1][1]])))
-    if phase:
-        phase_offset = xp.mean(xp.array(phase_offset_list))  # - xp.pi / 2
-    else:
-        phase_offset = 0
-    if amplitude:
-        amplitude_offset = xp.mean(xp.array(amplitude_offset_list))
-    else:
-        amplitude_offset = 1
+        phase_offset_list.append(
+            backend.mean(backend.angle(array[region[0][0] : region[0][1], region[1][0] : region[1][1]]))
+        )
+        amplitude_offset_list.append(
+            backend.mean(backend.abs(array[region[0][0] : region[0][1], region[1][0] : region[1][1]]))
+        )
 
-    array = array * xp.exp(-1j * phase_offset) / amplitude_offset
+    phase_offset = backend.mean(backend.array(phase_offset_list)) if phase else 0
+    amplitude_scale = backend.mean(backend.array(amplitude_offset_list)) if amplitude else 1
 
-    return array
+    return array * cmath.exp(-1j * phase_offset) / amplitude_scale
 
 
-def QPI(
-    array: xp.array,
-    reference: xp.array,
+def qpi(
+    backend: types.ModuleType,
+    array: ArrayProtocol,
+    reference: ArrayProtocol,
     params: QPIParameters,
-) -> xp.array:
-    """Quantitative phase imaging (QPI) calculation
+    offaxis_centers: Iterable[tuple[int, int]],
+) -> list[ArrayProtocol]:
+    r"""Calculate the QPI phase image.
 
-    Args:
-        array (xp.array): on-axis hologram
-        reference (xp.array): off-axis hologram
-        params (QPIParameters): QPIParameters class
+    Parameters
+    ----------
+    backend : `types.ModuleType`
+        numpy or cupy module
+    array : `ArrayProtocol`
+        Hologram array
+    reference : `ArrayProtocol`
+        Reference hologram array
+    params : `QPIParameters`
+        QPIParameters class
+    offaxis_centers : `Iterable`\[`tuple`\[`int`, `int`\]\]
+        The crop centers of off-axis digital holography
 
     Returns
     -------
-        xp.array: QPI phase image
+    `list`\[`ArrayProtocol`\]
+        The QPI phase image
+
+    Raises
+    ------
+    ValueError
+        If the array and reference have different shapes
     """
-    assert array.shape == reference.shape
+    if array.shape != reference.shape:
+        msg = "Array and reference must have the same shape"
+        raise ValueError(msg)
 
-    array_field = get_field(array, params)
-    ref_array_field = get_field(reference, params)
+    ft_array = backend.fft.fftshift(backend.fft.fft2(array)) * params.hologram2fourier
+    ft_reference = backend.fft.fftshift(backend.fft.fft2(reference)) * params.hologram2fourier
+    spectrums = get_spectrums(backend, ft_array, params, offaxis_centers)
+    ref_spectrums = get_spectrums(backend, ft_reference, params, offaxis_centers)
 
-    array_div = array_field / ref_array_field
+    cp_fields = []
 
-    # remove phase and amplitude offset
-    if mcfg.OFFSET_REGS is not None:
-        array_div = correct_offset(array_div, mcfg.OFFSET_REGS)
+    for spectrum, ref_spectrum in zip(spectrums, ref_spectrums):
+        cp_field = backend.fft.ifft2(backend.fft.ifftshift(spectrum)) * params.fourier2cpfield
+        ref_cp_field = backend.fft.ifft2(backend.fft.ifftshift(ref_spectrum)) * params.fourier2cpfield
+        cp_field /= ref_cp_field
+        cp_fields.append(cp_field)
 
-    dif_phase = xp.angle(array_div)
-
-    return dif_phase
+    return [backend.angle(cp_field) for cp_field in cp_fields]
 
 
-def MIPQPI(
-    array_on: xp.array,
-    array_off: xp.array,
+def mip_qpi(  # noqa: PLR0913
+    backend: types.ModuleType,
+    array_on: ArrayProtocol,
+    array_off: ArrayProtocol,
     params: QPIParameters,
+    offaxis_center: tuple[int, int],
+    *,
     crop_center: bool = False,
-    **kwargs,
-) -> xp.array:
-    """Mid-infrared photothermal quantitative phase imaging (MIP-QPI) calculation
+    c_r: int = 5,
+    mip_center_reg: Region | None = None,
+) -> ArrayProtocol:
+    r"""Calculate the MIP-QPI phase image.
 
-    Args:
-        array_on (xp.array): on-axis hologram
-        array_off (xp.array): off-axis hologram
-        params (QPIParameters): QPIParameters class
-        crop_center (bool, optional): crop the center of the array or not. Defaults to False.
+    Parameters
+    ----------
+    array_on : `ArrayProtocol`
+        MIR ON hologram array
+    array_off : `ArrayProtocol`
+        MIR OFF hologram array
+    params : `QPIParameters`
+        QPIParameters class
+    offaxis_center : `tuple`\[`int`, `int`\]
+        The crop center of off-axis digital holography
+    crop_center : `bool`, optional
+        Whether to crop center or not, by default False
+        This option is used for MIP-QPI
+    c_r : `int`, optional
+        The crop radius, by default 5
+    mip_center_reg : `Region` | `None`, optional
+        _description_, by default None
 
     Returns
     -------
-        xp.array: MIP-QPI phase image
+    `ArrayProtocol`
+        The MIP-QPI phase image
+
+    Raises
+    ------
+    ValueError
+        If the array on and off have different shapes
     """
-    assert array_on.shape == array_off.shape
-    array_on_field = get_field(array_on, params, crop_center=crop_center, **kwargs)
-    array_off_field = get_field(array_off, params, crop_center=crop_center, **kwargs)
+    if array_on.shape != array_off.shape:
+        msg = "Array on and off must have the same shape"
+        raise ValueError(msg)
 
-    array_div = array_on_field / array_off_field
+    ft_array_on = backend.fft.fftshift(backend.fft.fft2(array_on)) * params.hologram2fourier
+    ft_array_off = backend.fft.fftshift(backend.fft.fft2(array_off)) * params.hologram2fourier
 
-    if mcfg.MIP_CENTER is not None:
-        center_phase = xp.mean(
-            xp.angle(
+    spectrum_on = get_spectrum(backend, ft_array_on, params, offaxis_center, crop_center=crop_center, c_r=c_r)
+    spectrum_off = get_spectrum(backend, ft_array_off, params, offaxis_center, crop_center=crop_center, c_r=c_r)
+
+    cp_field_on = backend.fft.ifft2(backend.fft.ifftshift(spectrum_on)) * params.fourier2cpfield
+    cp_field_off = backend.fft.ifft2(backend.fft.ifftshift(spectrum_off)) * params.fourier2cpfield
+
+    array_div = cp_field_on / cp_field_off
+
+    if mip_center_reg is not None:
+        center_phase = backend.mean(
+            backend.angle(
                 array_div[
-                    mcfg.MIP_CENTER[0][0] : mcfg.MIP_CENTER[0][1],
-                    mcfg.MIP_CENTER[1][0] : mcfg.MIP_CENTER[1][1],
+                    mip_center_reg[0][0] : mip_center_reg[0][1],
+                    mip_center_reg[1][0] : mip_center_reg[1][1],
                 ]
             )
         )
         if center_phase < 0:
             array_div = 1 / array_div
 
-    # remove phase and amplitude offset
-    if mcfg.OFFSET_REGS is not None:
-        array_div = correct_offset(array_div, mcfg.OFFSET_REGS, phase=True)
-
-    dif_phase = xp.angle(array_div)
-
-    return dif_phase
+    return backend.angle(array_div)
 
 
 def _get_dc_ac(

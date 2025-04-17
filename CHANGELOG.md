@@ -12,8 +12,7 @@
 
 ### Changed
 
-- QPI module now explicilty requires `backend` parameter [[#30](https://github.com/Ideguchi-Lab/muscopy/issues/30)]
-- QPI parameters attributes are changed [[#30](https://github.com/Ideguchi-Lab/muscopy/issues/30)].
+- QPI module now explicitly requires `backend` parameter [[#30](https://github.com/Ideguchi-Lab/muscopy/issues/30)]
     - Escpecially, `offaxis_center` is removed from `QPIParameters` class for the support of multiplexed QPI.
 
 ### Removed

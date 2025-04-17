@@ -3,9 +3,13 @@
 # %%
 # import modules
 
+import matplotlib.pyplot as plt
 
 from muscopy.backend_manager import BackendManager
 from muscopy.qpi import QPIParameters, make_disk, print_qpi_all_parameters, qpi
+
+# config
+SHOW_IMAGE = True
 
 # %%
 # set QPI parameters
@@ -61,4 +65,9 @@ ref_hologram = backend.sum(ref_sample_array + ref_array) ** 2
 # %%
 # Extract phase of scattering wave with QPI
 
-phase_image = qpi(backend, hologram, ref_hologram, params, [off_axis_center])
+phase_image = qpi(backend, hologram, ref_hologram, params, [off_axis_center])[0]
+if bmg.backend == "cupy":
+    phase_image = backend.asnumpy(phase_image)
+
+if SHOW_IMAGE:
+    plt.imshow(phase_image)

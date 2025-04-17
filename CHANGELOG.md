@@ -6,12 +6,20 @@
 
 - Introduced Ruff as a project formatter and linter [[#38](https://github.com/Ideguchi-Lab/muscopy/issues/38)]
 - pre-commit config file
-- 'backend_manager' module to control CPU/GPU [[#41](https://github.com/Ideguchi-Lab/muscopy/issues/41)]
+- `backend_manager` module to control CPU/GPU [[#41](https://github.com/Ideguchi-Lab/muscopy/issues/41)]
 - setup pytest workflow
+- Demo of QPI reconstruction [[#30](https://github.com/Ideguchi-Lab/muscopy/issues/30)]
+
+### Changed
+
+- QPI module now explicilty requires `backend` parameter [[#30](https://github.com/Ideguchi-Lab/muscopy/issues/30)]
+- QPI parameters attributes are changed [[#30](https://github.com/Ideguchi-Lab/muscopy/issues/30)].
+    - Escpecially, `offaxis_center` is removed from `QPIParameters` class for the support of multiplexed QPI.
 
 ### Removed
 
 - Removed black, isort, and flake8.
+- `fft2d` module
 
 ---
 

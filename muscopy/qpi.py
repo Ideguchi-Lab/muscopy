@@ -215,7 +215,7 @@ def make_disk(
         array_shape = (array_shape, array_shape)
     xx, yy = backend.meshgrid(backend.arange(array_shape[0]), backend.arange(array_shape[1]), indexing="ij")
     circle = (xx - center[0]) ** 2 + (yy - center[1]) ** 2
-    return circle > radius**2 if highpass else circle < radius**2
+    return circle > radius**2 if highpass else circle <= radius**2
 
 
 def crop_array(array: ArrayProtocol[_T], center: tuple[int, int], width: int) -> ArrayProtocol[_T]:
@@ -285,7 +285,7 @@ def get_spectrum(  # noqa: PLR0913
 
 def get_spectrums(  # noqa: PLR0913
     backend: types.ModuleType,
-    array: ArrayProtocol,
+    ft_array: ArrayProtocol,
     params: QPIParameters,
     offaxis_centers: Iterable[tuple[int, int]],
     *,
@@ -298,8 +298,8 @@ def get_spectrums(  # noqa: PLR0913
     ----------
     backend : `types.ModuleType`
         numpy or cupy module
-    array : `ArrayProtocol`
-        Hologram array
+    ft_array : `ArrayProtocol`
+        Fourier transformed hologram array
     params : `QPIParameters`
         QPIParameters class
     offaxis_centers : `Iterable`\[`tuple`\[`int`, `int`\]\]
@@ -315,10 +315,9 @@ def get_spectrums(  # noqa: PLR0913
     `list`\[`ArrayProtocol`\]
         The spectrums of complex amplitude
     """
-    hologram_fft = backend.fft.fftshift(backend.fft.fft2(array)) * params.hologram2fourier
     cp_spectrums = []
     for offaxis_center in offaxis_centers:
-        cp_spectrum = get_spectrum(backend, hologram_fft, params, offaxis_center, crop_center=crop_center, c_r=c_r)
+        cp_spectrum = get_spectrum(backend, ft_array, params, offaxis_center, crop_center=crop_center, c_r=c_r)
         cp_spectrums.append(cp_spectrum)
     return cp_spectrums
 

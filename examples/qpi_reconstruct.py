@@ -59,8 +59,6 @@ ref_array = backend.exp(
 )
 ref_array /= backend.sum(backend.abs(ref_array) ** 2) ** 0.5
 
-ft_ref_array = backend.fft.fftshift(backend.fft.fft2(ref_array))
-
 hologram = backend.abs(sample_array + ref_array) ** 2
 
 ref_sample_array = backend.ones_like(sample_array)

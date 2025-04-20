@@ -1,24 +1,18 @@
-"""Demonstration of the shot noise calculation from a hologram."""
+"""Demonstration of Quantitative Phase Imaging (QPI) reconstruction."""
 
 # %%
+# import modules
 
 import matplotlib.pyplot as plt
 
 from muscopy.backend_manager import BackendManager
-from muscopy.phase_noise import calc_phase_noise, calc_visibility
-from muscopy.qpi import QPIParameters, make_disk, print_qpi_all_parameters
+from muscopy.qpi import QPIParameters, make_disk, print_qpi_all_parameters, qpi
 
-# %%
 # config
 SHOW_IMAGE = True
 
-# Image sensor parameters
-full_well_capacity = int(10e3)  # full well capacity (e-)
-bit_depth = 12  # bit depth of the camera
-sensor_noise = 10  # sensor noise (e-)
-
 # %%
-# generate a hologram
+# set QPI parameters
 
 params = QPIParameters(
     na=0.8,
@@ -27,6 +21,8 @@ params = QPIParameters(
     px_size_m=5e-6 / 60,
     n_sol=1.33,
 )
+
+# show QPI parameters
 print_qpi_all_parameters(params, show_properties=True)
 
 # %%
@@ -64,25 +60,20 @@ ref_array = backend.exp(
 ref_array /= backend.sum(backend.abs(ref_array) ** 2) ** 0.5
 
 hologram = backend.abs(sample_array + ref_array) ** 2
-# normalize
-hologram /= backend.max(hologram)  # normalize to 1
-hologram *= 2**bit_depth
+
+ref_sample_array = backend.ones_like(sample_array)
+ref_sample_array /= backend.sum(backend.abs(ref_sample_array) ** 2) ** 0.5
+ref_hologram = backend.abs(ref_sample_array + ref_array) ** 2
 
 # %%
-# calculate visibility and phase noise
-visibility = calc_visibility(backend, hologram, params, off_axis_center)
-phase_noise = calc_phase_noise(backend, hologram, params, off_axis_center, full_well_capacity, bit_depth, sensor_noise)
+# Extract phase of scattering wave with QPI
 
+phase_image = qpi(backend, hologram, ref_hologram, params, [off_axis_center])[0]
+if bmg.backend == "cupy":
+    phase_image = backend.asnumpy(phase_image)
 
-# %%
 if SHOW_IMAGE:
-    plt.imshow(visibility)
-    plt.title("Visibility")
+    plt.imshow(phase_image, cmap="gray")
     plt.colorbar()
     plt.show()
-    plt.imshow(phase_noise)
-    plt.title("Phase noise")
-    plt.colorbar()
-    plt.show()
-
 # %%

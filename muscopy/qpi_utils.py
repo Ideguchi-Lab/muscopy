@@ -1,4 +1,9 @@
-"""QPI util functions for microscopy data processing."""
+"""QPI util functions for microscopy data processing.
+
+This module provides:
+
+- `unwrap_phase`: Unwraps the phase of a 2D image using the Poisson solver.
+"""
 
 from muscopy import qpi_utils_backend
 from muscopy.backend_manager import ArrayProtocol, BackendManager
@@ -9,12 +14,14 @@ def unwrap_phase(bmg: BackendManager, phase_image: ArrayProtocol) -> ArrayProtoc
 
     Parameters
     ----------
-    phase_image : ArrayProtocol
+    bmg : `BackendManager`
+        The backend manager to use for the operation.
+    phase_image : `ArrayProtocol`
         The wrapped phase image to be unwrapped.
 
     Returns
     -------
-    ArrayProtocol
+    `ArrayProtocol`
         The unwrapped phase image.
     """
     if bmg.backend == "numpy":

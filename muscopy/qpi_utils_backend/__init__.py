@@ -1,3 +1,5 @@
+"""QPI utilities backend."""
+
 import importlib.util
 
 from . import qpi_util_cpu  # noqa: F401

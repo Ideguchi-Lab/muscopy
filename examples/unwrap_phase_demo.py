@@ -41,13 +41,11 @@ off_axis_center = (100, 100)
 x_radius = 30
 y_radius = 100
 xx, yy = backend.meshgrid(
-    backend.arange(-params.img_size_px//2, params.img_size_px // 2),
-    backend.arange(-params.img_size_px//2, params.img_size_px // 2),
+    backend.arange(-params.img_size_px // 2, params.img_size_px // 2),
+    backend.arange(-params.img_size_px // 2, params.img_size_px // 2),
     indexing="ij",
 )
-gaussian = 2 * backend.exp(
-    -((xx) ** 2 / (2 * (x_radius / 2)**2) + (yy) ** 2 / (2 * (y_radius / 2) ** 2))
-)
+gaussian = 2 * backend.exp(-((xx) ** 2 / (2 * (x_radius / 2) ** 2) + (yy) ** 2 / (2 * (y_radius / 2) ** 2)))
 sample_array = backend.exp(2j * backend.pi * gaussian)
 low_pass = make_disk(backend, (params.img_center), params.aperturesize_px // 2, params.img_size_px)
 sample_array = backend.fft.ifft2(backend.fft.ifftshift(backend.fft.fftshift(backend.fft.fft2(sample_array)) * low_pass))

@@ -39,8 +39,15 @@ backend = bmg.get_backend()
 off_axis_center = (100, 100)
 
 radius = 30
-sample_disk = make_disk(backend, params.img_center, radius, params.img_size_px)
-sample_array = backend.exp(2j * backend.pi / 3 * sample_disk)
+xx, yy = backend.meshgrid(
+    backend.arange(-params.img_size_px//2, params.img_size_px // 2),
+    backend.arange(-params.img_size_px//2, params.img_size_px // 2),
+    indexing="ij",
+)
+gaussian = 2 * backend.exp(
+    -((xx) ** 2 + (yy) ** 2) / (2 * (radius / 2) ** 2)
+)
+sample_array = backend.exp(2j * backend.pi * gaussian)
 low_pass = make_disk(backend, (params.img_center), params.aperturesize_px // 2, params.img_size_px)
 sample_array = backend.fft.ifft2(backend.fft.ifftshift(backend.fft.fftshift(backend.fft.fft2(sample_array)) * low_pass))
 sample_array /= backend.sum(backend.abs(sample_array) ** 2) ** 0.5
@@ -96,7 +103,7 @@ if SHOW_IMAGE:
 if bmg.backend == "cupy":
     phase_image = backend.asnumpy(phase_image)
 
-unwrapped_skimage = skimage_unwrap_phase(phase_image, discont=0.5)
+unwrapped_skimage = skimage_unwrap_phase(phase_image)
 
 if SHOW_IMAGE:
     plt.imshow(unwrapped_skimage)

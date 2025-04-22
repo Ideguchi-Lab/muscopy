@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from types import ModuleType
 from dataclasses import dataclass
 from functools import cached_property
+from collections.abc import Sequence
 
 from tqdm import tqdm
 
 from muscopy.backend_manager import ArrayProtocol, BackendManager
+from muscopy.cfg import ArrayPrecision
 from muscopy.qpi import QPIParameters, make_disk, correct_offset, crop_array
 from muscopy.qpi_utils import unwrap_phase
 
@@ -101,3 +104,40 @@ class ODTParameters(QPIParameters):
             factor from field to spectrum.
         """
         return (self.imgpx_axial_m_per_px / self.freq_per_px) ** 0.5
+
+@dataclass
+class ODTConfig:
+    approx_type: str = "Born"
+    hermite_symmetry: bool = True
+    precision: ArrayPrecision = ArrayPrecision()
+
+def synthesize_forward_spectrum() -> ArrayProtocol:
+    pass
+
+def synthesize_backward_spectrum() -> ArrayProtocol:
+    pass
+
+def fill_hermite_components(spectrum3d: ArrayProtocol) -> ArrayProtocol:
+    pass
+
+def calc_refractive_index(scattering_potential: ArrayProtocol) -> ArrayProtocol:
+    pass
+
+def odt(backend: ModuleType, sample_arrays: Sequence[ArrayProtocol], ref_arrays: Sequence[ArrayProtocol], params: ODTParameters, config: ODTConfig) -> tuple[ArrayProtocol, ArrayProtocol]:
+    pass
+
+def _find_max_args(backend: ModuleType, array: ArrayProtocol) -> tuple[int, int, float]:
+    max_value = backend.max(array)
+    max_index = backend.unravel_index(backend.argmax(array), array.shape)
+    max_x = max_index[0]
+    max_y = max_index[1]
+    return max_x, max_y, max_value
+
+def _shift_dh_spectrum() -> ArrayProtocol:
+    pass
+
+def _calc_1st_scattering_spectrum() -> ArrayProtocol:
+    pass
+
+def _embed_3d_spectrum() -> ArrayProtocol:
+    pass

@@ -3,7 +3,7 @@
 This module provides:
 
 - `QPIParameters`: A dataclass to hold QPI parameters.
-- `print_qpi_all_parameters`: A function to print all parameters of QPIParameters dataclass.
+- `print_all_parameters`: A function to print all parameters of QPIParameters dataclass.
 - `make_disk`: A function to create a disk mask.
 - `crop_array`: A function to crop an array.
 - `get_spectrum`: A function to get the spectrum of the hologram array.
@@ -155,7 +155,7 @@ class QPIParameters:
         return (self.imgpx_m_per_px / self.freq_per_px) ** 0.5
 
 
-def print_qpi_all_parameters(param: QPIParameters, *, show_properties: bool = False) -> None:
+def print_all_parameters(param: QPIParameters, *, show_properties: bool = False) -> None:
     """Print all parameters of QPIParameters dataclass.
 
     Parameters

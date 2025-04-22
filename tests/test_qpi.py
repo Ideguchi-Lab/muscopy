@@ -10,7 +10,7 @@ from muscopy.qpi import (
     get_spectrum,
     get_spectrums,
     make_disk,
-    print_qpi_all_parameters,
+    print_all_parameters,
 )
 
 
@@ -60,18 +60,18 @@ def test_qpi_parameters_properties() -> None:
     assert abs(params.cpfield2spectrum - expected_cpfield2spectrum) < 1e-12
 
 
-def test_print_qpi_all_parameters(capsys) -> None:
+def test_print_all_parameters(capsys) -> None:
     params = QPIParameters(na=1.4, wavelength_m=550e-9, img_size_px=100, px_size_m=6.5e-6, n_sol=1.33)
 
     # Test output when show_properties is False
-    print_qpi_all_parameters(params, show_properties=False)
+    print_all_parameters(params, show_properties=False)
     captured = capsys.readouterr().out
     assert "=== Dataclass Parameters ===" in captured
     for field_obj in fields(params):
         assert f"{field_obj.name}:" in captured
 
     # Test output when show_properties is True
-    print_qpi_all_parameters(params, show_properties=True)
+    print_all_parameters(params, show_properties=True)
     captured = capsys.readouterr().out
     assert "=== Properties ===" in captured
 

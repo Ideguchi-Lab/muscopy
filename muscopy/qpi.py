@@ -55,6 +55,38 @@ class QPIParameters:
     px_size_m: float
     n_sol: float
 
+    def verify_parameters(self) -> None:
+        """Verify the parameters.
+
+        Raises
+        ------
+        ValueError
+            1. If the NA is negative.
+            2. If the wavelength is negative.
+            3. If the image size is negative.
+            4. If the pixel size is negative.
+            5. If the refractive index of the solution is negative.
+            6. If the NA is greater than the refractive index of the solution.
+        """
+        if self.na < 0:
+            msg = "NA cannot be negative."
+            raise ValueError(msg)
+        if self.wavelength_m < 0:
+            msg = "Wavelength cannot be negative."
+            raise ValueError(msg)
+        if self.img_size_px < 0:
+            msg = "Image size cannot be negative."
+            raise ValueError(msg)
+        if self.px_size_m < 0:
+            msg = "Pixel size cannot be negative."
+            raise ValueError(msg)
+        if self.n_sol < 0:
+            msg = "Refractive index of the solution cannot be negative."
+            raise ValueError(msg)
+        if self.na > self.n_sol:
+            msg = "NA cannot be greater than the refractive index of the solution."
+            raise ValueError(msg)
+
     @cached_property
     def img_center(self) -> tuple[int, int]:
         r"""Get the center position of the image.

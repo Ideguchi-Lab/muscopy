@@ -11,6 +11,8 @@
 - QPI module now explicitly requires `backend` parameter [[#30](https://github.com/Ideguchi-Lab/muscopy/issues/30)]
   - Especially, `offaxis_center` is removed from `QPIParameters` class for the support of multiplexed QPI.
 - Updated `shot_noise_calculation.py` for the latest version.
+- Modified `unwrap_phase` backend.
+- Changed module name from `unwrap_phase` to `qpi_utils`.
 
 ### Removed
 

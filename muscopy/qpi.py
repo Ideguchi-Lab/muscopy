@@ -154,7 +154,7 @@ class QPIParameters:
         return self.px_size_m * self.img_size_px / self.aperturesize_px
 
     @cached_property
-    def hologram2fourier(self) -> float:
+    def hologram2spectrum(self) -> float:
         """Fourier factor from hologram to spectrum.
 
         Returns
@@ -165,7 +165,7 @@ class QPIParameters:
         return (self.px_size_m / self.freq_per_px) ** 0.5
 
     @cached_property
-    def fourier2cpfield(self) -> float:
+    def spectrum2cpfield(self) -> float:
         """Fourier factor from spectrum to complex field.
 
         Returns
@@ -437,16 +437,16 @@ def qpi(
         msg = "Array and reference must have the same shape"
         raise ValueError(msg)
 
-    ft_array = backend.fft.fftshift(backend.fft.fft2(array)) * params.hologram2fourier
-    ft_reference = backend.fft.fftshift(backend.fft.fft2(reference)) * params.hologram2fourier
+    ft_array = backend.fft.fftshift(backend.fft.fft2(array)) * params.hologram2spectrum
+    ft_reference = backend.fft.fftshift(backend.fft.fft2(reference)) * params.hologram2spectrum
     spectrums = get_spectrums(backend, ft_array, params, offaxis_centers)
     ref_spectrums = get_spectrums(backend, ft_reference, params, offaxis_centers)
 
     cp_fields = []
 
     for spectrum, ref_spectrum in zip(spectrums, ref_spectrums):
-        cp_field = backend.fft.ifft2(backend.fft.ifftshift(spectrum)) * params.fourier2cpfield
-        ref_cp_field = backend.fft.ifft2(backend.fft.ifftshift(ref_spectrum)) * params.fourier2cpfield
+        cp_field = backend.fft.ifft2(backend.fft.ifftshift(spectrum)) * params.spectrum2cpfield
+        ref_cp_field = backend.fft.ifft2(backend.fft.ifftshift(ref_spectrum)) * params.spectrum2cpfield
         cp_field /= ref_cp_field
         cp_fields.append(cp_field)
 
@@ -498,14 +498,14 @@ def mip_qpi(  # noqa: PLR0913
         msg = "Array on and off must have the same shape"
         raise ValueError(msg)
 
-    ft_array_on = backend.fft.fftshift(backend.fft.fft2(array_on)) * params.hologram2fourier
-    ft_array_off = backend.fft.fftshift(backend.fft.fft2(array_off)) * params.hologram2fourier
+    ft_array_on = backend.fft.fftshift(backend.fft.fft2(array_on)) * params.hologram2spectrum
+    ft_array_off = backend.fft.fftshift(backend.fft.fft2(array_off)) * params.hologram2spectrum
 
     spectrum_on = get_spectrum(backend, ft_array_on, params, offaxis_center, crop_center=crop_center, c_r=c_r)
     spectrum_off = get_spectrum(backend, ft_array_off, params, offaxis_center, crop_center=crop_center, c_r=c_r)
 
-    cp_field_on = backend.fft.ifft2(backend.fft.ifftshift(spectrum_on)) * params.fourier2cpfield
-    cp_field_off = backend.fft.ifft2(backend.fft.ifftshift(spectrum_off)) * params.fourier2cpfield
+    cp_field_on = backend.fft.ifft2(backend.fft.ifftshift(spectrum_on)) * params.spectrum2cpfield
+    cp_field_off = backend.fft.ifft2(backend.fft.ifftshift(spectrum_off)) * params.spectrum2cpfield
 
     array_div = cp_field_on / cp_field_off
 

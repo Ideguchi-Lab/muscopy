@@ -37,7 +37,7 @@ def print_backend():
 
 
 class ArrayPrecision:
-    def __init__(self, int_length: int, float_length: int):
+    def __init__(self, int_length: int = 64, float_length: int = 64):
         self.int_length = int_length
         self.float_length = float_length
 

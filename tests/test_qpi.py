@@ -49,11 +49,11 @@ def test_qpi_parameters_properties() -> None:
 
     # Test hologram2fourier property
     expected_hologram2fourier = (px_size_m / expected_freq_per_px) ** 0.5
-    assert abs(params.hologram2fourier - expected_hologram2fourier) < 1e-12
+    assert abs(params.hologram2spectrum - expected_hologram2fourier) < 1e-12
 
     # Test fourier2cpfield property
     expected_fourier2cpfield = (expected_freq_per_px / expected_imgpx_m_per_px) ** 0.5
-    assert abs(params.fourier2cpfield - expected_fourier2cpfield) < 1e-12
+    assert abs(params.spectrum2cpfield - expected_fourier2cpfield) < 1e-12
 
     # Test cpfield2spectrum property
     expected_cpfield2spectrum = (expected_imgpx_m_per_px / expected_freq_per_px) ** 0.5

@@ -38,14 +38,15 @@ backend = bmg.get_backend()
 # create a hologram
 off_axis_center = (100, 100)
 
-radius = 30
+x_radius = 30
+y_radius = 100
 xx, yy = backend.meshgrid(
     backend.arange(-params.img_size_px//2, params.img_size_px // 2),
     backend.arange(-params.img_size_px//2, params.img_size_px // 2),
     indexing="ij",
 )
 gaussian = 2 * backend.exp(
-    -((xx) ** 2 + (yy) ** 2) / (2 * (radius / 2) ** 2)
+    -((xx) ** 2 / (2 * (x_radius / 2)**2) + (yy) ** 2 / (2 * (y_radius / 2) ** 2))
 )
 sample_array = backend.exp(2j * backend.pi * gaussian)
 low_pass = make_disk(backend, (params.img_center), params.aperturesize_px // 2, params.img_size_px)

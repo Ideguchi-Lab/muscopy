@@ -152,16 +152,19 @@ def synthesize_spectrum(
 
 def fill_hermite_components(backend: ModuleType, spectrum3d: ArrayProtocol) -> ArrayProtocol:
     conjugate_spectrum = backend.conjugate(backend.flip(spectrum3d, axis=(0, 1, 2)))
-    overlap_region = backend.logical_and(
-        backend.abs(spectrum3d) > 0, backend.abs(conjugate_spectrum) > 0
-    )
+    overlap_region = backend.logical_and(backend.abs(spectrum3d) > 0, backend.abs(conjugate_spectrum) > 0)
     spectrum3d += conjugate_spectrum
     spectrum3d[overlap_region] /= 2
     return spectrum3d
 
 
-def calc_refractive_index(scattering_potential: ArrayProtocol) -> ArrayProtocol:
-    pass
+def calc_refractive_index(
+    backend: ModuleType, scattering_potential: ArrayProtocol, params: ODTParameters
+) -> ArrayProtocol:
+    return params.n_sol * backend.sqrt(
+        backend.ones_like(scattering_potential)
+        + scattering_potential / (params.light_freq_px * params.freq_per_px) ** 2
+    )
 
 
 def odt(

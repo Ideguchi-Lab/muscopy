@@ -134,9 +134,8 @@ def synthesize_spectrum(
 
     for scattering_wave_spectrum in scattering_wave_spectrums:
         kz_disk = calc_kz_disk(backend, params, oblique_shift, precision)
-        scattering_wave_spectrum *= 2j * kz_disk
         scattering_potential = _embed_3d_spectrum(
-            backend, scattering_wave_spectrum, params, oblique_shift, precision, mode=mode
+            backend, scattering_wave_spectrum * 2j * kz_disk, params, oblique_shift, precision, mode=mode
         )
 
         synthesized_spectrum += scattering_potential

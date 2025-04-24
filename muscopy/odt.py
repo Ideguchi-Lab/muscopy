@@ -133,9 +133,9 @@ def synthesize_spectrum(
     synthesized_weight = backend.ones_like(synthesized_spectrum, dtype=config.precision.get_int_precision())
 
     for scattering_wave_spectrum in scattering_wave_spectrums:
-        kz_disk = calc_kz_disk(backend, params, oblique_shift, precision)
+        kz_disk = calc_kz_disk(backend, params, illumination_vector, precision)
         scattering_potential = _embed_3d_spectrum(
-            backend, scattering_wave_spectrum * 2j * kz_disk, params, oblique_shift, precision, mode=mode
+            backend, scattering_wave_spectrum * 2j * kz_disk, params, illumination_vector, precision, mode=mode
         )
 
         synthesized_spectrum += scattering_potential
@@ -198,8 +198,18 @@ def _find_max_args(backend: ModuleType, array: ArrayProtocol) -> tuple[int, int,
     return max_x, max_y, max_value
 
 
-def _shift_dh_spectrum() -> ArrayProtocol:
-    pass
+def _shift_dh_spectrum(
+    backend: ModuleType, params: ODTParameters, cp_field: ArrayProtocol, illumination_vector: tuple[int, int]
+) -> ArrayProtocol:
+    expanded_cp_field = backend.zeros(
+        (2 * params.aperturesize_px + 1, 2 * params.aperturesize_px + 1), dtype=cp_field.dtype
+    )
+
+    expanded_cp_field[
+        params.aperturesize_px // 2 - illumination_vector[0] : 3 * params.aperturesize_px // 2 - illumination_vector[0],
+        params.aperturesize_px // 2 - illumination_vector[1] : 3 * params.aperturesize_px // 2 - illumination_vector[1],
+    ] = cp_field
+    return expanded_cp_field
 
 
 def _calc_1st_scattering_spectrum() -> ArrayProtocol:

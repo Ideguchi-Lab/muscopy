@@ -176,7 +176,12 @@ def odt(
     # weak scattering approximation
     scattering_spectrums = []
     for cp_field, ref_cp_field in zip(cp_fields, ref_cp_fields):
-        scattering_spectrum = _calc_1st_scattering_spectrum(backend, cp_field, ref_cp_field, config.approx_type)
+        cp_spectrum = backend.fft.fftshift(backend.fft.fft2(cp_field))
+        max_x, max_y, _ = _find_max_args(backend, cp_spectrum)
+        illumination_vector = (max_x - params.img_center[0], max_y - params.img_center[1])
+        expanded_cp_field = _shift_dh_spectrum(backend, params, cp_field, illumination_vector)
+        expanded_ref_cp_field = _shift_dh_spectrum(backend, params, ref_cp_field, illumination_vector)
+        scattering_spectrum = _calc_1st_scattering_spectrum(backend, expanded_cp_field, expanded_ref_cp_field, params, config.approx_type, illumination_vector)
         scattering_spectrums.append(scattering_spectrum)
 
     synthesized_spectrum = synthesize_spectrum(backend, scattering_spectrums, params, config, mode="Forward")
@@ -212,8 +217,40 @@ def _shift_dh_spectrum(
     return expanded_cp_field
 
 
-def _calc_1st_scattering_spectrum() -> ArrayProtocol:
-    pass
+def _calc_1st_scattering_spectrum(backend: ModuleType, cp_field: ArrayProtocol, ref_cp_field: ArrayProtocol, params: ODTParameters, approx_type: str, illumination_vector: tuple[int, int]) -> ArrayProtocol:
+    if approx_type == "Born":
+        scattering_field = (cp_field - ref_cp_field) / ref_cp_field
+    elif approx_type == "Rytov":
+        scattering_field = _log_field(backend, cp_field, ref_cp_field)
+    else:
+        msg = f"Unknown approximation type: {approx_type}"
+        raise ValueError(msg)
+    scattering_spectrum = backend.fft.fftshift(backend.fft.fft2(scattering_field))
+    mask_for_synthesis = make_disk(
+        backend,
+        (
+            params.aperturesize_px + illumination_vector[0],
+            params.aperturesize_px + illumination_vector[1],
+        ),
+        params.aperturesize_px//2,
+        cp_field.shape,
+    )
+    scattering_spectrum *= mask_for_synthesis
+
+    return scattering_spectrum
+
+def _log_field(backend: ModuleType, cp_field: ArrayProtocol, ref_cp_field: ArrayProtocol) -> ArrayProtocol:
+    field_log = backend.log(cp_field)
+    field_log_real = backend.real(field_log)
+    field_log_imag = backend.imag(field_log)
+    ref_field_log = backend.log(ref_cp_field)
+    ref_field_log_real = backend.real(ref_field_log)
+    ref_field_log_imag = backend.imag(ref_field_log)
+
+    amplitude = field_log_real - ref_field_log_real
+    phase = unwrap_phase(bmg, field_log_imag - ref_field_log_imag)
+
+    return amplitude + 1j * phase
 
 
 def _embed_3d_spectrum() -> ArrayProtocol:

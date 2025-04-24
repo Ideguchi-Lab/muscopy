@@ -5,7 +5,7 @@ from __future__ import annotations
 from types import ModuleType
 from dataclasses import dataclass
 from functools import cached_property
-from collections.abc import Sequence
+from collections.abc import Sequence, Iterable
 
 from tqdm import tqdm
 
@@ -13,6 +13,7 @@ from muscopy.backend_manager import ArrayProtocol, BackendManager
 from muscopy.cfg import ArrayPrecision
 from muscopy.qpi import QPIParameters, make_disk, correct_offset, crop_array
 from muscopy.qpi_utils import unwrap_phase
+
 
 @dataclass
 class ODTParameters(QPIParameters):
@@ -59,7 +60,7 @@ class ODTParameters(QPIParameters):
         `float`
             The axial frequency in pixels.
         """
-        return (self.light_freq_px ** 2 - self.light_freq_lateral_px ** 2) ** 0.5
+        return (self.light_freq_px**2 - self.light_freq_lateral_px**2) ** 0.5
 
     @cached_property
     def freq_axial_extent_px(self) -> int:
@@ -105,26 +106,67 @@ class ODTParameters(QPIParameters):
         """
         return (self.imgpx_axial_m_per_px / self.freq_per_px) ** 0.5
 
+
 @dataclass
 class ODTConfig:
     approx_type: str = "Born"
     hermite_symmetry: bool = True
     precision: ArrayPrecision = ArrayPrecision()
 
-def synthesize_forward_spectrum() -> ArrayProtocol:
-    pass
 
-def synthesize_backward_spectrum() -> ArrayProtocol:
-    pass
+def synthesize_spectrum(
+    backend: ModuleType,
+    scattering_wave_spectrums: Iterable[ArrayPrecision],
+    params: ODTParameters,
+    config: ODTConfig,
+    mode: str = "Forward",
+    edge_size: int = 0,
+) -> ArrayProtocol:
+    synthesized_spectrum = backend.zeros(
+        (
+            2 * params.aperturesize_px + 1 - edge_size,
+            2 * params.aperturesize_px + 1 - edge_size,
+            2 * params.freq_axial_extent_px + 1,
+        ),
+        dtype=config.precision.get_complex_precision(),
+    )
+    synthesized_weight = backend.ones_like(synthesized_spectrum, dtype=config.precision.get_int_precision())
+
+    for scattering_wave_spectrum in scattering_wave_spectrums:
+        kz_disk = calc_kz_disk(backend, params, oblique_shift, precision)
+        scattering_wave_spectrum *= 2j * kz_disk
+        scattering_potential = _embed_3d_spectrum(
+            backend, scattering_wave_spectrum, params, oblique_shift, precision, mode=mode
+        )
+
+        synthesized_spectrum += scattering_potential
+        synthesized_weight += scattering_potential != 0
+
+    synthesized_weight -= synthesized_weight > 1
+    synthesized_spectrum /= synthesized_weight
+
+    # NOTE: Fourier factor to cancel 3D mapping effect
+
+    return synthesized_spectrum
+
 
 def fill_hermite_components(spectrum3d: ArrayProtocol) -> ArrayProtocol:
     pass
 
+
 def calc_refractive_index(scattering_potential: ArrayProtocol) -> ArrayProtocol:
     pass
 
-def odt(backend: ModuleType, sample_arrays: Sequence[ArrayProtocol], ref_arrays: Sequence[ArrayProtocol], params: ODTParameters, config: ODTConfig) -> tuple[ArrayProtocol, ArrayProtocol]:
+
+def odt(
+    backend: ModuleType,
+    sample_arrays: Sequence[ArrayProtocol],
+    ref_arrays: Sequence[ArrayProtocol],
+    params: ODTParameters,
+    config: ODTConfig,
+) -> tuple[ArrayProtocol, ArrayProtocol]:
     pass
+
 
 def _find_max_args(backend: ModuleType, array: ArrayProtocol) -> tuple[int, int, float]:
     max_value = backend.max(array)
@@ -133,11 +175,14 @@ def _find_max_args(backend: ModuleType, array: ArrayProtocol) -> tuple[int, int,
     max_y = max_index[1]
     return max_x, max_y, max_value
 
+
 def _shift_dh_spectrum() -> ArrayProtocol:
     pass
 
+
 def _calc_1st_scattering_spectrum() -> ArrayProtocol:
     pass
+
 
 def _embed_3d_spectrum() -> ArrayProtocol:
     pass

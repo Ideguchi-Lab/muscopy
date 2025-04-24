@@ -9,7 +9,7 @@ from collections.abc import Sequence, Iterable
 
 from tqdm import tqdm
 
-from muscopy.backend_manager import ArrayProtocol, BackendManager
+from muscopy.backend_manager import ArrayProtocol
 from muscopy.cfg import ArrayPrecision
 from muscopy.qpi import QPIParameters, make_disk, correct_offset, crop_array
 from muscopy.qpi_utils import unwrap_phase
@@ -112,6 +112,7 @@ class ODTConfig:
     approx_type: str = "Born"
     hermite_symmetry: bool = True
     precision: ArrayPrecision = ArrayPrecision()
+    edge_size: int = 0
 
 
 def synthesize_spectrum(
@@ -120,12 +121,11 @@ def synthesize_spectrum(
     params: ODTParameters,
     config: ODTConfig,
     mode: str = "Forward",
-    edge_size: int = 0,
 ) -> ArrayProtocol:
     synthesized_spectrum = backend.zeros(
         (
-            2 * params.aperturesize_px + 1 - edge_size,
-            2 * params.aperturesize_px + 1 - edge_size,
+            2 * params.aperturesize_px + 1 - config.edge_size,
+            2 * params.aperturesize_px + 1 - config.edge_size,
             2 * params.freq_axial_extent_px + 1,
         ),
         dtype=config.precision.get_complex_precision(),
@@ -168,12 +168,26 @@ def calc_refractive_index(
 
 def odt(
     backend: ModuleType,
-    sample_arrays: Sequence[ArrayProtocol],
-    ref_arrays: Sequence[ArrayProtocol],
+    cp_fields: Sequence[ArrayProtocol],
+    ref_cp_fields: Sequence[ArrayProtocol],
     params: ODTParameters,
     config: ODTConfig,
 ) -> tuple[ArrayProtocol, ArrayProtocol]:
-    pass
+    # weak scattering approximation
+    scattering_spectrums = []
+    for cp_field, ref_cp_field in zip(cp_fields, ref_cp_fields):
+        scattering_spectrum = _calc_1st_scattering_spectrum(backend, cp_field, ref_cp_field, config.approx_type)
+        scattering_spectrums.append(scattering_spectrum)
+
+    synthesized_spectrum = synthesize_spectrum(backend, scattering_spectrums, params, config, mode="Forward")
+
+    if config.hermite_symmetry:
+        synthesized_spectrum = fill_hermite_components(backend, synthesized_spectrum)
+
+    scattering_potential = backend.fft.ifftn(backend.fft.ifftshift(synthesized_spectrum))
+
+    refractive_index = calc_refractive_index(backend, scattering_potential, params)
+    return refractive_index, scattering_potential
 
 
 def _find_max_args(backend: ModuleType, array: ArrayProtocol) -> tuple[int, int, float]:

@@ -2,17 +2,21 @@
 
 from __future__ import annotations
 
-from types import ModuleType
 from dataclasses import dataclass
 from functools import cached_property
-from collections.abc import Sequence, Iterable
+from typing import TYPE_CHECKING, NamedTuple
 
 from tqdm import tqdm
 
-from muscopy.backend_manager import ArrayProtocol
 from muscopy.cfg import ArrayPrecision
-from muscopy.qpi import QPIParameters, make_disk, correct_offset, crop_array
+from muscopy.qpi import QPIParameters, make_disk
 from muscopy.qpi_utils import unwrap_phase
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Sequence
+    from types import ModuleType
+
+    from muscopy.backend_manager import ArrayProtocol
 
 
 @dataclass
@@ -115,9 +119,14 @@ class ODTConfig:
     edge_size: int = 0
 
 
+class ScatteringSpectrum(NamedTuple):
+    array: ArrayProtocol
+    illumintaion_vector: tuple[int, int]
+
+
 def synthesize_spectrum(
     backend: ModuleType,
-    scattering_wave_spectrums: Iterable[ArrayProtocol],
+    scattering_spectrums: Iterable[ScatteringSpectrum],
     params: ODTParameters,
     config: ODTConfig,
     mode: str = "Forward",
@@ -133,14 +142,16 @@ def synthesize_spectrum(
     synthesized_weight = backend.ones_like(synthesized_spectrum, dtype=config.precision.get_int_precision())
 
     print("Synthesize spectrum...")  # noqa: T201
-    for scattering_wave_spectrum in tqdm(scattering_wave_spectrums):
-        kz_disk = _calc_kz_disk(backend, params, illumination_vector, precision)
+    for scattering_spectrum in tqdm(scattering_spectrums):
+        kz_disk = _calc_kz_disk(
+            backend, params, scattering_spectrum.array.shape, scattering_spectrum.illumination_vector, config.precision
+        )
         scattering_potential = _embed_3d_spectrum(
             backend,
-            scattering_wave_spectrum * 2j * kz_disk,
-            synthesize_spectrum.shape,
+            scattering_spectrum.array * 2j * kz_disk,
+            synthesized_spectrum.shape,
             params,
-            illumination_vector,
+            scattering_spectrum.illumination_vector,
             mode=mode,
         )
 
@@ -187,9 +198,10 @@ def odt(
         illumination_vector = (max_x - params.img_center[0], max_y - params.img_center[1])
         expanded_cp_field = _shift_dh_spectrum(backend, params, cp_field, illumination_vector)
         expanded_ref_cp_field = _shift_dh_spectrum(backend, params, ref_cp_field, illumination_vector)
-        scattering_spectrum = _calc_1st_scattering_spectrum(
+        scattering_spectrum_array = _calc_1st_scattering_spectrum(
             backend, expanded_cp_field, expanded_ref_cp_field, params, config.approx_type, illumination_vector
         )
+        scattering_spectrum = ScatteringSpectrum(scattering_spectrum_array, illumination_vector)
         scattering_spectrums.append(scattering_spectrum)
 
     synthesized_spectrum = synthesize_spectrum(backend, scattering_spectrums, params, config, mode="Forward")

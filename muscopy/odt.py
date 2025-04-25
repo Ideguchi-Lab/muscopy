@@ -132,10 +132,11 @@ def synthesize_spectrum(
     )
     synthesized_weight = backend.ones_like(synthesized_spectrum, dtype=config.precision.get_int_precision())
 
-    for scattering_wave_spectrum in scattering_wave_spectrums:
-        kz_disk = calc_kz_disk(backend, params, illumination_vector, precision)
+    print("Synthesize spectrum...")  # noqa: T201
+    for scattering_wave_spectrum in tqdm(scattering_wave_spectrums):
+        kz_disk = _calc_kz_disk(backend, params, illumination_vector, precision)
         scattering_potential = _embed_3d_spectrum(
-            backend, scattering_wave_spectrum * 2j * kz_disk, params, illumination_vector, precision, mode=mode
+            backend, scattering_wave_spectrum * 2j * kz_disk, synthesize_spectrum.shape ,params, illumination_vector, mode=mode
         )
 
         synthesized_spectrum += scattering_potential
@@ -181,7 +182,9 @@ def odt(
         illumination_vector = (max_x - params.img_center[0], max_y - params.img_center[1])
         expanded_cp_field = _shift_dh_spectrum(backend, params, cp_field, illumination_vector)
         expanded_ref_cp_field = _shift_dh_spectrum(backend, params, ref_cp_field, illumination_vector)
-        scattering_spectrum = _calc_1st_scattering_spectrum(backend, expanded_cp_field, expanded_ref_cp_field, params, config.approx_type, illumination_vector)
+        scattering_spectrum = _calc_1st_scattering_spectrum(
+            backend, expanded_cp_field, expanded_ref_cp_field, params, config.approx_type, illumination_vector
+        )
         scattering_spectrums.append(scattering_spectrum)
 
     synthesized_spectrum = synthesize_spectrum(backend, scattering_spectrums, params, config, mode="Forward")
@@ -217,7 +220,14 @@ def _shift_dh_spectrum(
     return expanded_cp_field
 
 
-def _calc_1st_scattering_spectrum(backend: ModuleType, cp_field: ArrayProtocol, ref_cp_field: ArrayProtocol, params: ODTParameters, approx_type: str, illumination_vector: tuple[int, int]) -> ArrayProtocol:
+def _calc_1st_scattering_spectrum(
+    backend: ModuleType,
+    cp_field: ArrayProtocol,
+    ref_cp_field: ArrayProtocol,
+    params: ODTParameters,
+    approx_type: str,
+    illumination_vector: tuple[int, int],
+) -> ArrayProtocol:
     if approx_type == "Born":
         scattering_field = (cp_field - ref_cp_field) / ref_cp_field
     elif approx_type == "Rytov":
@@ -232,12 +242,13 @@ def _calc_1st_scattering_spectrum(backend: ModuleType, cp_field: ArrayProtocol, 
             params.aperturesize_px + illumination_vector[0],
             params.aperturesize_px + illumination_vector[1],
         ),
-        params.aperturesize_px//2,
+        params.aperturesize_px // 2,
         cp_field.shape,
     )
     scattering_spectrum *= mask_for_synthesis
 
     return scattering_spectrum
+
 
 def _log_field(backend: ModuleType, cp_field: ArrayProtocol, ref_cp_field: ArrayProtocol) -> ArrayProtocol:
     field_log = backend.log(cp_field)
@@ -253,5 +264,63 @@ def _log_field(backend: ModuleType, cp_field: ArrayProtocol, ref_cp_field: Array
     return amplitude + 1j * phase
 
 
-def _embed_3d_spectrum() -> ArrayProtocol:
-    pass
+def _embed_3d_spectrum(
+    backend: ModuleType,
+    spectrum2d: ArrayProtocol,
+    shape_3d: tuple[int, int, int],
+    params: ODTParameters,
+    illumination_vector: tuple[int, int],
+    mode: str,
+) -> ArrayProtocol:
+    xx, yy = backend.meshgrid(
+        backend.arange(-shape_3d[0] // 2, shape_3d[0] // 2),
+        backend.arange(
+            -shape_3d[1] // 2,
+            shape_3d[1] // 2,
+        ),
+        indexing="ij",
+    )
+
+    _, _, zz = backend.meshgrid(
+        backend.arange(-shape_3d[0] // 2, shape_3d[0] // 2),
+        backend.arange(-shape_3d[1] // 2, shape_3d[1] // 2),
+        backend.arange(-shape_3d[2]) // 2,
+        shape_3d[2] // 2,
+        indexing="ij",
+    )
+
+    circle = (xx + illumination_vector[0]) ** 2 + (yy + illumination_vector[1]) ** 2 <= (
+        params.aperturesize_px // 2
+    ) ** 2
+
+    fz_circle = (
+        backend.sqrt(params.light_freq_px**2 - (xx + illumination_vector[0]) ** 2 - (yy + illumination_vector[1]) ** 2)
+        - params.light_freq_axial_px
+    )
+
+    if mode == "Backward":
+        fz_circle = -fz_circle
+
+    fz_value = (fz_circle + shape_3d[2] // 2) * circle
+    fz_tile = backend.tile(fz_value, (shape_3d[2], 1, 1))
+    fz_tile = fz_tile.transpose(1, 2, 0)
+
+    fz_tile -= fz_tile == 0
+    fz_index = zz == fz_tile
+
+    array_tiled = backend.stack([spectrum2d] * shape_3d[2], axis=2)
+    return array_tiled * fz_index
+
+
+def _calc_kz_disk(backend: ModuleType, params: ODTParameters, shape: tuple[int, int], illumination_vector: tuple[int, int], precision: ArrayPrecision) -> ArrayProtocol:
+    xx, yy = backend.measgrid(
+        backend.arange(-shape[0] // 2, shape[0] // 2),
+        backend.arange(-shape[1] // 2, shape[1] // 2),
+        indexing="ij",
+    )
+
+    disk = (xx + illumination_vector[0]) ** 2 + (yy + illumination_vector[1]) ** 2
+    disk_mask = disk <= (params.aperturesize_px // 2) ** 2
+    fz_disk = (params.light_freq_px**2 - disk) ** 0.5 * disk_mask
+    kz_disk = fz_disk * params.k_per_px
+    return kz_disk.astype(precision.get_float_precision())

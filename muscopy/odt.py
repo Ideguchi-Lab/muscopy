@@ -117,7 +117,7 @@ class ODTConfig:
 
 def synthesize_spectrum(
     backend: ModuleType,
-    scattering_wave_spectrums: Iterable[ArrayPrecision],
+    scattering_wave_spectrums: Iterable[ArrayProtocol],
     params: ODTParameters,
     config: ODTConfig,
     mode: str = "Forward",

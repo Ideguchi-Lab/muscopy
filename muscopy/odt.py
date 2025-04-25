@@ -136,7 +136,12 @@ def synthesize_spectrum(
     for scattering_wave_spectrum in tqdm(scattering_wave_spectrums):
         kz_disk = _calc_kz_disk(backend, params, illumination_vector, precision)
         scattering_potential = _embed_3d_spectrum(
-            backend, scattering_wave_spectrum * 2j * kz_disk, synthesize_spectrum.shape ,params, illumination_vector, mode=mode
+            backend,
+            scattering_wave_spectrum * 2j * kz_disk,
+            synthesize_spectrum.shape,
+            params,
+            illumination_vector,
+            mode=mode,
         )
 
         synthesized_spectrum += scattering_potential
@@ -312,7 +317,13 @@ def _embed_3d_spectrum(
     return array_tiled * fz_index
 
 
-def _calc_kz_disk(backend: ModuleType, params: ODTParameters, shape: tuple[int, int], illumination_vector: tuple[int, int], precision: ArrayPrecision) -> ArrayProtocol:
+def _calc_kz_disk(
+    backend: ModuleType,
+    params: ODTParameters,
+    shape: tuple[int, int],
+    illumination_vector: tuple[int, int],
+    precision: ArrayPrecision,
+) -> ArrayProtocol:
     xx, yy = backend.measgrid(
         backend.arange(-shape[0] // 2, shape[0] // 2),
         backend.arange(-shape[1] // 2, shape[1] // 2),

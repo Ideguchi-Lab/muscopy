@@ -21,6 +21,24 @@ if TYPE_CHECKING:
 
 @dataclass
 class ODTParameters(QPIParameters):
+    """Optical Diffraction Tomography (ODT) parameters.
+
+    Attributes
+    ----------
+    na : `float`
+        Numerical aperture of the objective lens
+    wavelength_m : `float`
+        Wavelength of the light in meters
+    img_size_px : `int`
+        Size of the image in pixels. We assume square image.
+    px_size_m : `float`
+        Pixel size in meters
+    n_sol : `float`
+        Refractive index of the solution
+    na_illumination : `float`
+        Maximum illumination numerical aperture
+    """
+
     na_illumination: float = 1.0
 
     def verify_parameters(self) -> None:
@@ -113,6 +131,20 @@ class ODTParameters(QPIParameters):
 
 @dataclass
 class ODTConfig:
+    """Optical Diffraction Tomography (ODT) configuration.
+
+    Attributes
+    ----------
+    approx_type : `str`, optional
+        Weak scattering approximation type, [Born, Rytov].
+    hermite_symmetry : `bool`, optional
+        Whether to use Hermite embedding or not.
+    precision : `ArrayPrecision`
+        Precision configuration
+    edge_size : `int`, optional
+        Size of removed edge in FT calculation.
+    """
+
     approx_type: str = "Born"
     hermite_symmetry: bool = True
     precision: ArrayPrecision = ArrayPrecision()
@@ -120,6 +152,16 @@ class ODTConfig:
 
 
 class ScatteringSpectrum(NamedTuple):
+    r"""Data class to store scattering spectrum.
+
+    Attributes
+    ----------
+    array : `ArrayProtocol`
+        Scattering spectrum
+    illumination_vector : `tuple`\[`int`, `int`\]
+        Illumination vector in px unit
+    """
+
     array: ArrayProtocol
     illumintaion_vector: tuple[int, int]
 
@@ -131,6 +173,26 @@ def synthesize_spectrum(
     config: ODTConfig,
     mode: str = "Forward",
 ) -> ArrayProtocol:
+    r"""Synthesize scattering spectrums into 3D scattering potential.
+
+    Parameters
+    ----------
+    backend : `types.ModuleType`
+        Backend module to use
+    scattering_spectrums : `collections.abc.Iterable`\[`ScatteringSpectrum`\]
+        Collection of ScatteringSpectrum object
+    params : `ODTParameters`
+        ODT params class instance
+    config : `ODTConfig`
+        ODT configuration
+    mode : `str`, optional
+        Diffraction mode, by default "Forward"
+
+    Returns
+    -------
+    `ArrayProtocol`
+        Synthesized scattering potential
+    """
     synthesized_spectrum = backend.zeros(
         (
             2 * params.aperturesize_px + 1 - config.edge_size,
@@ -167,6 +229,20 @@ def synthesize_spectrum(
 
 
 def fill_hermite_components(backend: ModuleType, spectrum3d: ArrayProtocol) -> ArrayProtocol:
+    """Fill the hermite conjugated spectrum for transparent sample.
+
+    Parameters
+    ----------
+    backend : `types.ModuleType`
+        Backend module to calculate
+    spectrum3d : `ArrayProtocol`
+        Spectrum of scattering potential
+
+    Returns
+    -------
+    `ArrayProtocol`
+        Filled spectrum of scattering potential
+    """
     conjugate_spectrum = backend.conjugate(backend.flip(spectrum3d, axis=(0, 1, 2)))
     overlap_region = backend.logical_and(backend.abs(spectrum3d) > 0, backend.abs(conjugate_spectrum) > 0)
     spectrum3d += conjugate_spectrum
@@ -177,6 +253,22 @@ def fill_hermite_components(backend: ModuleType, spectrum3d: ArrayProtocol) -> A
 def calc_refractive_index(
     backend: ModuleType, scattering_potential: ArrayProtocol, params: ODTParameters
 ) -> ArrayProtocol:
+    """Calculate the refractive index from the scattering potential.
+
+    Parameters
+    ----------
+    backend : `types.ModuleType`
+        Backend module to calulate
+    scattering_potential : `ArrayProtocol`
+        scattering potential array
+    params : `ODTParameters`
+        ODT parameter instance
+
+    Returns
+    -------
+    `ArrayProtocol`
+        3D refractive index
+    """
     return params.n_sol * backend.sqrt(
         backend.ones_like(scattering_potential)
         + scattering_potential / (params.light_freq_px * params.freq_per_px) ** 2
@@ -190,6 +282,26 @@ def odt(
     params: ODTParameters,
     config: ODTConfig,
 ) -> tuple[ArrayProtocol, ArrayProtocol]:
+    r"""Optical Diffraction Tomography (ODT) reconstruction.
+
+    Parameters
+    ----------
+    backend : `types.ModuleType`
+        Backend module to calculate
+    cp_fields : `collections.abc.Sequence`\[`ArrayProtocol`\]
+        Complex fields
+    ref_cp_fields : `collections.abc.Sequence`\[`ArrayProtocol`\]
+        Reference complex fields
+    params : `ODTParameters`
+        ODT parameter instance
+    config : `ODTConfig`
+        ODT configuration
+
+    Returns
+    -------
+    `tuple`\[`ArrayProtocol`, `ArrayProtocol`\]
+        3D refractive index, 3D spectrum
+    """
     # weak scattering approximation
     scattering_spectrums = []
     for cp_field, ref_cp_field in zip(cp_fields, ref_cp_fields):
@@ -237,7 +349,7 @@ def _shift_dh_spectrum(
     return expanded_cp_field
 
 
-def _calc_1st_scattering_spectrum(
+def _calc_1st_scattering_spectrum(  # noqa: PLR0913, PLR0917
     backend: ModuleType,
     cp_field: ArrayProtocol,
     ref_cp_field: ArrayProtocol,
@@ -281,7 +393,7 @@ def _log_field(backend: ModuleType, cp_field: ArrayProtocol, ref_cp_field: Array
     return amplitude + 1j * phase
 
 
-def _embed_3d_spectrum(
+def _embed_3d_spectrum(  # noqa: PLR0913, PLR0917
     backend: ModuleType,
     spectrum2d: ArrayProtocol,
     shape_3d: tuple[int, int, int],

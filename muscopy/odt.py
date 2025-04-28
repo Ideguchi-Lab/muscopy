@@ -96,6 +96,17 @@ class ODTParameters(QPIParameters):
         return 2 * int(self.light_freq_px) + 1
 
     @cached_property
+    def imgpx_lateral_m_per_px(self) -> float:
+        """Calculate the lateral pixel size in meters (ODT).
+
+        Returns
+        -------
+        float
+            The lateral pixel size in meter
+        """
+        return self.px_size_m * self.img_size_px / (2 * self.aperturesize_px + 1)
+
+    @cached_property
     def imgpx_axial_m_per_px(self) -> float:
         """Calculate the axial pixel size in meters.
 
@@ -107,7 +118,29 @@ class ODTParameters(QPIParameters):
         return 1 / (self.freq_per_px * self.freq_axial_extent_px)
 
     @cached_property
-    def spectrum2field_z(self) -> float:
+    def spectrum2cpfield_xy(self) -> float:
+        """Lateral Fourier factor from spectrum to field.
+
+        Returns
+        -------
+        float
+            factor from spectrum to field
+        """
+        return (self.freq_per_px / self.imgpx_lateral_m_per_px) ** 0.5
+
+    @cached_property
+    def cpfield_xy2spectrum(self) -> float:
+        """Lateral Fourier factor from field to spectrum.
+
+        Returns
+        -------
+        float
+            factor from field to spectrum
+        """
+        return (self.imgpx_lateral_m_per_px / self.freq_per_px) ** 0.5
+
+    @cached_property
+    def spectrum2cpfield_z(self) -> float:
         """Axial Fourier factor from spectrum to field.
 
         Returns
@@ -118,7 +151,7 @@ class ODTParameters(QPIParameters):
         return (self.freq_per_px / self.imgpx_axial_m_per_px) ** 0.5
 
     @cached_property
-    def field_z2spectrum(self) -> float:
+    def cpfield_z2spectrum(self) -> float:
         """Axial Fourier factor from spectrum to field.
 
         Returns
@@ -364,7 +397,11 @@ def _calc_1st_scattering_spectrum(  # noqa: PLR0913, PLR0917
     else:
         msg = f"Unknown approximation type: {approx_type}"
         raise ValueError(msg)
-    scattering_spectrum = backend.fft.fftshift(backend.fft.fft2(scattering_field, norm="ortho"))
+    scattering_spectrum = (
+        backend.fft.fftshift(backend.fft.fft2(scattering_field, norm="ortho"))
+        * (params.cpfield_xy2spectrum) ** 2
+        * (2 * backend.pi)
+    )
     mask_for_synthesis = make_disk(
         backend,
         (

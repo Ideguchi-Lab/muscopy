@@ -305,7 +305,7 @@ def odt(
     # weak scattering approximation
     scattering_spectrums = []
     for cp_field, ref_cp_field in zip(cp_fields, ref_cp_fields):
-        cp_spectrum = backend.fft.fftshift(backend.fft.fft2(cp_field))
+        cp_spectrum = backend.fft.fftshift(backend.fft.fft2(cp_field, norm="ortho"))
         max_x, max_y, _ = _find_max_args(backend, cp_spectrum)
         illumination_vector = (max_x - params.img_center[0], max_y - params.img_center[1])
         expanded_cp_field = _shift_dh_spectrum(backend, params, cp_field, illumination_vector)
@@ -321,7 +321,7 @@ def odt(
     if config.hermite_symmetry:
         synthesized_spectrum = fill_hermite_components(backend, synthesized_spectrum)
 
-    scattering_potential = backend.fft.ifftn(backend.fft.ifftshift(synthesized_spectrum))
+    scattering_potential = backend.fft.ifftn(backend.fft.ifftshift(synthesized_spectrum), norm="ortho")
 
     refractive_index = calc_refractive_index(backend, scattering_potential, params)
     return refractive_index, scattering_potential
@@ -364,7 +364,7 @@ def _calc_1st_scattering_spectrum(  # noqa: PLR0913, PLR0917
     else:
         msg = f"Unknown approximation type: {approx_type}"
         raise ValueError(msg)
-    scattering_spectrum = backend.fft.fftshift(backend.fft.fft2(scattering_field))
+    scattering_spectrum = backend.fft.fftshift(backend.fft.fft2(scattering_field, norm="ortho"))
     mask_for_synthesis = make_disk(
         backend,
         (
@@ -413,8 +413,7 @@ def _embed_3d_spectrum(  # noqa: PLR0913, PLR0917
     _, _, zz = backend.meshgrid(
         backend.arange(-shape_3d[0] // 2, shape_3d[0] // 2),
         backend.arange(-shape_3d[1] // 2, shape_3d[1] // 2),
-        backend.arange(-shape_3d[2]) // 2,
-        shape_3d[2] // 2,
+        backend.arange(-shape_3d[2] // 2, shape_3d[2] // 2),
         indexing="ij",
     )
 

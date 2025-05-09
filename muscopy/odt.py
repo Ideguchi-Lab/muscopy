@@ -19,8 +19,6 @@ if TYPE_CHECKING:
 
     from muscopy.backend_manager import ArrayProtocol
 
-from ilabvis.mouse_cursor2d import CursorVisualizer
-from ilabvis.slice_visualizer import SlicingVisualizer
 
 @dataclass
 class ODTParameters(QPIParameters):
@@ -325,11 +323,8 @@ def odt(
         illumination_vector = (max_x - params.aperturesize_px // 2, max_y - params.aperturesize_px // 2)
         expanded_cp_spectrum = _shift_dh_spectrum(backend, params, cp_spectrum, illumination_vector)
         expanded_ref_cp_spectrum = _shift_dh_spectrum(backend, params, ref_cp_spectrum, illumination_vector)
-        cp_field = backend.fft.ifft2(
-            backend.fft.ifftshift(expanded_cp_spectrum), norm="ortho")
-        ref_cp_field = backend.fft.ifft2(
-            backend.fft.ifftshift(expanded_ref_cp_spectrum), norm="ortho"
-        )
+        cp_field = backend.fft.ifft2(backend.fft.ifftshift(expanded_cp_spectrum), norm="ortho")
+        ref_cp_field = backend.fft.ifft2(backend.fft.ifftshift(expanded_ref_cp_spectrum), norm="ortho")
         scattering_spectrum_array = _calc_1st_scattering_spectrum(
             bmg, cp_field, ref_cp_field, params, config.approx_type, illumination_vector
         )
@@ -352,11 +347,7 @@ def odt(
     return refractive_index, synthesized_spectrum
 
 
-def discard_higher_axial_freq(
-        backend: ModuleType,
-        array3d: ArrayProtocol,
-        threshold: int
-    )  -> ArrayProtocol:
+def discard_higher_axial_freq(backend: ModuleType, array3d: ArrayProtocol, threshold: int) -> ArrayProtocol:
     """Discard higher axial frequency.
 
     Parameters
@@ -382,9 +373,9 @@ def discard_higher_axial_freq(
 
 
 def zeropad_higher_axial_freq(
-        backend: ModuleType,
-        array3d: ArrayProtocol,
-        number: int,
+    backend: ModuleType,
+    array3d: ArrayProtocol,
+    number: int,
 ) -> ArrayProtocol:
     """Zero pad the higher axial frequency.
 
@@ -515,10 +506,9 @@ def _embed_3d_spectrum(  # noqa: PLR0913, PLR0917
         params.aperturesize_px // 2
     ) ** 2
 
-    fz_circle = (
-        backend.sqrt(params.light_freq_px**2 - (xx - illumination_vector[0]) ** 2 - (yy - illumination_vector[1]) ** 2)
-        - backend.sqrt(params.light_freq_px ** 2 - illumination_vector[0] ** 2 - illumination_vector[1] ** 2)
-    )
+    fz_circle = backend.sqrt(
+        params.light_freq_px**2 - (xx - illumination_vector[0]) ** 2 - (yy - illumination_vector[1]) ** 2
+    ) - backend.sqrt(params.light_freq_px**2 - illumination_vector[0] ** 2 - illumination_vector[1] ** 2)
 
     if mode == "Backward":
         fz_circle = -fz_circle
@@ -526,7 +516,7 @@ def _embed_3d_spectrum(  # noqa: PLR0913, PLR0917
     fz_value = fz_circle * circle
     fz_tile = backend.tile(fz_value, (shape_3d[2], 1, 1))
     fz_tile = fz_tile.transpose(1, 2, 0)
-    fz_tile = fz_tile.astype(backend.int64) # necessary for the equivalence check
+    fz_tile = fz_tile.astype(backend.int64)  # necessary for the equivalence check
 
     fz_tile -= (fz_tile == 0) * 2 * params.freq_axial_extent_px
     fz_index = zz == fz_tile
@@ -552,5 +542,5 @@ def _calc_kz_disk(
     disk_mask = disk <= (params.aperturesize_px // 2) ** 2
     fz_disk = (params.light_freq_px**2 - disk) * disk_mask
     fz_disk[fz_disk < 0] = 0
-    kz_disk = fz_disk ** 0.5 * params.k_per_px
+    kz_disk = fz_disk**0.5 * params.k_per_px
     return kz_disk.astype(precision.get_float_precision())

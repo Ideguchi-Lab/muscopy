@@ -360,6 +360,69 @@ def odt(
     return refractive_index, scattering_potential
 
 
+def discard_higher_axial_freq(
+        backend: ModuleType,
+        array3d: ArrayProtocol,
+        threshold: int
+    )  -> ArrayProtocol:
+    """Discard higher axial frequency.
+
+    Parameters
+    ----------
+    backend : ModuleType
+        Backend module to calculate
+    array3d : ArrayProtocol
+        3D array to be modulated
+    threshold : int
+        Number of pixels to be remained
+
+    Returns
+    -------
+    ArrayProtocol
+        3D array with higher axial frequency discarded
+    """
+    norm_factor = backend.sqrt((array3d.shape[2] - 2 * threshold) / array3d.shape[2])
+    ft_array3d = backend.fft.fftshift(backend.fft.fftn(array3d, norm="ortho"))
+    discarded = ft_array3d[:, :, threshold:-threshold]
+    del array3d, ft_array3d
+    discarded *= norm_factor
+    return backend.fft.ifftn(backend.fft.ifftshift(discarded), norm="ortho")
+
+
+def zeropad_higher_axial_freq(
+        backend: ModuleType,
+        array3d: ArrayProtocol,
+        number: int,
+) -> ArrayProtocol:
+    """Zero pad the higher axial frequency.
+
+    Parameters
+    ----------
+    backend : ModuleType
+        Backend module to calculate
+    array3d : ArrayProtocol
+        3D array to be zero padded
+    number : int
+        Number of pixels to be zero padded
+
+    Returns
+    -------
+    ArrayProtocol
+        Zero padded 3D array
+    """
+    norm_factor = backend.sqrt((array3d.shape[2] + 2 * number) / array3d.shape[2])
+    ft_array3d = backend.fft.fftshift(backend.fft.fftn(array3d, norm="ortho"))
+    del array3d
+    ft_array3d = backend.pad(
+        ft_array3d,
+        ((0, 0), (0, 0), (number, number)),
+        mode="constant",
+        constant_values=0,
+    )
+    ft_array3d *= norm_factor
+    return backend.fft.ifftn(backend.fft.ifftshift(ft_array3d), norm="ortho")
+
+
 def _find_max_args(backend: ModuleType, array: ArrayProtocol) -> tuple[int, int, float]:
     max_value = backend.max(array)
     max_index = backend.unravel_index(backend.argmax(array), array.shape)

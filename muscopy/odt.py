@@ -310,8 +310,8 @@ def calc_refractive_index(
 
 def odt(
     backend: ModuleType,
-    cp_fields: Sequence[ArrayProtocol],
-    ref_cp_fields: Sequence[ArrayProtocol],
+    cp_spectrums: Sequence[ArrayProtocol],
+    ref_cp_spectrums: Sequence[ArrayProtocol],
     params: ODTParameters,
     config: ODTConfig,
 ) -> tuple[ArrayProtocol, ArrayProtocol]:
@@ -321,10 +321,10 @@ def odt(
     ----------
     backend : `types.ModuleType`
         Backend module to calculate
-    cp_fields : `collections.abc.Sequence`\[`ArrayProtocol`\]
-        Complex fields
-    ref_cp_fields : `collections.abc.Sequence`\[`ArrayProtocol`\]
-        Reference complex fields
+    cp_spectrums : `collections.abc.Sequence`\[`ArrayProtocol`\]
+        Spectrum of complex fields
+    ref_cp_spectrums : `collections.abc.Sequence`\[`ArrayProtocol`\]
+        Reference spectrum of complex fields
     params : `ODTParameters`
         ODT parameter instance
     config : `ODTConfig`
@@ -337,12 +337,11 @@ def odt(
     """
     # weak scattering approximation
     scattering_spectrums = []
-    for cp_field, ref_cp_field in zip(cp_fields, ref_cp_fields):
-        cp_spectrum = backend.fft.fftshift(backend.fft.fft2(cp_field, norm="ortho"))
+    for cp_spectrum, ref_cp_spectrum in zip(cp_spectrums, ref_cp_spectrums):
         max_x, max_y, _ = _find_max_args(backend, cp_spectrum)
-        illumination_vector = (max_x - params.img_center[0], max_y - params.img_center[1])
-        expanded_cp_field = _shift_dh_spectrum(backend, params, cp_field, illumination_vector)
-        expanded_ref_cp_field = _shift_dh_spectrum(backend, params, ref_cp_field, illumination_vector)
+        illumination_vector = (max_x - params.aperturesize_px // 2, max_y - params.aperturesize_px // 2)
+        expanded_cp_field = _shift_dh_spectrum(backend, params, cp_spectrum, illumination_vector)
+        expanded_ref_cp_field = _shift_dh_spectrum(backend, params, ref_cp_spectrum, illumination_vector)
         scattering_spectrum_array = _calc_1st_scattering_spectrum(
             backend, expanded_cp_field, expanded_ref_cp_field, params, config.approx_type, illumination_vector
         )
@@ -432,17 +431,17 @@ def _find_max_args(backend: ModuleType, array: ArrayProtocol) -> tuple[int, int,
 
 
 def _shift_dh_spectrum(
-    backend: ModuleType, params: ODTParameters, cp_field: ArrayProtocol, illumination_vector: tuple[int, int]
+    backend: ModuleType, params: ODTParameters, cp_spectrum: ArrayProtocol, illumination_vector: tuple[int, int]
 ) -> ArrayProtocol:
-    expanded_cp_field = backend.zeros(
-        (2 * params.aperturesize_px + 1, 2 * params.aperturesize_px + 1), dtype=cp_field.dtype
+    expanded_cp_spectrum = backend.zeros(
+        (2 * params.aperturesize_px + 1, 2 * params.aperturesize_px + 1), dtype=cp_spectrum.dtype
     )
 
-    expanded_cp_field[
+    expanded_cp_spectrum[
         params.aperturesize_px // 2 - illumination_vector[0] : 3 * params.aperturesize_px // 2 - illumination_vector[0],
         params.aperturesize_px // 2 - illumination_vector[1] : 3 * params.aperturesize_px // 2 - illumination_vector[1],
-    ] = cp_field
-    return expanded_cp_field
+    ] = cp_spectrum
+    return expanded_cp_spectrum
 
 
 def _calc_1st_scattering_spectrum(  # noqa: PLR0913, PLR0917

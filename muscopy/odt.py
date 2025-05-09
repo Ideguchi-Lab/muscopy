@@ -20,6 +20,8 @@ if TYPE_CHECKING:
     from muscopy.backend_manager import ArrayProtocol
 
 import cupy as cp
+from ilabvis.mouse_cursor2d import CursorVisualizer
+from ilabvis.slice_visualizer import SlicingVisualizer
 
 @dataclass
 class ODTParameters(QPIParameters):
@@ -63,28 +65,6 @@ class ODTParameters(QPIParameters):
         if self.na_illumination > self.n_sol:
             msg = "NA of illumination cannot be greater than NA of the solvent."
             raise ValueError(msg)
-
-    @cached_property
-    def light_freq_lateral_px(self) -> float:
-        """Calculate the lateral frequency in pixels.
-
-        Returns
-        -------
-        `float`
-            The lateral frequency in pixels.
-        """
-        return self.light_freq_px * self.na_illumination / self.n_sol
-
-    @cached_property
-    def light_freq_axial_px(self) -> float:
-        """Calculate the axial frequency in pixels.
-
-        Returns
-        -------
-        `float`
-            The axial frequency in pixels.
-        """
-        return (self.light_freq_px**2 - self.light_freq_lateral_px**2) ** 0.5
 
     @cached_property
     def freq_axial_extent_px(self) -> int:
@@ -243,9 +223,6 @@ def synthesize_spectrum(
         kz_disk = _calc_kz_disk(
             backend, params, scattering_spectrum.array.shape, scattering_spectrum.illumination_vector, config.precision
         )
-        if cp.isnan(kz_disk).any():
-            msg = "NaN value in kz_disk."
-            raise ValueError(msg)
         scattering_potential = _embed_3d_spectrum(
             backend,
             scattering_spectrum.array * 2j * kz_disk,
@@ -254,9 +231,6 @@ def synthesize_spectrum(
             scattering_spectrum.illumination_vector,
             mode=mode,
         )
-        if cp.isnan(scattering_potential).any():
-            msg = "NaN value in scattering potential."
-            raise ValueError(msg)
 
         synthesized_spectrum += scattering_potential
         synthesized_weight += scattering_potential != 0
@@ -363,6 +337,11 @@ def odt(
         synthesized_spectrum = fill_hermite_components(backend, synthesized_spectrum)
 
     scattering_potential = backend.fft.ifftn(backend.fft.ifftshift(synthesized_spectrum), norm="ortho")
+
+    scattering_potential = backend.fft.fftshift(scattering_potential, axes=(2))
+
+    factor = params.spectrum2cpfield_xy**2 * params.spectrum2cpfield_z / (2 * backend.pi) ** (3 / 2)
+    scattering_potential *= factor
 
     refractive_index = calc_refractive_index(backend, scattering_potential, params)
     return refractive_index, scattering_potential
@@ -533,17 +512,18 @@ def _embed_3d_spectrum(  # noqa: PLR0913, PLR0917
 
     fz_circle = (
         backend.sqrt(params.light_freq_px**2 - (xx + illumination_vector[0]) ** 2 - (yy + illumination_vector[1]) ** 2)
-        - params.light_freq_axial_px
+        - backend.sqrt(params.light_freq_px ** 2 - illumination_vector[0] ** 2 - illumination_vector[1] ** 2)
     )
 
     if mode == "Backward":
         fz_circle = -fz_circle
 
-    fz_value = (fz_circle + shape_3d[2] // 2) * circle
+    fz_value = fz_circle * circle
     fz_tile = backend.tile(fz_value, (shape_3d[2], 1, 1))
     fz_tile = fz_tile.transpose(1, 2, 0)
+    fz_tile = fz_tile.astype(backend.int64) # necessary for the equivalence check
 
-    fz_tile -= fz_tile == 0
+    fz_tile -= (fz_tile == 0) * 2 * params.freq_axial_extent_px
     fz_index = zz == fz_tile
 
     array_tiled = backend.stack([spectrum2d] * shape_3d[2], axis=2)
@@ -563,8 +543,8 @@ def _calc_kz_disk(
         indexing="ij",
     )
 
-    disk = (xx + illumination_vector[0]) ** 2 + (yy + illumination_vector[1]) ** 2
-    disk_mask = disk < (params.aperturesize_px // 2) ** 2
+    disk = (xx - illumination_vector[0]) ** 2 + (yy - illumination_vector[1]) ** 2
+    disk_mask = disk <= (params.aperturesize_px // 2) ** 2
     fz_disk = (params.light_freq_px**2 - disk) * disk_mask
     fz_disk[fz_disk < 0] = 0
     kz_disk = fz_disk ** 0.5 * params.k_per_px

@@ -19,7 +19,6 @@ if TYPE_CHECKING:
 
     from muscopy.backend_manager import ArrayProtocol
 
-import cupy as cp
 from ilabvis.mouse_cursor2d import CursorVisualizer
 from ilabvis.slice_visualizer import SlicingVisualizer
 
@@ -75,7 +74,7 @@ class ODTParameters(QPIParameters):
         `int`
             The axial extent of Fourier space in pixels.
         """
-        return 2 * int(self.light_freq_px) + 1
+        return self.aperturesize_px
 
     @cached_property
     def imgpx_lateral_m_per_px(self) -> float:
@@ -212,7 +211,7 @@ def synthesize_spectrum(
         (
             2 * params.aperturesize_px + 1 - config.edge_size,
             2 * params.aperturesize_px + 1 - config.edge_size,
-            2 * params.freq_axial_extent_px + 1,
+            params.freq_axial_extent_px,
         ),
         dtype=config.precision.get_complex_precision(),
     )
@@ -223,6 +222,8 @@ def synthesize_spectrum(
         kz_disk = _calc_kz_disk(
             backend, params, scattering_spectrum.array.shape, scattering_spectrum.illumination_vector, config.precision
         )
+        # CursorVisualizer(backend.abs(kz_disk)).run()
+        # CursorVisualizer(backend.abs(scattering_spectrum.array)).run()
         scattering_potential = _embed_3d_spectrum(
             backend,
             scattering_spectrum.array * 2j * kz_disk,
@@ -234,11 +235,10 @@ def synthesize_spectrum(
 
         synthesized_spectrum += scattering_potential
         synthesized_weight += scattering_potential != 0
+        # SlicingVisualizer(backend.abs(scattering_potential)).run()
 
     synthesized_weight -= synthesized_weight > 1
     synthesized_spectrum /= synthesized_weight
-
-    # NOTE: Fourier factor to cancel 3D mapping effect
 
     return synthesized_spectrum
 
@@ -323,10 +323,15 @@ def odt(
     for cp_spectrum, ref_cp_spectrum in zip(cp_spectrums, ref_cp_spectrums):
         max_x, max_y, _ = _find_max_args(backend, cp_spectrum)
         illumination_vector = (max_x - params.aperturesize_px // 2, max_y - params.aperturesize_px // 2)
-        expanded_cp_field = _shift_dh_spectrum(backend, params, cp_spectrum, illumination_vector)
-        expanded_ref_cp_field = _shift_dh_spectrum(backend, params, ref_cp_spectrum, illumination_vector)
+        expanded_cp_spectrum = _shift_dh_spectrum(backend, params, cp_spectrum, illumination_vector)
+        expanded_ref_cp_spectrum = _shift_dh_spectrum(backend, params, ref_cp_spectrum, illumination_vector)
+        cp_field = backend.fft.ifft2(
+            backend.fft.ifftshift(expanded_cp_spectrum), norm="ortho")
+        ref_cp_field = backend.fft.ifft2(
+            backend.fft.ifftshift(expanded_ref_cp_spectrum), norm="ortho"
+        )
         scattering_spectrum_array = _calc_1st_scattering_spectrum(
-            bmg, expanded_cp_field, expanded_ref_cp_field, params, config.approx_type, illumination_vector
+            bmg, cp_field, ref_cp_field, params, config.approx_type, illumination_vector
         )
         scattering_spectrum = ScatteringSpectrum(scattering_spectrum_array, illumination_vector)
         scattering_spectrums.append(scattering_spectrum)
@@ -344,7 +349,7 @@ def odt(
     scattering_potential *= factor
 
     refractive_index = calc_refractive_index(backend, scattering_potential, params)
-    return refractive_index, scattering_potential
+    return refractive_index, synthesized_spectrum
 
 
 def discard_higher_axial_freq(
@@ -506,12 +511,12 @@ def _embed_3d_spectrum(  # noqa: PLR0913, PLR0917
         indexing="ij",
     )
 
-    circle = (xx + illumination_vector[0]) ** 2 + (yy + illumination_vector[1]) ** 2 <= (
+    circle = (xx - illumination_vector[0]) ** 2 + (yy - illumination_vector[1]) ** 2 <= (
         params.aperturesize_px // 2
     ) ** 2
 
     fz_circle = (
-        backend.sqrt(params.light_freq_px**2 - (xx + illumination_vector[0]) ** 2 - (yy + illumination_vector[1]) ** 2)
+        backend.sqrt(params.light_freq_px**2 - (xx - illumination_vector[0]) ** 2 - (yy - illumination_vector[1]) ** 2)
         - backend.sqrt(params.light_freq_px ** 2 - illumination_vector[0] ** 2 - illumination_vector[1] ** 2)
     )
 

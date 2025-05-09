@@ -369,16 +369,16 @@ def discard_higher_axial_freq(
 
     Parameters
     ----------
-    backend : ModuleType
+    backend : `types.ModuleType`
         Backend module to calculate
-    array3d : ArrayProtocol
+    array3d : `ArrayProtocol`
         3D array to be modulated
-    threshold : int
+    threshold : `int`
         Number of pixels to be remained
 
     Returns
     -------
-    ArrayProtocol
+    `ArrayProtocol`
         3D array with higher axial frequency discarded
     """
     norm_factor = backend.sqrt((array3d.shape[2] - 2 * threshold) / array3d.shape[2])
@@ -398,16 +398,16 @@ def zeropad_higher_axial_freq(
 
     Parameters
     ----------
-    backend : ModuleType
+    backend : `types.ModuleType`
         Backend module to calculate
-    array3d : ArrayProtocol
+    array3d : `ArrayProtocol`
         3D array to be zero padded
-    number : int
+    number : `int`
         Number of pixels to be zero padded
 
     Returns
     -------
-    ArrayProtocol
+    `ArrayProtocol`
         Zero padded 3D array
     """
     norm_factor = backend.sqrt((array3d.shape[2] + 2 * number) / array3d.shape[2])

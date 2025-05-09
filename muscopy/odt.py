@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, NamedTuple
 
 from tqdm import tqdm
 
+from muscopy.backend_manager import BackendManager
 from muscopy.cfg import ArrayPrecision
 from muscopy.qpi import QPIParameters, make_disk
 from muscopy.qpi_utils import unwrap_phase
@@ -18,6 +19,7 @@ if TYPE_CHECKING:
 
     from muscopy.backend_manager import ArrayProtocol
 
+import cupy as cp
 
 @dataclass
 class ODTParameters(QPIParameters):
@@ -101,7 +103,7 @@ class ODTParameters(QPIParameters):
 
         Returns
         -------
-        float
+        `float`
             The lateral pixel size in meter
         """
         return self.px_size_m * self.img_size_px / (2 * self.aperturesize_px + 1)
@@ -123,7 +125,7 @@ class ODTParameters(QPIParameters):
 
         Returns
         -------
-        float
+        `float`
             factor from spectrum to field
         """
         return (self.freq_per_px / self.imgpx_lateral_m_per_px) ** 0.5
@@ -134,7 +136,7 @@ class ODTParameters(QPIParameters):
 
         Returns
         -------
-        float
+        `float`
             factor from field to spectrum
         """
         return (self.imgpx_lateral_m_per_px / self.freq_per_px) ** 0.5
@@ -196,7 +198,7 @@ class ScatteringSpectrum(NamedTuple):
     """
 
     array: ArrayProtocol
-    illumintaion_vector: tuple[int, int]
+    illumination_vector: tuple[int, int]
 
 
 def synthesize_spectrum(
@@ -241,6 +243,9 @@ def synthesize_spectrum(
         kz_disk = _calc_kz_disk(
             backend, params, scattering_spectrum.array.shape, scattering_spectrum.illumination_vector, config.precision
         )
+        if cp.isnan(kz_disk).any():
+            msg = "NaN value in kz_disk."
+            raise ValueError(msg)
         scattering_potential = _embed_3d_spectrum(
             backend,
             scattering_spectrum.array * 2j * kz_disk,
@@ -249,6 +254,9 @@ def synthesize_spectrum(
             scattering_spectrum.illumination_vector,
             mode=mode,
         )
+        if cp.isnan(scattering_potential).any():
+            msg = "NaN value in scattering potential."
+            raise ValueError(msg)
 
         synthesized_spectrum += scattering_potential
         synthesized_weight += scattering_potential != 0
@@ -309,7 +317,7 @@ def calc_refractive_index(
 
 
 def odt(
-    backend: ModuleType,
+    bmg: BackendManager,
     cp_spectrums: Sequence[ArrayProtocol],
     ref_cp_spectrums: Sequence[ArrayProtocol],
     params: ODTParameters,
@@ -319,8 +327,8 @@ def odt(
 
     Parameters
     ----------
-    backend : `types.ModuleType`
-        Backend module to calculate
+    bmg : `BackendManager`
+        Backend manager to use
     cp_spectrums : `collections.abc.Sequence`\[`ArrayProtocol`\]
         Spectrum of complex fields
     ref_cp_spectrums : `collections.abc.Sequence`\[`ArrayProtocol`\]
@@ -335,6 +343,7 @@ def odt(
     `tuple`\[`ArrayProtocol`, `ArrayProtocol`\]
         3D refractive index, 3D spectrum
     """
+    backend = bmg.get_backend()
     # weak scattering approximation
     scattering_spectrums = []
     for cp_spectrum, ref_cp_spectrum in zip(cp_spectrums, ref_cp_spectrums):
@@ -343,7 +352,7 @@ def odt(
         expanded_cp_field = _shift_dh_spectrum(backend, params, cp_spectrum, illumination_vector)
         expanded_ref_cp_field = _shift_dh_spectrum(backend, params, ref_cp_spectrum, illumination_vector)
         scattering_spectrum_array = _calc_1st_scattering_spectrum(
-            backend, expanded_cp_field, expanded_ref_cp_field, params, config.approx_type, illumination_vector
+            bmg, expanded_cp_field, expanded_ref_cp_field, params, config.approx_type, illumination_vector
         )
         scattering_spectrum = ScatteringSpectrum(scattering_spectrum_array, illumination_vector)
         scattering_spectrums.append(scattering_spectrum)
@@ -445,17 +454,18 @@ def _shift_dh_spectrum(
 
 
 def _calc_1st_scattering_spectrum(  # noqa: PLR0913, PLR0917
-    backend: ModuleType,
+    bmg: BackendManager,
     cp_field: ArrayProtocol,
     ref_cp_field: ArrayProtocol,
     params: ODTParameters,
     approx_type: str,
     illumination_vector: tuple[int, int],
 ) -> ArrayProtocol:
+    backend = bmg.get_backend()
     if approx_type == "Born":
         scattering_field = (cp_field - ref_cp_field) / ref_cp_field
     elif approx_type == "Rytov":
-        scattering_field = _log_field(backend, cp_field, ref_cp_field)
+        scattering_field = _log_field(bmg, cp_field, ref_cp_field)
     else:
         msg = f"Unknown approximation type: {approx_type}"
         raise ValueError(msg)
@@ -478,11 +488,12 @@ def _calc_1st_scattering_spectrum(  # noqa: PLR0913, PLR0917
     return scattering_spectrum
 
 
-def _log_field(backend: ModuleType, cp_field: ArrayProtocol, ref_cp_field: ArrayProtocol) -> ArrayProtocol:
-    field_log = backend.log(cp_field)
+def _log_field(bmg: BackendManager, cp_field: ArrayProtocol, ref_cp_field: ArrayProtocol) -> ArrayProtocol:
+    backend = bmg.get_backend()
+    field_log = backend.log(cp_field + 1e-40)
     field_log_real = backend.real(field_log)
     field_log_imag = backend.imag(field_log)
-    ref_field_log = backend.log(ref_cp_field)
+    ref_field_log = backend.log(ref_cp_field + 1e-40)
     ref_field_log_real = backend.real(ref_field_log)
     ref_field_log_imag = backend.imag(ref_field_log)
 
@@ -546,14 +557,15 @@ def _calc_kz_disk(
     illumination_vector: tuple[int, int],
     precision: ArrayPrecision,
 ) -> ArrayProtocol:
-    xx, yy = backend.measgrid(
+    xx, yy = backend.meshgrid(
         backend.arange(-shape[0] // 2, shape[0] // 2),
         backend.arange(-shape[1] // 2, shape[1] // 2),
         indexing="ij",
     )
 
     disk = (xx + illumination_vector[0]) ** 2 + (yy + illumination_vector[1]) ** 2
-    disk_mask = disk <= (params.aperturesize_px // 2) ** 2
-    fz_disk = (params.light_freq_px**2 - disk) ** 0.5 * disk_mask
-    kz_disk = fz_disk * params.k_per_px
+    disk_mask = disk < (params.aperturesize_px // 2) ** 2
+    fz_disk = (params.light_freq_px**2 - disk) * disk_mask
+    fz_disk[fz_disk < 0] = 0
+    kz_disk = fz_disk ** 0.5 * params.k_per_px
     return kz_disk.astype(precision.get_float_precision())

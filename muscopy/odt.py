@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, NamedTuple
 from tqdm import tqdm
 
 from muscopy.backend_manager import BackendManager
-from muscopy.cfg import ArrayPrecision
+from muscopy.cfg import ArrayPrecision, OffsetRegions
 from muscopy.qpi import QPIParameters, make_disk
 from muscopy.qpi_utils import unwrap_phase
 
@@ -155,12 +155,15 @@ class ODTConfig:
         Precision configuration
     edge_size : `int`, optional
         Size of removed edge in FT calculation.
+    offset_regions : `OffsetRegions`, optional
+        Regions to be used for offset calculation.
     """
 
     approx_type: str = "Born"
     hermite_symmetry: bool = True
     precision: ArrayPrecision = ArrayPrecision()
     edge_size: int = 0
+    offset_regions: OffsetRegions = None
 
 
 class ScatteringSpectrum(NamedTuple):
@@ -220,8 +223,6 @@ def synthesize_spectrum(
         kz_disk = _calc_kz_disk(
             backend, params, scattering_spectrum.array.shape, scattering_spectrum.illumination_vector, config.precision
         )
-        # CursorVisualizer(backend.abs(kz_disk)).run()
-        # CursorVisualizer(backend.abs(scattering_spectrum.array)).run()
         scattering_potential = _embed_3d_spectrum(
             backend,
             scattering_spectrum.array * 2j * kz_disk,
@@ -233,7 +234,6 @@ def synthesize_spectrum(
 
         synthesized_spectrum += scattering_potential
         synthesized_weight += scattering_potential != 0
-        # SlicingVisualizer(backend.abs(scattering_potential)).run()
 
     synthesized_weight -= synthesized_weight > 1
     synthesized_spectrum /= synthesized_weight
@@ -326,7 +326,7 @@ def odt(
         cp_field = backend.fft.ifft2(backend.fft.ifftshift(expanded_cp_spectrum), norm="ortho")
         ref_cp_field = backend.fft.ifft2(backend.fft.ifftshift(expanded_ref_cp_spectrum), norm="ortho")
         scattering_spectrum_array = _calc_1st_scattering_spectrum(
-            bmg, cp_field, ref_cp_field, params, config.approx_type, illumination_vector
+            bmg, cp_field, ref_cp_field, params, config.approx_type, illumination_vector, config.offset_regions
         )
         scattering_spectrum = ScatteringSpectrum(scattering_spectrum_array, illumination_vector)
         scattering_spectrums.append(scattering_spectrum)
@@ -435,6 +435,7 @@ def _calc_1st_scattering_spectrum(  # noqa: PLR0913, PLR0917
     params: ODTParameters,
     approx_type: str,
     illumination_vector: tuple[int, int],
+    offset_regions: OffsetRegions = None,
 ) -> ArrayProtocol:
     backend = bmg.get_backend()
     if approx_type == "Born":
@@ -444,6 +445,17 @@ def _calc_1st_scattering_spectrum(  # noqa: PLR0913, PLR0917
     else:
         msg = f"Unknown approximation type: {approx_type}"
         raise ValueError(msg)
+
+    # offset correction
+    if offset_regions:
+        amplitude_offset = 0.0
+        for region in offset_regions:
+            amplitude_offset += backend.mean(
+                backend.abs(scattering_field[region[0][0] : region[0][1], region[1][0] : region[1][1]])
+            )
+        amplitude_offset /= len(offset_regions)
+        scattering_field -= amplitude_offset
+
     scattering_spectrum = (
         backend.fft.fftshift(backend.fft.fft2(scattering_field, norm="ortho"))
         * (params.cpfield_xy2spectrum) ** 2

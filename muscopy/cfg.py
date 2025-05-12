@@ -37,7 +37,26 @@ def print_backend():
 
 
 class ArrayPrecision:
-    def __init__(self, int_length: int = 64, float_length: int = 64):
+    """A class to define the precision of arrays used in the library.
+
+    Attributes
+    ----------
+    int_length : int
+        The number of bits used for integer arrays.
+    float_length : int
+        The number of bits used for float arrays.
+    """
+
+    def __init__(self, int_length: int = 64, float_length: int = 64) -> None:
+        """Construct an ArrayPrecision object with specified integer and float lengths.
+
+        Parameters
+        ----------
+        int_length : int, optional
+            The number of bits used for integer arrays, by default 64
+        float_length : int, optional
+            The number of bits used for float arrays, by default 64
+        """
         self.int_length = int_length
         self.float_length = float_length
 

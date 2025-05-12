@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from skimage.restoration import unwrap_phase as skimage_unwrap_phase
 
 from muscopy.backend_manager import BackendManager
-from muscopy.qpi import QPIParameters, make_disk, print_qpi_all_parameters, qpi
+from muscopy.qpi import QPIParameters, make_disk, print_all_parameters, qpi
 from muscopy.qpi_utils import unwrap_phase as mus_unwrap_phase
 
 # config
@@ -24,7 +24,7 @@ params = QPIParameters(
 )
 
 # show QPI parameters
-print_qpi_all_parameters(params, show_properties=True)
+print_all_parameters(params, show_properties=True)
 
 # %%
 # specify the backend

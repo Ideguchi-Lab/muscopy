@@ -3,7 +3,7 @@
 This module provides:
 
 - `QPIParameters`: A dataclass to hold QPI parameters.
-- `print_qpi_all_parameters`: A function to print all parameters of QPIParameters dataclass.
+- `print_all_parameters`: A function to print all parameters of QPIParameters dataclass.
 - `make_disk`: A function to create a disk mask.
 - `crop_array`: A function to crop an array.
 - `get_spectrum`: A function to get the spectrum of the hologram array.
@@ -54,6 +54,38 @@ class QPIParameters:
     img_size_px: int
     px_size_m: float
     n_sol: float
+
+    def verify_parameters(self) -> None:
+        """Verify the parameters.
+
+        Raises
+        ------
+        ValueError
+            1. If the NA is negative.
+            2. If the wavelength is negative.
+            3. If the image size is negative.
+            4. If the pixel size is negative.
+            5. If the refractive index of the solution is negative.
+            6. If the NA is greater than the refractive index of the solution.
+        """
+        if self.na < 0:
+            msg = "NA cannot be negative."
+            raise ValueError(msg)
+        if self.wavelength_m < 0:
+            msg = "Wavelength cannot be negative."
+            raise ValueError(msg)
+        if self.img_size_px < 0:
+            msg = "Image size cannot be negative."
+            raise ValueError(msg)
+        if self.px_size_m < 0:
+            msg = "Pixel size cannot be negative."
+            raise ValueError(msg)
+        if self.n_sol < 0:
+            msg = "Refractive index of the solution cannot be negative."
+            raise ValueError(msg)
+        if self.na > self.n_sol:
+            msg = "NA cannot be greater than the refractive index of the solution."
+            raise ValueError(msg)
 
     @cached_property
     def img_center(self) -> tuple[int, int]:
@@ -122,7 +154,7 @@ class QPIParameters:
         return self.px_size_m * self.img_size_px / self.aperturesize_px
 
     @cached_property
-    def hologram2fourier(self) -> float:
+    def hologram2spectrum(self) -> float:
         """Fourier factor from hologram to spectrum.
 
         Returns
@@ -133,7 +165,7 @@ class QPIParameters:
         return (self.px_size_m / self.freq_per_px) ** 0.5
 
     @cached_property
-    def fourier2cpfield(self) -> float:
+    def spectrum2cpfield(self) -> float:
         """Fourier factor from spectrum to complex field.
 
         Returns
@@ -155,7 +187,7 @@ class QPIParameters:
         return (self.imgpx_m_per_px / self.freq_per_px) ** 0.5
 
 
-def print_qpi_all_parameters(param: QPIParameters, *, show_properties: bool = False) -> None:
+def print_all_parameters(param: QPIParameters, *, show_properties: bool = False) -> None:
     """Print all parameters of QPIParameters dataclass.
 
     Parameters
@@ -401,20 +433,21 @@ def qpi(
     ValueError
         If the array and reference have different shapes
     """
+    params.verify_parameters()
     if array.shape != reference.shape:
         msg = "Array and reference must have the same shape"
         raise ValueError(msg)
 
-    ft_array = backend.fft.fftshift(backend.fft.fft2(array)) * params.hologram2fourier
-    ft_reference = backend.fft.fftshift(backend.fft.fft2(reference)) * params.hologram2fourier
+    ft_array = backend.fft.fftshift(backend.fft.fft2(array)) * params.hologram2spectrum
+    ft_reference = backend.fft.fftshift(backend.fft.fft2(reference)) * params.hologram2spectrum
     spectrums = get_spectrums(backend, ft_array, params, offaxis_centers)
     ref_spectrums = get_spectrums(backend, ft_reference, params, offaxis_centers)
 
     cp_fields = []
 
     for spectrum, ref_spectrum in zip(spectrums, ref_spectrums):
-        cp_field = backend.fft.ifft2(backend.fft.ifftshift(spectrum)) * params.fourier2cpfield
-        ref_cp_field = backend.fft.ifft2(backend.fft.ifftshift(ref_spectrum)) * params.fourier2cpfield
+        cp_field = backend.fft.ifft2(backend.fft.ifftshift(spectrum)) * params.spectrum2cpfield
+        ref_cp_field = backend.fft.ifft2(backend.fft.ifftshift(ref_spectrum)) * params.spectrum2cpfield
         cp_field /= ref_cp_field
         cp_fields.append(cp_field)
 
@@ -466,14 +499,14 @@ def mip_qpi(  # noqa: PLR0913
         msg = "Array on and off must have the same shape"
         raise ValueError(msg)
 
-    ft_array_on = backend.fft.fftshift(backend.fft.fft2(array_on)) * params.hologram2fourier
-    ft_array_off = backend.fft.fftshift(backend.fft.fft2(array_off)) * params.hologram2fourier
+    ft_array_on = backend.fft.fftshift(backend.fft.fft2(array_on)) * params.hologram2spectrum
+    ft_array_off = backend.fft.fftshift(backend.fft.fft2(array_off)) * params.hologram2spectrum
 
     spectrum_on = get_spectrum(backend, ft_array_on, params, offaxis_center, crop_center=crop_center, c_r=c_r)
     spectrum_off = get_spectrum(backend, ft_array_off, params, offaxis_center, crop_center=crop_center, c_r=c_r)
 
-    cp_field_on = backend.fft.ifft2(backend.fft.ifftshift(spectrum_on)) * params.fourier2cpfield
-    cp_field_off = backend.fft.ifft2(backend.fft.ifftshift(spectrum_off)) * params.fourier2cpfield
+    cp_field_on = backend.fft.ifft2(backend.fft.ifftshift(spectrum_on)) * params.spectrum2cpfield
+    cp_field_off = backend.fft.ifft2(backend.fft.ifftshift(spectrum_off)) * params.spectrum2cpfield
 
     array_div = cp_field_on / cp_field_off
 

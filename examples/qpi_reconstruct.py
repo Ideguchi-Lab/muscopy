@@ -6,7 +6,7 @@
 import matplotlib.pyplot as plt
 
 from muscopy.backend_manager import BackendManager
-from muscopy.qpi import QPIParameters, make_disk, print_qpi_all_parameters, qpi
+from muscopy.qpi import QPIParameters, make_disk, print_all_parameters, qpi
 
 # config
 SHOW_IMAGE = True
@@ -23,7 +23,7 @@ params = QPIParameters(
 )
 
 # show QPI parameters
-print_qpi_all_parameters(params, show_properties=True)
+print_all_parameters(params, show_properties=True)
 
 # %%
 # specify the backend

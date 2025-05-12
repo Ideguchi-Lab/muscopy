@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 from muscopy.backend_manager import BackendManager
 from muscopy.phase_noise import calc_phase_noise, calc_visibility
-from muscopy.qpi import QPIParameters, make_disk, print_qpi_all_parameters
+from muscopy.qpi import QPIParameters, make_disk, print_all_parameters
 
 # %%
 # config
@@ -27,7 +27,7 @@ params = QPIParameters(
     px_size_m=5e-6 / 60,
     n_sol=1.33,
 )
-print_qpi_all_parameters(params, show_properties=True)
+print_all_parameters(params, show_properties=True)
 
 # %%
 # specify the backend

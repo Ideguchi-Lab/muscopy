@@ -5,6 +5,7 @@
 ### Added
 
 - Demo of QPI reconstruction [[#30](https://github.com/Ideguchi-Lab/muscopy/issues/30)]
+- New module dedicated for optical diffraction tomography `odt.py`.
 
 ### Changed
 

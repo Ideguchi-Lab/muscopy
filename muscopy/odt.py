@@ -314,6 +314,7 @@ def odt(
     `tuple`\[`ArrayProtocol`, `ArrayProtocol`\]
         3D refractive index, 3D spectrum
     """
+    params.verify_parameters()
     backend = bmg.get_backend()
     # weak scattering approximation
     scattering_spectrums = []

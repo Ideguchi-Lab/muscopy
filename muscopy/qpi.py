@@ -433,6 +433,7 @@ def qpi(
     ValueError
         If the array and reference have different shapes
     """
+    params.verify_parameters()
     if array.shape != reference.shape:
         msg = "Array and reference must have the same shape"
         raise ValueError(msg)

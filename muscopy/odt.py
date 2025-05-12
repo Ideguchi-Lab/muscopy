@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, NamedTuple
 
 from tqdm import tqdm
 
-from muscopy.backend_manager import BackendManager
 from muscopy.cfg import ArrayPrecision, OffsetRegions
 from muscopy.qpi import QPIParameters, make_disk
 from muscopy.qpi_utils import unwrap_phase
@@ -17,7 +16,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
     from types import ModuleType
 
-    from muscopy.backend_manager import ArrayProtocol
+    from muscopy.backend_manager import ArrayProtocol, BackendManager
 
 
 @dataclass
@@ -340,7 +339,7 @@ def odt(
 
     scattering_potential = backend.fft.fftshift(scattering_potential, axes=(2))
 
-    factor = params.spectrum2cpfield_xy**2 * params.spectrum2cpfield_z / (2 * backend.pi) ** (3 / 2)
+    factor = params.spectrum2cpfield_xy**2 * params.spectrum2cpfield_z / (2 * backend.pi) ** 3
     scattering_potential *= factor
 
     refractive_index = calc_refractive_index(backend, scattering_potential, params)
@@ -460,7 +459,7 @@ def _calc_1st_scattering_spectrum(  # noqa: PLR0913, PLR0917
         backend.fft.fftshift(backend.fft.fft2(scattering_field, norm="ortho"))
         * (params.cpfield_xy2spectrum) ** 2
         * (2 * backend.pi)
-    )
+    )  # last factor is to adjust to the non-Unitary derivation in Tamamitsu's paper
     mask_for_synthesis = make_disk(
         backend,
         (

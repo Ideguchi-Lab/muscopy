@@ -10,13 +10,13 @@ import math
 import types
 
 from muscopy.backend_manager import ArrayProtocol
-from muscopy.qpi import QPIParameters, crop_array, make_disk
+from muscopy.dh import MuParameters, crop_array, make_disk
 
 
 def _get_dc_ac(
     backend: types.ModuleType,
     hologram: ArrayProtocol,
-    params: QPIParameters,
+    params: MuParameters,
     offaxis_center: tuple[int, int],
 ) -> tuple[ArrayProtocol, ArrayProtocol]:
     scale_factor = params.aperturesize_px / params.img_size_px
@@ -65,7 +65,7 @@ def _get_phase_noise(  # noqa: PLR0913, PLR0917
 def calc_visibility(
     backend: types.ModuleType,
     hologram: ArrayProtocol,
-    params: QPIParameters,
+    params: MuParameters,
     offaxis_center: tuple[int, int],
 ) -> ArrayProtocol:
     r"""Calculate the visibility of a hologram.
@@ -76,8 +76,8 @@ def calc_visibility(
         numpy or cupy module
     hologram : `ArrayProtocol`
         The hologram array
-    params : `QPIParameters`
-        QPI parameters
+    params : `MuParameters`
+        Microscopy parameters
     offaxis_center : `tuple`\[`int`, `int`\]
         The crop center of the off-axis digital holography
 
@@ -93,7 +93,7 @@ def calc_visibility(
 def calc_phase_noise(
     backend: types.ModuleType,
     hologram: ArrayProtocol,
-    params: QPIParameters,
+    params: MuParameters,
     offaxis_center: tuple[int, int],
     fullwell: int,
     bit_depth: int,
@@ -107,8 +107,8 @@ def calc_phase_noise(
         numpy or cupy module
     hologram : `ArrayProtocol`
         The hologram array
-    params : `QPIParameters`
-        QPI parameters
+    params : `MuParameters`
+        Microscopy parameters
     offaxis_center : `tuple`\[`int`, `int`\]
         The crop center of the off-axis digital holography
     fullwell : `int`

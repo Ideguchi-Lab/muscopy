@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, NamedTuple
 from tqdm import tqdm
 
 from muscopy.cfg import ArrayPrecision, OffsetRegions
-from muscopy.qpi import QPIParameters, make_disk
+from muscopy.dh import MuParameters, make_disk
 from muscopy.qpi_utils import unwrap_phase
 
 if TYPE_CHECKING:
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class ODTParameters(QPIParameters):
+class ODTParameters(MuParameters):
     """Optical Diffraction Tomography (ODT) parameters.
 
     Attributes

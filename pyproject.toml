@@ -75,6 +75,7 @@ docstring-code-format = true
   "D103",
   "D104",
   "D400",
+  "PLR2004", # magic value
 ]
 "examples/*.py" = [
   "T201", # print

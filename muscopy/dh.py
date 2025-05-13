@@ -19,6 +19,7 @@ import cmath
 import dataclasses
 import functools
 import inspect
+import typing
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -403,7 +404,17 @@ def correct_offset(
 
     return array * cmath.exp(-1j * phase_offset) / amplitude_scale
 
+@typing.overload
+def offaxis_dh(
+    backend: types.ModuleType,
+    array: ArrayProtocol,
+    reference: ArrayProtocol,
+    params: MuParameters,
+    offaxis_centers: tuple[int, int],
+) -> ArrayProtocol:
+    ...
 
+@typing.overload
 def offaxis_dh(
     backend: types.ModuleType,
     array: ArrayProtocol,
@@ -411,6 +422,16 @@ def offaxis_dh(
     params: MuParameters,
     offaxis_centers: Iterable[tuple[int, int]],
 ) -> list[ArrayProtocol]:
+    ...
+
+
+def offaxis_dh(
+    backend: types.ModuleType,
+    array: ArrayProtocol,
+    reference: ArrayProtocol,
+    params: MuParameters,
+    offaxis_centers: tuple[int, int] | Iterable[tuple[int, int]],
+) -> ArrayProtocol | list[ArrayProtocol]:
     r"""Reconstruct the complex wave front using off-axis digital holography.
 
     Parameters
@@ -423,7 +444,7 @@ def offaxis_dh(
         Reference hologram array
     params : `MuParameters`
         Microscopy Parameters class
-    offaxis_centers : `Iterable`\[`tuple`\[`int`, `int`\]\]
+    offaxis_centers : `tuple`\[`int`, `int`\] | `Iterable`\[`tuple`\[`int`, `int`\]\]
         The crop centers of off-axis digital holography
 
     Returns
@@ -443,6 +464,14 @@ def offaxis_dh(
 
     ft_array = backend.fft.fftshift(backend.fft.fft2(array)) * params.hologram2spectrum
     ft_reference = backend.fft.fftshift(backend.fft.fft2(reference)) * params.hologram2spectrum
+    if isinstance(offaxis_centers, tuple):
+        spectrum = get_spectrum(backend, ft_array, params, offaxis_centers)
+        ref_spectrum = get_spectrum(backend, ft_reference, params, offaxis_centers)
+        cp_field = backend.fft.ifft2(backend.fft.ifftshift(spectrum)) * params.spectrum2cpfield
+        ref_cp_field = backend.fft.ifft2(backend.fft.ifftshift(ref_spectrum)) * params.spectrum2cpfield
+        cp_field /= ref_cp_field
+        return cp_field
+
     spectrums = get_spectrums(backend, ft_array, params, offaxis_centers)
     ref_spectrums = get_spectrums(backend, ft_reference, params, offaxis_centers)
 

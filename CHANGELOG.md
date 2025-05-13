@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+---
+
+## Version 0.4.0 [2025-05-13]
+
 ### Added
 
 - Demo of QPI reconstruction [[#30](https://github.com/Ideguchi-Lab/muscopy/issues/30)]

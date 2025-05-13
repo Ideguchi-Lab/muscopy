@@ -404,11 +404,11 @@ def correct_offset(
 
 
 def offaxis_dh(
-        backend: types.ModuleType,
-        array: ArrayProtocol,
-        reference: ArrayProtocol,
-        params: QPIParameters,
-        offaxis_centers: Iterable[tuple[int, int]],
+    backend: types.ModuleType,
+    array: ArrayProtocol,
+    reference: ArrayProtocol,
+    params: QPIParameters,
+    offaxis_centers: Iterable[tuple[int, int]],
 ) -> list[ArrayProtocol]:
     r"""Reconstruct the complex wave front using off-axis digital holography.
 

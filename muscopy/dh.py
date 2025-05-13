@@ -404,6 +404,7 @@ def correct_offset(
 
     return array * cmath.exp(-1j * phase_offset) / amplitude_scale
 
+
 @typing.overload
 def offaxis_dh(
     backend: types.ModuleType,
@@ -413,6 +414,7 @@ def offaxis_dh(
     offaxis_centers: tuple[int, int],
 ) -> ArrayProtocol:
     ...
+
 
 @typing.overload
 def offaxis_dh(

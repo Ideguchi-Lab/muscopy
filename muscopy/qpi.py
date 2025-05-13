@@ -32,6 +32,7 @@ def qpi(
 ) -> ArrayProtocol:
     ...
 
+
 @typing.overload
 def qpi(
     backend: types.ModuleType,

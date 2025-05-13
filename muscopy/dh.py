@@ -15,20 +15,20 @@ def demultiplex_cp_arrays(
     cp_arrays: Sequence[ArrayProtocol],
     demultiplexing_matrix: ArrayProtocol,
 ) -> list[ArrayProtocol]:
-    """Demultiplex a set of CP arrays using a demultiplexing matrix.
+    r"""Demultiplex a set of CP arrays using a demultiplexing matrix.
 
     Parameters
     ----------
-    bmg : BackendManager
+    bmg : `BackendManager`
         Backend manager to use for the operation.
-    cp_arrays : Sequence[ArrayProtocol]
+    cp_arrays : `collections.abc.Sequence`\[`ArrayProtocol`\]
         List of CP arrays to be demultiplexed.
-    demultiplexing_matrix : ArrayProtocol
+    demultiplexing_matrix : `ArrayProtocol`
         Demultiplexing coefficient matrix.
 
     Returns
     -------
-    list[ArrayProtocol]
+    `list`\[`ArrayProtocol`\]
         List of demultiplexed CP arrays.
 
     Raises

@@ -5,16 +5,15 @@
 import matplotlib.pyplot as plt
 
 from muscopy.backend_manager import BackendManager
-from muscopy.dh import demultiplex_cp_arrays
-from muscopy.qpi import QPIParameters, make_disk, offaxis_dh, print_all_parameters
+from muscopy.dh import MuParameters, demultiplex_cp_arrays, make_disk, offaxis_dh, print_all_parameters
 
 # config
 SHOW_IMAGE = True
 
 # %%
-# set DH parameters
+# set Microscopy parameters
 
-params = QPIParameters(
+params = MuParameters(
     na=0.8,
     wavelength_m=500e-9,
     img_size_px=512,
@@ -95,6 +94,21 @@ ref_hologram = backend.abs(ref_sample_array + ref_array) ** 2
 
 cp_field1 = offaxis_dh(backend, hologram1, ref_hologram, params, [off_axis_center])[0]
 cp_field2 = offaxis_dh(backend, hologram2, ref_hologram, params, [off_axis_center])[0]
+
+if SHOW_IMAGE:
+    if bmg.backend == "cupy":
+        cp_field1_to_show = backend.asnumpy(backend.angle(cp_field1))
+        cp_field2_to_show = backend.asnumpy(backend.angle(cp_field2))
+    else:
+        cp_field1_to_show = backend.angle(cp_field1)
+        cp_field2_to_show = backend.angle(cp_field2)
+
+    fig, ax = plt.subplots(1, 2, figsize=(10, 5))
+    ax[0].imshow(cp_field1_to_show, cmap="gray")
+    ax[0].set_title("Complex field 1")
+    ax[1].imshow(cp_field2_to_show, cmap="gray")
+    ax[1].set_title("Complex field 2")
+    plt.show()
 
 cp_fields = [cp_field1, cp_field2]
 

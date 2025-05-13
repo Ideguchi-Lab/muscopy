@@ -17,10 +17,12 @@
 - Updated `shot_noise_calculation.py` for the latest version.
 - Modified `unwrap_phase` backend.
 - Changed module name from `unwrap_phase` to `qpi_utils`.
+- Moved digital holography modules from `qpi` to `dh` [[#54](https://github.com/Ideguchi-Lab/muscopy/issues/54)]
 
 ### Removed
 
 - `fft2d` module
+- `aperture_synthesis` module
 
 ---
 

@@ -5,8 +5,8 @@
 import matplotlib.pyplot as plt
 
 from muscopy.backend_manager import BackendManager
+from muscopy.dh import MuParameters, make_disk, print_all_parameters
 from muscopy.phase_noise import calc_phase_noise, calc_visibility
-from muscopy.qpi import QPIParameters, make_disk, print_all_parameters
 
 # %%
 # config
@@ -20,7 +20,7 @@ sensor_noise = 10  # sensor noise (e-)
 # %%
 # generate a hologram
 
-params = QPIParameters(
+params = MuParameters(
     na=0.8,
     wavelength_m=500e-9,
     img_size_px=512,

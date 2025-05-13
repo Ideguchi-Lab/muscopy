@@ -6,16 +6,17 @@ import matplotlib.pyplot as plt
 from skimage.restoration import unwrap_phase as skimage_unwrap_phase
 
 from muscopy.backend_manager import BackendManager
-from muscopy.qpi import QPIParameters, make_disk, print_all_parameters, qpi
+from muscopy.dh import MuParameters, make_disk, print_all_parameters
+from muscopy.qpi import qpi
 from muscopy.qpi_utils import unwrap_phase as mus_unwrap_phase
 
 # config
 SHOW_IMAGE = True
 
 # %%
-# set QPI parameters
+# set Microscopy parameters
 
-params = QPIParameters(
+params = MuParameters(
     na=0.8,
     wavelength_m=500e-9,
     img_size_px=512,

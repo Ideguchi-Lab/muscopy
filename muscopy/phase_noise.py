@@ -90,7 +90,7 @@ def calc_visibility(
     return _get_visibility(backend, dc, ac)
 
 
-def calc_phase_noise(
+def calc_phase_noise(  # noqa: PLR0913, PLR0917
     backend: types.ModuleType,
     hologram: ArrayProtocol,
     params: MuParameters,

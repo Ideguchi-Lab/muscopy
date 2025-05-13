@@ -8,6 +8,7 @@ This module provides:
 
 from __future__ import annotations
 
+import typing
 from typing import TYPE_CHECKING
 
 from muscopy.dh import get_spectrum, offaxis_dh
@@ -21,13 +22,33 @@ if TYPE_CHECKING:
     from muscopy.dh import MuParameters
 
 
+@typing.overload
+def qpi(
+    backend: types.ModuleType,
+    array: ArrayProtocol,
+    reference: ArrayProtocol,
+    params: MuParameters,
+    offaxis_centers: tuple[int, int],
+) -> ArrayProtocol: ...
+
+
+@typing.overload
 def qpi(
     backend: types.ModuleType,
     array: ArrayProtocol,
     reference: ArrayProtocol,
     params: MuParameters,
     offaxis_centers: Iterable[tuple[int, int]],
-) -> list[ArrayProtocol]:
+) -> list[ArrayProtocol]: ...
+
+
+def qpi(
+    backend: types.ModuleType,
+    array: ArrayProtocol,
+    reference: ArrayProtocol,
+    params: MuParameters,
+    offaxis_centers: tuple[int, int] | Iterable[tuple[int, int]],
+) -> ArrayProtocol | list[ArrayProtocol]:
     r"""Calculate the QPI phase image.
 
     Parameters
@@ -50,7 +71,10 @@ def qpi(
     """
     cp_fields = offaxis_dh(backend, array, reference, params, offaxis_centers)
 
-    return [backend.angle(cp_field) for cp_field in cp_fields]
+    if isinstance(cp_fields, list):
+        return [backend.angle(cp_field) for cp_field in cp_fields]
+
+    return backend.angle(cp_fields)
 
 
 def mip_qpi(  # noqa: PLR0913

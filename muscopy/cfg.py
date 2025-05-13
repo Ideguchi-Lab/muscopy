@@ -1,39 +1,11 @@
-import os
-from importlib.util import find_spec
+"""Configuration module for microscopy converters."""
+
 from typing import NewType, Union
-
-gpu_on = os.environ.get("MUSCOPY_GPU", "False") == "True"
-
-_cp = gpu_on and bool(find_spec("cupy"))
-
 
 Region = NewType("Region", tuple[tuple[int, int], tuple[int, int]])
 Regions = NewType("Regions", list[Region])
 OffsetRegions = Union[Regions, None]
 MIPRegion = Union[Region, None]
-
-EDGE_SIZE = 0
-OFFSET_REGS = None
-MIP_CENTER = None
-
-
-def set_edge_size(size: int):
-    global EDGE_SIZE
-    EDGE_SIZE = size
-
-
-def set_offset_regs(offset_regs: OffsetRegions):
-    global OFFSET_REGS
-    OFFSET_REGS = offset_regs
-
-
-def set_mip_center(center: MIPRegion):
-    global MIP_CENTER
-    MIP_CENTER = center
-
-
-def print_backend():
-    print("Using cupy" if _cp else "Using numpy")
 
 
 class ArrayPrecision:
@@ -41,30 +13,42 @@ class ArrayPrecision:
 
     Attributes
     ----------
-    int_length : int
+    int_length : `int`
         The number of bits used for integer arrays.
-    float_length : int
+    float_length : `int`
         The number of bits used for float arrays.
     """
 
     def __init__(self, int_length: int = 64, float_length: int = 64) -> None:
-        """Construct an ArrayPrecision object with specified integer and float lengths.
-
-        Parameters
-        ----------
-        int_length : int, optional
-            The number of bits used for integer arrays, by default 64
-        float_length : int, optional
-            The number of bits used for float arrays, by default 64
-        """
         self.int_length = int_length
         self.float_length = float_length
 
-    def get_float_precision(self):
+    def float_precision(self) -> str:
+        """Return the precision of float arrays as a string.
+
+        Returns
+        -------
+        `str`
+            The precision of float arrays, e.g., "float32" or "float64".
+        """
         return f"float{self.float_length}"
 
-    def get_int_precision(self):
+    def int_precision(self) -> str:
+        """Return the precision of integer arrays as a string.
+
+        Returns
+        -------
+        `str`
+            The precision of integer arrays, e.g., "int32" or "int64".
+        """
         return f"int{self.int_length}"
 
-    def get_complex_precision(self):
+    def complex_precision(self) -> str:
+        """Return the precision of complex arrays as a string.
+
+        Returns
+        -------
+        `str`
+            The precision of complex arrays, e.g., "complex64" or "complex128".
+        """
         return f"complex{2 * self.float_length}"

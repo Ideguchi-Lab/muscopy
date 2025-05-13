@@ -1,8 +1,21 @@
-"""Optical Diffraction Tomography (ODT) calculator."""
+"""Optical Diffraction Tomography (ODT) calculator.
+
+This module provides:
+
+- `ODTParameters`: A class to store ODT parameters.
+- `ODTConfig`: A class to store ODT configuration.
+- `ScatteringSpectrum`: A class to store scattering spectrum.
+- `synthesize_spectrum`: A function to synthesize scattering spectrums into 3D scattering potential.
+- `fill_hermite_components`: A function to fill the hermite conjugated spectrum for transparent sample.
+- `calc_refractive_index`: A function to calculate the refractive index from the scattering potential.
+- `odt`: A function to perform ODT reconstruction.
+- `discard_higher_axial_freq`: A function to discard higher axial frequency.
+- `zeropad_higher_axial_freq`: A function to zero pad the higher axial frequency.
+"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import dataclasses
 from functools import cached_property
 from typing import TYPE_CHECKING, NamedTuple
 
@@ -19,7 +32,7 @@ if TYPE_CHECKING:
     from muscopy.backend_manager import ArrayProtocol, BackendManager
 
 
-@dataclass
+@dataclasses.dataclass
 class ODTParameters(MuParameters):
     """Optical Diffraction Tomography (ODT) parameters.
 
@@ -140,7 +153,7 @@ class ODTParameters(MuParameters):
         return (self.imgpx_axial_m_per_px / self.freq_per_px) ** 0.5
 
 
-@dataclass
+@dataclasses.dataclass
 class ODTConfig:
     """Optical Diffraction Tomography (ODT) configuration.
 
@@ -160,7 +173,7 @@ class ODTConfig:
 
     approx_type: str = "Born"
     hermite_symmetry: bool = True
-    precision: ArrayPrecision = ArrayPrecision()
+    precision: ArrayPrecision = dataclasses.field(default_factory=ArrayPrecision)
     edge_size: int = 0
     offset_regions: OffsetRegions = None
 
@@ -213,9 +226,9 @@ def synthesize_spectrum(
             2 * params.aperturesize_px + 1 - config.edge_size,
             params.freq_axial_extent_px,
         ),
-        dtype=config.precision.get_complex_precision(),
+        dtype=config.precision.complex_precision(),
     )
-    synthesized_weight = backend.ones_like(synthesized_spectrum, dtype=config.precision.get_int_precision())
+    synthesized_weight = backend.ones_like(synthesized_spectrum, dtype=config.precision.int_precision())
 
     print("Synthesize spectrum...")  # noqa: T201
     for scattering_spectrum in tqdm(scattering_spectrums):
@@ -287,7 +300,7 @@ def calc_refractive_index(
     )
 
 
-def odt(
+def odt(  # noqa: PLR0914
     bmg: BackendManager,
     cp_spectrums: Sequence[ArrayProtocol],
     ref_cp_spectrums: Sequence[ArrayProtocol],
@@ -322,10 +335,10 @@ def odt(
         max_x, max_y, _ = _find_max_args(backend, cp_spectrum)
         illumination_vector = (max_x - params.aperturesize_px // 2, max_y - params.aperturesize_px // 2)
         expanded_cp_spectrum = _shift_dh_spectrum(backend, params, cp_spectrum, illumination_vector).astype(
-            config.precision.get_complex_precision()
+            config.precision.complex_precision()
         )
         expanded_ref_cp_spectrum = _shift_dh_spectrum(backend, params, ref_cp_spectrum, illumination_vector).astype(
-            config.precision.get_complex_precision()
+            config.precision.complex_precision()
         )
         cp_field = backend.fft.ifft2(backend.fft.ifftshift(expanded_cp_spectrum), norm="ortho")
         ref_cp_field = backend.fft.ifft2(backend.fft.ifftshift(expanded_ref_cp_spectrum), norm="ortho")
@@ -559,4 +572,4 @@ def _calc_kz_disk(
     fz_disk = (params.light_freq_px**2 - disk) * disk_mask
     fz_disk[fz_disk < 0] = 0
     kz_disk = fz_disk**0.5 * params.k_per_px
-    return kz_disk.astype(precision.get_float_precision())
+    return kz_disk.astype(precision.float_precision())

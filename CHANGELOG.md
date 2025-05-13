@@ -9,6 +9,7 @@
 - `offaxis_dh` method in `qpi` module.
 - demultiplexing method in `dh` module. [[#51](https://github.com/Ideguchi-Lab/muscopy/issues/51)]
   - Added an example in `examples/multiplexed_qpi.py`
+- ruff check for every PR.
 
 ### Changed
 
@@ -18,6 +19,7 @@
 - Modified `unwrap_phase` backend.
 - Changed module name from `unwrap_phase` to `qpi_utils`.
 - Moved digital holography modules from `qpi` to `dh` [[#54](https://github.com/Ideguchi-Lab/muscopy/issues/54)]
+- Use overload for `qpi.qpi` and `dh.offaxis_dh`
 
 ### Removed
 

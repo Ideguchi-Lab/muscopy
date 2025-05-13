@@ -60,7 +60,7 @@ def test_mu_parameters_properties() -> None:
     assert abs(params.cpfield2spectrum - expected_cpfield2spectrum) < 1e-12
 
 
-def test_print_all_parameters(capsys) -> None:
+def test_print_all_parameters(capsys: pytest.CaptureFixture[str]) -> None:
     params = MuParameters(na=1.4, wavelength_m=550e-9, img_size_px=100, px_size_m=6.5e-6, n_sol=1.33)
 
     # Test output when show_properties is False

@@ -92,8 +92,8 @@ ref_hologram = backend.abs(ref_sample_array + ref_array) ** 2
 # %%
 # extract complex fields
 
-cp_field1 = offaxis_dh(backend, hologram1, ref_hologram, params, [off_axis_center])[0]
-cp_field2 = offaxis_dh(backend, hologram2, ref_hologram, params, [off_axis_center])[0]
+cp_field1 = offaxis_dh(backend, hologram1, ref_hologram, params, off_axis_center)
+cp_field2 = offaxis_dh(backend, hologram2, ref_hologram, params, off_axis_center)
 
 if SHOW_IMAGE:
     if bmg.backend == "cupy":

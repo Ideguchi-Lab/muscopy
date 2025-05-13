@@ -24,7 +24,7 @@ params = MuParameters(
     n_sol=1.33,
 )
 
-# show QPI parameters
+# show Microscopy parameters
 print_all_parameters(params, show_properties=True)
 
 # %%
@@ -76,7 +76,7 @@ ref_hologram = backend.abs(ref_sample_array + ref_array) ** 2
 # %%
 # Extract phase of scattering wave with QPI
 
-phase_image = qpi(backend, hologram, ref_hologram, params, [off_axis_center])[0]
+phase_image = qpi(backend, hologram, ref_hologram, params, off_axis_center)
 if bmg.backend == "cupy":
     phase_image = backend.asnumpy(phase_image)
 

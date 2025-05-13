@@ -9,6 +9,7 @@ This module provides:
 - `get_spectrum`: A function to get the spectrum of the hologram array.
 - `get_spectrums`: A function to get the spectrums of the complex fields.
 - `correct_offset`: A function to correct the phase and amplitude offset of the array.
+- `offaxis_dh`: A function to reconstruct the complex wave front using off-axis digital holography.
 - `qpi`: A function to calculate the QPI phase image.
 - `mip_qpi`: A function to calculate the MIP-QPI phase image.
 """
@@ -221,6 +222,7 @@ def make_disk(
     center: tuple[int, int],
     radius: float,
     array_shape: int | tuple[int, int],
+    *,
     highpass: bool = False,
 ) -> ArrayProtocol[bool]:
     r"""Make a disk mask with specified center and radius.
@@ -389,16 +391,69 @@ def correct_offset(
     amplitude_offset_list = []
     for region in offset_regs:
         phase_offset_list.append(
-            backend.mean(backend.angle(array[region[0][0] : region[0][1], region[1][0] : region[1][1]]))
+            backend.mean(backend.angle(array[region[0][0] : region[0][1], region[1][0] : region[1][1]])),
         )
         amplitude_offset_list.append(
-            backend.mean(backend.abs(array[region[0][0] : region[0][1], region[1][0] : region[1][1]]))
+            backend.mean(backend.abs(array[region[0][0] : region[0][1], region[1][0] : region[1][1]])),
         )
 
     phase_offset = backend.mean(backend.array(phase_offset_list)) if phase else 0
     amplitude_scale = backend.mean(backend.array(amplitude_offset_list)) if amplitude else 1
 
     return array * cmath.exp(-1j * phase_offset) / amplitude_scale
+
+
+def offaxis_dh(
+        backend: types.ModuleType,
+        array: ArrayProtocol,
+        reference: ArrayProtocol,
+        params: QPIParameters,
+        offaxis_centers: Iterable[tuple[int, int]],
+) -> list[ArrayProtocol]:
+    r"""Reconstruct the complex wave front using off-axis digital holography.
+
+    Parameters
+    ----------
+    backend : `types.ModuleType`
+        numpy or cupy module
+    array : `ArrayProtocol`
+        Hologram array
+    reference : `ArrayProtocol`
+        Reference hologram array
+    params : `QPIParameters`
+        QPIParameters class
+    offaxis_centers : `Iterable`\[`tuple`\[`int`, `int`\]\]
+        The crop centers of off-axis digital holography
+
+    Returns
+    -------
+    `list`\[`ArrayProtocol`\]
+        The complex wave front
+
+    Raises
+    ------
+    ValueError
+        If the array and reference have different shapes
+    """
+    params.verify_parameters()
+    if array.shape != reference.shape:
+        msg = "Array and reference must have the same shape"
+        raise ValueError(msg)
+
+    ft_array = backend.fft.fftshift(backend.fft.fft2(array)) * params.hologram2spectrum
+    ft_reference = backend.fft.fftshift(backend.fft.fft2(reference)) * params.hologram2spectrum
+    spectrums = get_spectrums(backend, ft_array, params, offaxis_centers)
+    ref_spectrums = get_spectrums(backend, ft_reference, params, offaxis_centers)
+
+    cp_fields = []
+
+    for spectrum, ref_spectrum in zip(spectrums, ref_spectrums):
+        cp_field = backend.fft.ifft2(backend.fft.ifftshift(spectrum)) * params.spectrum2cpfield
+        ref_cp_field = backend.fft.ifft2(backend.fft.ifftshift(ref_spectrum)) * params.spectrum2cpfield
+        cp_field /= ref_cp_field
+        cp_fields.append(cp_field)
+
+    return cp_fields
 
 
 def qpi(
@@ -427,29 +482,8 @@ def qpi(
     -------
     `list`\[`ArrayProtocol`\]
         The QPI phase image
-
-    Raises
-    ------
-    ValueError
-        If the array and reference have different shapes
     """
-    params.verify_parameters()
-    if array.shape != reference.shape:
-        msg = "Array and reference must have the same shape"
-        raise ValueError(msg)
-
-    ft_array = backend.fft.fftshift(backend.fft.fft2(array)) * params.hologram2spectrum
-    ft_reference = backend.fft.fftshift(backend.fft.fft2(reference)) * params.hologram2spectrum
-    spectrums = get_spectrums(backend, ft_array, params, offaxis_centers)
-    ref_spectrums = get_spectrums(backend, ft_reference, params, offaxis_centers)
-
-    cp_fields = []
-
-    for spectrum, ref_spectrum in zip(spectrums, ref_spectrums):
-        cp_field = backend.fft.ifft2(backend.fft.ifftshift(spectrum)) * params.spectrum2cpfield
-        ref_cp_field = backend.fft.ifft2(backend.fft.ifftshift(ref_spectrum)) * params.spectrum2cpfield
-        cp_field /= ref_cp_field
-        cp_fields.append(cp_field)
+    cp_fields = offaxis_dh(backend, array, reference, params, offaxis_centers)
 
     return [backend.angle(cp_field) for cp_field in cp_fields]
 
@@ -516,8 +550,8 @@ def mip_qpi(  # noqa: PLR0913
                 array_div[
                     mip_center_reg[0][0] : mip_center_reg[0][1],
                     mip_center_reg[1][0] : mip_center_reg[1][1],
-                ]
-            )
+                ],
+            ),
         )
         if center_phase < 0:
             array_div = 1 / array_div

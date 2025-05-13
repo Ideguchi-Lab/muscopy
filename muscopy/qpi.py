@@ -29,8 +29,7 @@ def qpi(
     reference: ArrayProtocol,
     params: MuParameters,
     offaxis_centers: tuple[int, int],
-) -> ArrayProtocol:
-    ...
+) -> ArrayProtocol: ...
 
 
 @typing.overload
@@ -40,8 +39,7 @@ def qpi(
     reference: ArrayProtocol,
     params: MuParameters,
     offaxis_centers: Iterable[tuple[int, int]],
-) -> list[ArrayProtocol]:
-    ...
+) -> list[ArrayProtocol]: ...
 
 
 def qpi(

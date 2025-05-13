@@ -412,8 +412,7 @@ def offaxis_dh(
     reference: ArrayProtocol,
     params: MuParameters,
     offaxis_centers: tuple[int, int],
-) -> ArrayProtocol:
-    ...
+) -> ArrayProtocol: ...
 
 
 @typing.overload
@@ -423,8 +422,7 @@ def offaxis_dh(
     reference: ArrayProtocol,
     params: MuParameters,
     offaxis_centers: Iterable[tuple[int, int]],
-) -> list[ArrayProtocol]:
-    ...
+) -> list[ArrayProtocol]: ...
 
 
 def offaxis_dh(

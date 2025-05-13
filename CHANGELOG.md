@@ -19,6 +19,7 @@
 - Modified `unwrap_phase` backend.
 - Changed module name from `unwrap_phase` to `qpi_utils`.
 - Moved digital holography modules from `qpi` to `dh` [[#54](https://github.com/Ideguchi-Lab/muscopy/issues/54)]
+- Use overload for `qpi.qpi` and `dh.offaxis_dh`
 
 ### Removed
 

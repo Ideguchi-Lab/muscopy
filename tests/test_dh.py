@@ -3,8 +3,8 @@ from dataclasses import fields
 import numpy as np
 import pytest
 
-from muscopy.qpi import (
-    QPIParameters,
+from muscopy.dh import (
+    MuParameters,
     correct_offset,
     crop_array,
     get_spectrum,
@@ -14,14 +14,14 @@ from muscopy.qpi import (
 )
 
 
-def test_qpi_parameters_properties() -> None:
+def test_mu_parameters_properties() -> None:
     # Set fixed parameters
     na = 1.4
     wavelength_m = 550e-9
     img_size_px = 256
     px_size_m = 6.5e-6
     n_sol = 1.33
-    params = QPIParameters(na, wavelength_m, img_size_px, px_size_m, n_sol)
+    params = MuParameters(na, wavelength_m, img_size_px, px_size_m, n_sol)
 
     # Test img_center property
     expected_img_center = (img_size_px // 2, img_size_px // 2)
@@ -61,7 +61,7 @@ def test_qpi_parameters_properties() -> None:
 
 
 def test_print_all_parameters(capsys) -> None:
-    params = QPIParameters(na=1.4, wavelength_m=550e-9, img_size_px=100, px_size_m=6.5e-6, n_sol=1.33)
+    params = MuParameters(na=1.4, wavelength_m=550e-9, img_size_px=100, px_size_m=6.5e-6, n_sol=1.33)
 
     # Test output when show_properties is False
     print_all_parameters(params, show_properties=False)
@@ -110,7 +110,7 @@ def test_crop_array() -> None:
 
 def test_get_spectrum() -> None:
     backend = np
-    params = QPIParameters(na=0.1, wavelength_m=500e-9, img_size_px=64, px_size_m=1e-6, n_sol=1.33)
+    params = MuParameters(na=0.1, wavelength_m=500e-9, img_size_px=64, px_size_m=1e-6, n_sol=1.33)
     offaxis_center = (32, 32)
     # Create a Fourier array with all ones
     ft_array = np.ones((params.img_size_px, params.img_size_px), dtype=float)
@@ -125,7 +125,7 @@ def test_get_spectrum() -> None:
 
 def test_get_spectrums() -> None:
     backend = np
-    params = QPIParameters(na=0.1, wavelength_m=500e-9, img_size_px=64, px_size_m=1e-6, n_sol=1.33)
+    params = MuParameters(na=0.1, wavelength_m=500e-9, img_size_px=64, px_size_m=1e-6, n_sol=1.33)
     array = np.ones((params.img_size_px, params.img_size_px), dtype=float)
     offaxis_centers = [(32, 32), (20, 20)]
     spectrums = get_spectrums(backend, array, params, offaxis_centers, crop_center=True, c_r=3)

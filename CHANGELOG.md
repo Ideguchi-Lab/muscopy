@@ -21,6 +21,7 @@
 ### Removed
 
 - `fft2d` module
+- `aperture_synthesis` module
 
 ---
 

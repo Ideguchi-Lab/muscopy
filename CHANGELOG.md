@@ -6,6 +6,9 @@
 
 - Demo of QPI reconstruction [[#30](https://github.com/Ideguchi-Lab/muscopy/issues/30)]
 - New module dedicated for optical diffraction tomography `odt.py`.
+- `offaxis_dh` method in `qpi` module.
+- demultiplexing method in `dh` module. [[#51](https://github.com/Ideguchi-Lab/muscopy/issues/51)]
+  - Added an example in `examples/multiplexed_qpi.py`
 
 ### Changed
 

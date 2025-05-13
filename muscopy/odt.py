@@ -322,9 +322,11 @@ def odt(
         max_x, max_y, _ = _find_max_args(backend, cp_spectrum)
         illumination_vector = (max_x - params.aperturesize_px // 2, max_y - params.aperturesize_px // 2)
         expanded_cp_spectrum = _shift_dh_spectrum(backend, params, cp_spectrum, illumination_vector).astype(
-            config.precision.get_complex_precision())
+            config.precision.get_complex_precision()
+        )
         expanded_ref_cp_spectrum = _shift_dh_spectrum(backend, params, ref_cp_spectrum, illumination_vector).astype(
-            config.precision.get_complex_precision())
+            config.precision.get_complex_precision()
+        )
         cp_field = backend.fft.ifft2(backend.fft.ifftshift(expanded_cp_spectrum), norm="ortho")
         ref_cp_field = backend.fft.ifft2(backend.fft.ifftshift(expanded_ref_cp_spectrum), norm="ortho")
         scattering_spectrum_array = _calc_1st_scattering_spectrum(

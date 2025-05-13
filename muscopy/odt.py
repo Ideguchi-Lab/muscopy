@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import dataclasses
 from functools import cached_property
 from typing import TYPE_CHECKING, NamedTuple
 
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from muscopy.backend_manager import ArrayProtocol, BackendManager
 
 
-@dataclass
+@dataclasses.dataclass
 class ODTParameters(MuParameters):
     """Optical Diffraction Tomography (ODT) parameters.
 
@@ -140,7 +140,7 @@ class ODTParameters(MuParameters):
         return (self.imgpx_axial_m_per_px / self.freq_per_px) ** 0.5
 
 
-@dataclass
+@dataclasses.dataclass
 class ODTConfig:
     """Optical Diffraction Tomography (ODT) configuration.
 
@@ -160,7 +160,7 @@ class ODTConfig:
 
     approx_type: str = "Born"
     hermite_symmetry: bool = True
-    precision: ArrayPrecision = ArrayPrecision()
+    precision: ArrayPrecision = dataclasses.field(default_factory=ArrayPrecision)
     edge_size: int = 0
     offset_regions: OffsetRegions = None
 
@@ -287,7 +287,7 @@ def calc_refractive_index(
     )
 
 
-def odt(
+def odt(  # noqa: PLR0914
     bmg: BackendManager,
     cp_spectrums: Sequence[ArrayProtocol],
     ref_cp_spectrums: Sequence[ArrayProtocol],

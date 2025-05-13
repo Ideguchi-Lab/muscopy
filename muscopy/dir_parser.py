@@ -27,7 +27,7 @@ def numpy_parser(dir_path: str) -> list[str]:
     """
     return [
         dir_path + str(file) for file in pathlib.Path(dir_path).iterdir() if file.is_file() and file.suffix == ".npy"
-        ]
+    ]
 
 
 def png_parser(dir_path: str) -> list[str]:
@@ -98,6 +98,4 @@ def recurcive_file_parser(dir_path: str, file_suffix: str) -> list[str]:
     `list`\[`str`\]
         List of files in the directory.
     """
-    return [
-        str(path) for path in pathlib.Path(dir_path).glob(f"**/*{file_suffix}") if path.is_file()
-    ]
+    return [str(path) for path in pathlib.Path(dir_path).glob(f"**/*{file_suffix}") if path.is_file()]

@@ -4,12 +4,13 @@ This module provides:
 
 - `check_overlap`: A function to check for overlapping images in a given directory.
 """
+
 import pathlib
 
 import numpy as np
 
 
-def _dummy_image_generator(num: int=100, size: tuple[int, int] = (512, 512)) -> None:
+def _dummy_image_generator(num: int = 100, size: tuple[int, int] = (512, 512)) -> None:
     if not pathlib.Path("dummy_images").exists():
         pathlib.Path("dummy_images").mkdir()
     for i in range(num // 2):

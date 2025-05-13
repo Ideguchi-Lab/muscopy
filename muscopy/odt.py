@@ -213,9 +213,9 @@ def synthesize_spectrum(
             2 * params.aperturesize_px + 1 - config.edge_size,
             params.freq_axial_extent_px,
         ),
-        dtype=config.precision.get_complex_precision(),
+        dtype=config.precision.complex_precision(),
     )
-    synthesized_weight = backend.ones_like(synthesized_spectrum, dtype=config.precision.get_int_precision())
+    synthesized_weight = backend.ones_like(synthesized_spectrum, dtype=config.precision.int_precision())
 
     print("Synthesize spectrum...")  # noqa: T201
     for scattering_spectrum in tqdm(scattering_spectrums):
@@ -322,10 +322,10 @@ def odt(
         max_x, max_y, _ = _find_max_args(backend, cp_spectrum)
         illumination_vector = (max_x - params.aperturesize_px // 2, max_y - params.aperturesize_px // 2)
         expanded_cp_spectrum = _shift_dh_spectrum(backend, params, cp_spectrum, illumination_vector).astype(
-            config.precision.get_complex_precision()
+            config.precision.complex_precision()
         )
         expanded_ref_cp_spectrum = _shift_dh_spectrum(backend, params, ref_cp_spectrum, illumination_vector).astype(
-            config.precision.get_complex_precision()
+            config.precision.complex_precision()
         )
         cp_field = backend.fft.ifft2(backend.fft.ifftshift(expanded_cp_spectrum), norm="ortho")
         ref_cp_field = backend.fft.ifft2(backend.fft.ifftshift(expanded_ref_cp_spectrum), norm="ortho")
@@ -559,4 +559,4 @@ def _calc_kz_disk(
     fz_disk = (params.light_freq_px**2 - disk) * disk_mask
     fz_disk[fz_disk < 0] = 0
     kz_disk = fz_disk**0.5 * params.k_per_px
-    return kz_disk.astype(precision.get_float_precision())
+    return kz_disk.astype(precision.float_precision())

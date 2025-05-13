@@ -45,13 +45,13 @@ def demultiplex_cp_arrays(
         raise ValueError(msg)
 
     xp = bmg.get_backend()
-    cp_arrays = xp.asarray(cp_arrays)
+    stacked = xp.stack([xp.asarray(a) for a in cp_arrays], axis=0)
     demultiplexing_matrix = xp.asarray(demultiplexing_matrix)
 
     demultiplexed_arrays = xp.tensordot(
-        cp_arrays,
         demultiplexing_matrix,
-        axes=(0, 0),
+        stacked,
+        axes=(1, 0),
     )
 
     return [demultiplexed_arrays[i] for i in range(demultiplexed_arrays.shape[0])]

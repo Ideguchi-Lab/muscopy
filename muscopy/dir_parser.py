@@ -1,62 +1,103 @@
-import os
+"""Helper functions to parse directories and return lists of files.
+
+This module provides:
+
+- `numpy_parser`: Returns a list of numpy files in a directory.
+- `png_parser`: Returns a list of png files in a directory.
+- `tiff_parser`: Returns a list of tiff files in a directory.
+- `recurcive_numpy_parser`: Returns a list of numpy files in a directory and its subdirectories.
+- `recurcive_file_parser`: Returns a list of files in a directory and its subdirectories.
+"""
+
 import pathlib
 
 
-def numpy_parser(dir_path):
-    """Return path list of numpy arrays"""
-    files = []
-    for file in os.listdir(dir_path):
-        if file.endswith(".npy"):
-            files.append(os.path.join(dir_path, file))
-    return files
+def numpy_parser(dir_path: str) -> list[str]:
+    r"""Return list of numpy files in a directory.
+
+    Parameters
+    ----------
+    dir_path : `str`
+        Path to the directory to parse.
+
+    Returns
+    -------
+    `list`\[`str`\]
+        List of numpy files in the directory.
+    """
+    return [
+        dir_path + str(file) for file in pathlib.Path(dir_path).iterdir() if file.is_file() and file.suffix == ".npy"
+        ]
 
 
-def recurcive_numpy_parser(dir_path):
-    files = []
+def png_parser(dir_path: str) -> list[str]:
+    r"""Return list of png files in a directory.
+
+    Parameters
+    ----------
+    dir_path : `str`
+        Path to the directory to parse.
+
+    Returns
+    -------
+    `list`\[`str`\]
+        List of png files in the directory.
+    """
+    return [
+        dir_path + str(file) for file in pathlib.Path(dir_path).iterdir() if file.is_file() and file.suffix == ".png"
+    ]
+
+
+def tiff_parser(dir_path: str) -> list[str]:
+    r"""Return list of tiff files in a directory.
+
+    Parameters
+    ----------
+    dir_path : `str`
+        Path to the directory to parse.
+
+    Returns
+    -------
+    `list`\[`str`\]
+        List of tiff files in the directory.
+    """
+    return [
+        dir_path + str(file) for file in pathlib.Path(dir_path).iterdir() if file.is_file() and file.suffix == ".tiff"
+    ]
+
+
+def recurcive_numpy_parser(dir_path: str) -> list[str]:
+    r"""Return list of numpy files in a directory.
+
+    Parameters
+    ----------
+    dir_path : `str`
+        Path to the directory to parse.
+
+    Returns
+    -------
+    `list`\[`str`\]
+        List of numpy files in the directory.
+    """
     p = pathlib.Path(dir_path)
-    for path in p.glob("**/*.npy"):
-        files.append(path)
-    return files
+    return [str(path) for path in p.glob("**/*.npy")]
 
 
-def png_parser(dir_path):
-    """Return list of png"""
-    files = []
-    for file in os.listdir(dir_path):
-        if file.endswith(".png"):
-            files.append(os.path.join(dir_path, file))
-    return files
+def recurcive_file_parser(dir_path: str, file_suffix: str) -> list[str]:
+    r"""Return list of files in a directory.
 
+    Parameters
+    ----------
+    dir_path : `str`
+        Path to the directory to parse.
+    file_suffix : `str`
+        Suffix of the files to parse.
 
-def tiff_parser(dir_path):
-    """Return list of tiff"""
-    files = []
-    for file in os.listdir(dir_path):
-        if file.endswith(".tiff"):
-            files.append(os.path.join(dir_path, file))
-    return files
-
-
-def pkl_parser(dir_path):
-    """Return list of pkl"""
-    files = []
-    for file in os.listdir(dir_path):
-        if file.endswith(".pkl"):
-            files.append(os.path.join(dir_path, file))
-    return files
-
-
-def recurcive_pkl_parser(dir_path):
-    files = []
-    p = pathlib.Path(dir_path)
-    for path in p.glob("**/*.pkl"):
-        files.append(path)
-    return files
-
-
-def recurcive_file_parser(dir_path, file_name):
-    files = []
-    p = pathlib.Path(dir_path)
-    for path in p.glob(f"**/{file_name}"):  # TODO: adapt to regular expression
-        files.append(path)
-    return files
+    Returns
+    -------
+    `list`\[`str`\]
+        List of files in the directory.
+    """
+    return [
+        str(path) for path in pathlib.Path(dir_path).glob(f"**/*{file_suffix}") if path.is_file()
+    ]

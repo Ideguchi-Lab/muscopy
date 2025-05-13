@@ -51,7 +51,7 @@ class BackendManager:
 
         Returns
         -------
-        types.ModuleType
+        `types.ModuleType`
             The current backend module (numpy or cupy).
 
         Raises

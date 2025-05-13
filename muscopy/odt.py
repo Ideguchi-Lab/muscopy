@@ -1,4 +1,17 @@
-"""Optical Diffraction Tomography (ODT) calculator."""
+"""Optical Diffraction Tomography (ODT) calculator.
+
+This module provides:
+
+- `ODTParameters`: A class to store ODT parameters.
+- `ODTConfig`: A class to store ODT configuration.
+- `ScatteringSpectrum`: A class to store scattering spectrum.
+- `synthesize_spectrum`: A function to synthesize scattering spectrums into 3D scattering potential.
+- `fill_hermite_components`: A function to fill the hermite conjugated spectrum for transparent sample.
+- `calc_refractive_index`: A function to calculate the refractive index from the scattering potential.
+- `odt`: A function to perform ODT reconstruction.
+- `discard_higher_axial_freq`: A function to discard higher axial frequency.
+- `zeropad_higher_axial_freq`: A function to zero pad the higher axial frequency.
+"""
 
 from __future__ import annotations
 

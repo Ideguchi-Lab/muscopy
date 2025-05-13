@@ -11,12 +11,12 @@ def unwrap_phase(phase_image: ArrayProtocol) -> ArrayProtocol:
 
     Parameters
     ----------
-    phase_image : ArrayProtocol
+    phase_image : `ArrayProtocol`
         The wrapped phase image to be unwrapped.
 
     Returns
     -------
-    ArrayProtocol
+    `ArrayProtocol`
         The unwrapped phase image.
     """
     dx = np.concatenate(

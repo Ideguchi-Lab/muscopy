@@ -13,9 +13,9 @@ class ArrayPrecision:
 
     Attributes
     ----------
-    int_length : int
+    int_length : `int`
         The number of bits used for integer arrays.
-    float_length : int
+    float_length : `int`
         The number of bits used for float arrays.
     """
 

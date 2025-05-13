@@ -5,8 +5,8 @@ This module provides:
 - `numpy_parser`: Returns a list of numpy files in a directory.
 - `png_parser`: Returns a list of png files in a directory.
 - `tiff_parser`: Returns a list of tiff files in a directory.
-- `recurcive_numpy_parser`: Returns a list of numpy files in a directory and its subdirectories.
-- `recurcive_file_parser`: Returns a list of files in a directory and its subdirectories.
+- `recursive_numpy_parser`: Returns a list of numpy files in a directory and its subdirectories.
+- `recursive_file_parser`: Returns a list of files in a directory and its subdirectories.
 """
 
 import pathlib
@@ -66,7 +66,7 @@ def tiff_parser(dir_path: str) -> list[str]:
     ]
 
 
-def recurcive_numpy_parser(dir_path: str) -> list[str]:
+def recursive_numpy_parser(dir_path: str) -> list[str]:
     r"""Return list of numpy files in a directory.
 
     Parameters
@@ -83,7 +83,7 @@ def recurcive_numpy_parser(dir_path: str) -> list[str]:
     return [str(path) for path in p.glob("**/*.npy")]
 
 
-def recurcive_file_parser(dir_path: str, file_suffix: str) -> list[str]:
+def recursive_file_parser(dir_path: str, file_suffix: str) -> list[str]:
     r"""Return list of files in a directory.
 
     Parameters

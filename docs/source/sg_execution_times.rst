@@ -6,7 +6,7 @@
 
 Computation times
 =================
-**00:00.000** total execution time for 4 files **from all galleries**:
+**00:01.124** total execution time for 4 files **from all galleries**:
 
 .. container::
 
@@ -32,15 +32,15 @@ Computation times
    * - Example
      - Time
      - Mem (MB)
+   * - :ref:`sphx_glr_gallery_unwrap_phase_demo.py` (``..\..\examples\unwrap_phase_demo.py``)
+     - 00:00.566
+     - 0.0
    * - :ref:`sphx_glr_gallery_multiplexed_qpi.py` (``..\..\examples\multiplexed_qpi.py``)
-     - 00:00.000
+     - 00:00.232
      - 0.0
    * - :ref:`sphx_glr_gallery_qpi_reconstruct.py` (``..\..\examples\qpi_reconstruct.py``)
-     - 00:00.000
+     - 00:00.202
      - 0.0
    * - :ref:`sphx_glr_gallery_shot_noise_calculation.py` (``..\..\examples\shot_noise_calculation.py``)
-     - 00:00.000
-     - 0.0
-   * - :ref:`sphx_glr_gallery_unwrap_phase_demo.py` (``..\..\examples\unwrap_phase_demo.py``)
-     - 00:00.000
+     - 00:00.124
      - 0.0

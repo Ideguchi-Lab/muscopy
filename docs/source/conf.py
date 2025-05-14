@@ -60,8 +60,15 @@ pygments_style = "sphinx"
 pygments_dark_style = "monokai"
 
 sphinx_gallery_conf = {
-    "examples_dirs": ["../../examples"],
-    "gallery_dirs": ["gallery"],
+    "examples_dirs": "../../examples",
+    "gallery_dirs": "gallery",
+    "filename_pattern": r".*\.py",
+    "ignore_pattern": r"__init__\.py",
+    "plot_gallery": True,
+    "run_stale_examples": True,
+    "first_notebook_cell": (
+        "%matplotlib inline\n"
+    ),
     "thumbnail_size": (800, 550),
 }
 

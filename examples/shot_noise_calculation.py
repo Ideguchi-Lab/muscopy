@@ -81,13 +81,14 @@ phase_noise = calc_phase_noise(backend, hologram, params, off_axis_center, full_
 
 # %%
 if SHOW_IMAGE:
-    plt.imshow(visibility)
-    plt.title("Visibility")
-    plt.colorbar()
-    plt.show()
-    plt.imshow(phase_noise)
-    plt.title("Phase noise")
-    plt.colorbar()
+    fig, ax = plt.subplots(1, 2, figsize=(10, 5))
+    ax[0].imshow(visibility)
+    ax[0].set_title("Visibility")
+    ax[1].imshow(phase_noise)
+    ax[1].set_title("Phase noise")
+    # colorbar
+    fig.colorbar(ax[0].imshow(visibility), ax=ax[0])
+    fig.colorbar(ax[1].imshow(phase_noise), ax=ax[1])
     plt.show()
 
 # %%

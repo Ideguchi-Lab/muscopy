@@ -1,7 +1,14 @@
-Module reference
+Module Reference
 ================
 
 .. toctree::
     :maxdepth: 2
 
+    backend_manager
     cfg
+    dir_parser
+    image_checker
+    dh
+    qpi_doc
+    odt_doc
+    phase_noise_doc

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## Version 0.4.1 [2025-05-13]
+
 ### Added
 
 - Set up sphinx document and related CI [[#49](https://github.com/Ideguchi-Lab/muscopy/issues/49)]

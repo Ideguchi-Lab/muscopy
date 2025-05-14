@@ -12,5 +12,8 @@ documentation for details.
 
 
 .. toctree::
-   :maxdepth: 2
-   :caption: Contents:
+   :maxdepth: 1
+   :caption: Documentations
+
+   gallery/index
+   references

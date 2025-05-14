@@ -1,1 +1,1 @@
-"""Documentation for the microscopy_converters package."""
+"""Documentation for the Muscopy package."""

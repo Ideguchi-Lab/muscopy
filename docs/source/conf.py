@@ -1,9 +1,10 @@
 """Configuration file for the Sphinx documentation builder."""
+
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path('..', 'muscopy').resolve()))
-sys.path.insert(0, str(Path('..', 'muscopy/examples').resolve()))
+sys.path.insert(0, str(Path("..", "muscopy").resolve()))
+sys.path.insert(0, str(Path("..", "muscopy/examples").resolve()))
 
 # Configuration file for the Sphinx documentation builder.
 #
@@ -13,9 +14,9 @@ sys.path.insert(0, str(Path('..', 'muscopy/examples').resolve()))
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'Muscopy'
-copyright = '2025, Masato Fukushima'  # noqa: A001
-author = 'Masato Fukushima'
+project = "Muscopy"
+copyright = "2025, Masato Fukushima"  # noqa: A001
+author = "Masato Fukushima"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -31,7 +32,7 @@ extensions = [
     "sphinx_gallery.gen_gallery",
 ]
 
-templates_path = ['_templates']
+templates_path = ["_templates"]
 exclude_patterns = []
 autosectionlabel_prefix_document = True
 default_role = "any"
@@ -44,8 +45,8 @@ autodoc_member_order = "bysource"
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = 'sphinx_rtd_theme'
-html_static_path = ['_static']
+html_theme = "sphinx_rtd_theme"
+html_static_path = ["_static"]
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
@@ -66,9 +67,7 @@ sphinx_gallery_conf = {
     "ignore_pattern": r"__init__\.py",
     "plot_gallery": True,
     "run_stale_examples": True,
-    "first_notebook_cell": (
-        "%matplotlib inline\n"
-    ),
+    "first_notebook_cell": ("%matplotlib inline\n"),
     "thumbnail_size": (800, 550),
 }
 

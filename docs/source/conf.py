@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path('..', 'muscopy').resolve()))
+sys.path.insert(0, str(Path('..', 'muscopy/examples').resolve()))
 
 # Configuration file for the Sphinx documentation builder.
 #
@@ -61,7 +62,7 @@ pygments_dark_style = "monokai"
 sphinx_gallery_conf = {
     "examples_dirs": ["../../examples"],
     "gallery_dirs": ["gallery"],
-    "filename_pattern": "/",
+    # "filename_pattern": "/",
     "thumbnail_size": (800, 550),
 }
 

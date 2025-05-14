@@ -132,3 +132,6 @@ examples/source
 odt_test_data
 
 *.png
+
+docs/source/gallery/*
+docs/source/sg_execution_times.rst

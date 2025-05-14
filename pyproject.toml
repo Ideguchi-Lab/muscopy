@@ -22,6 +22,7 @@ dependencies = {file = "requirements.txt"}
 
 [tool.setuptools.dynamic.optional-dependencies]
 dev = { file = ["requirements-dev.txt"] }
+doc = { file = ["docs/requirements.txt"] }
 
 [tool.ruff]
 target-version = "py39"
@@ -79,6 +80,8 @@ docstring-code-format = true
 ]
 "examples/*.py" = [
   "T201", # print
+  "D205", # conflicts with sphinx-gallery
+  "D400", # conflicts with sphinx-gallery
 ]
 
 [tool.pytest.ini_options]

@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import dataclasses
 from functools import cached_property
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING
 
 from tqdm import tqdm
 
@@ -178,7 +178,7 @@ class ODTConfig:
     offset_regions: OffsetRegions = None
 
 
-class ScatteringSpectrum(NamedTuple):
+class ScatteringSpectrum:
     r"""Data class to store scattering spectrum.
 
     Attributes

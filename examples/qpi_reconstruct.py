@@ -1,4 +1,10 @@
-"""Demonstration of Quantitative Phase Imaging (QPI) reconstruction."""
+"""
+Demonstration of Quantitative Phase Imaging (QPI) reconstruction
+================================================================
+
+This example demonstrates how to use the `muscopy.qpi` function to reconstruct the phase of a
+sample from a hologram. The example uses a simple off-axis holography setup with a disk-shaped
+"""
 
 # %%
 # import modules

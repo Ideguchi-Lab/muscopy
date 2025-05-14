@@ -1,0 +1,4 @@
+sphinx
+sphinx_gallery
+sphinx-rtd-theme
+scikit-image

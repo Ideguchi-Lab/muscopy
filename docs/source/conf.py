@@ -13,15 +13,51 @@ author = 'Masato Fukushima'
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions = []
+extensions = [
+    "sphinx.ext.intersphinx",
+    "sphinx.ext.autodoc",
+    "sphinx.ext.viewcode",
+    "sphinx.ext.autosummary",
+    "sphinx.ext.autosectionlabel",
+    "sphinx.ext.mathjax",
+    "sphinx.ext.napoleon",
+    "sphinx_gallery.gen_gallery",
+]
 
 templates_path = ['_templates']
 exclude_patterns = []
+autosectionlabel_prefix_document = True
+default_role = "any"
+autodoc_typehints = "description"
+autodoc_typehints_description_target = "documented"
+autodoc_class_signature = "separated"
+autodoc_member_order = "bysource"
 
 
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = 'alabaster'
+html_theme = 'furo'
 html_static_path = ['_static']
+
+intersphinx_mapping = {
+    "python": ("https://docs.python.org/3", None),
+    "numpy": ("https://numpy.org/doc/stable/", None),
+}
+
+html_context = {
+    "mode": "production",
+}
+
+pygments_style = "sphinx"
+pygments_dark_style = "monokai"
+
+sphinx_gallery_conf = {
+    "examples_dirs": ["../../examples"],
+    "gallery_dirs": ["gallery"],
+    "filename_pattern": "/",
+    "thumbnail_size": (800, 550),
+}
+
+suppress_warnings = ["config.cache"]

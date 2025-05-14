@@ -1,0 +1,101 @@
+{
+ "BackendManager": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "muscopy.backend_manager",
+   "module_short": "muscopy.backend_manager",
+   "name": "BackendManager"
+  }
+ ],
+ "MuParameters": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "muscopy.dh",
+   "module_short": "muscopy.dh",
+   "name": "MuParameters"
+  }
+ ],
+ "make_disk": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "muscopy.dh",
+   "module_short": "muscopy.dh",
+   "name": "make_disk"
+  }
+ ],
+ "mus_unwrap_phase": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "muscopy.qpi_utils",
+   "module_short": "muscopy.qpi_utils",
+   "name": "unwrap_phase"
+  }
+ ],
+ "plt.colorbar": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "matplotlib.pyplot",
+   "module_short": "matplotlib.pyplot",
+   "name": "colorbar"
+  }
+ ],
+ "plt.imshow": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "matplotlib.pyplot",
+   "module_short": "matplotlib.pyplot",
+   "name": "imshow"
+  }
+ ],
+ "plt.show": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "matplotlib.pyplot",
+   "module_short": "matplotlib.pyplot",
+   "name": "show"
+  }
+ ],
+ "plt.title": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "matplotlib.pyplot",
+   "module_short": "matplotlib.pyplot",
+   "name": "title"
+  }
+ ],
+ "print_all_parameters": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "muscopy.dh",
+   "module_short": "muscopy.dh",
+   "name": "print_all_parameters"
+  }
+ ],
+ "qpi": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "muscopy.qpi",
+   "module_short": "muscopy.qpi",
+   "name": "qpi"
+  }
+ ],
+ "skimage_unwrap_phase": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "skimage.restoration",
+   "module_short": "skimage.restoration",
+   "name": "unwrap_phase"
+  }
+ ]
+}

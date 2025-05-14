@@ -62,7 +62,6 @@ pygments_dark_style = "monokai"
 sphinx_gallery_conf = {
     "examples_dirs": ["../../examples"],
     "gallery_dirs": ["gallery"],
-    # "filename_pattern": "/",
     "thumbnail_size": (800, 550),
 }
 

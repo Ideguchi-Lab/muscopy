@@ -1,4 +1,10 @@
-"""Demonstration of multiplexed QPI."""
+"""
+Demonstration of multiplexed QPI
+================================
+
+This example demonstrates how to use the `muscopy.dh.demultiplex_cp_arrays` function to demultiplex
+complex fields obtained from multiplexed QPI. The example uses a simple multiplexing matrix and
+"""
 
 # %%
 # import modules

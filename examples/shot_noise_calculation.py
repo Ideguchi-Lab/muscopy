@@ -1,4 +1,9 @@
-"""Demonstration of the shot noise calculation from a hologram."""
+"""
+Shot noise calculation from a hologram
+====================================================
+
+Demonstration of the shot noise calculation from a hologram
+"""
 
 # %%
 

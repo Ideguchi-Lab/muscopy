@@ -79,6 +79,8 @@ docstring-code-format = true
 ]
 "examples/*.py" = [
   "T201", # print
+  "D205", # conflicts with sphinx-gallery
+  "D400", # conflicts with sphinx-gallery
 ]
 
 [tool.pytest.ini_options]

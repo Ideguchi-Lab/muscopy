@@ -1,4 +1,9 @@
-"""Demonstrate the unwrap phase functionality of the muscopy library."""
+"""
+Phase Unwrapping Demo
+=================================
+
+Demonstrate the unwrap phase functionality of the muscopy library.
+"""
 
 # %%
 

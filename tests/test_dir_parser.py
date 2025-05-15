@@ -120,7 +120,8 @@ def test_recursive_file_parser_generic_suffix(tmp_path: Path) -> None:
 
 def test_recursive_file_parser_ignores_directories(tmp_path: Path) -> None:
     suffix = ".data"
-    (_ := tmp_path / f"folder{suffix}").mkdir()  # directory, not file
+    folder_path = tmp_path / f"folder{suffix}"
+    folder_path.mkdir()  # directory, not file
     _touch(tmp_path / f"valid{suffix}")
 
     out = recursive_file_parser(str(tmp_path), suffix)

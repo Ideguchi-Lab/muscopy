@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Fixed
+
+- Bug in the non-recursive directory parser methods [[#65](https://github.com/Ideguchi-Lab/muscopy/issues/65)]
+
+---
+
 ## Version 0.4.1 [2025-05-13]
 
 ### Added

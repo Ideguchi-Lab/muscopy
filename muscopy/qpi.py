@@ -158,16 +158,16 @@ def correct_phase_offset(
 
     Parameters
     ----------
-    backend : types.ModuleType
+    backend : `types.ModuleType`
         numpy or cupy module
-    phase_array : ArrayProtocol
+    phase_array : `ArrayProtocol`
         Phase array to be corrected
-    offset_regs : OffsetRegions
+    offset_regs : `OffsetRegions`
         The regions to be used for phase offset correction
 
     Returns
     -------
-    ArrayProtocol
+    `ArrayProtocol`
         The phase array with the offset corrected
     """
     if offset_regs is None:

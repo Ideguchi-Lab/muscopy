@@ -25,9 +25,7 @@ def numpy_parser(dir_path: str) -> list[str]:
     `list`\[`str`\]
         List of numpy files in the directory.
     """
-    return [
-        dir_path + str(file) for file in pathlib.Path(dir_path).iterdir() if file.is_file() and file.suffix == ".npy"
-    ]
+    return [str(file) for file in pathlib.Path(dir_path).iterdir() if file.is_file() and file.suffix == ".npy"]
 
 
 def png_parser(dir_path: str) -> list[str]:
@@ -43,9 +41,7 @@ def png_parser(dir_path: str) -> list[str]:
     `list`\[`str`\]
         List of png files in the directory.
     """
-    return [
-        dir_path + str(file) for file in pathlib.Path(dir_path).iterdir() if file.is_file() and file.suffix == ".png"
-    ]
+    return [str(file) for file in pathlib.Path(dir_path).iterdir() if file.is_file() and file.suffix == ".png"]
 
 
 def tiff_parser(dir_path: str) -> list[str]:
@@ -61,9 +57,7 @@ def tiff_parser(dir_path: str) -> list[str]:
     `list`\[`str`\]
         List of tiff files in the directory.
     """
-    return [
-        dir_path + str(file) for file in pathlib.Path(dir_path).iterdir() if file.is_file() and file.suffix == ".tiff"
-    ]
+    return [str(file) for file in pathlib.Path(dir_path).iterdir() if file.is_file() and file.suffix == ".tiff"]
 
 
 def recursive_numpy_parser(dir_path: str) -> list[str]:

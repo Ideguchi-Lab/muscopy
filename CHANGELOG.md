@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- Phase correct function dedicated for QPI and MIP-QPI [[#66](https://github.com/Ideguchi-Lab/muscopy/issues/66)]
+
 ### Fixed
 
 - Bug in the non-recursive directory parser methods [[#65](https://github.com/Ideguchi-Lab/muscopy/issues/65)]

@@ -170,7 +170,7 @@ def correct_phase_offset(
     `ArrayProtocol`
         The phase array with the offset corrected
     """
-    if offset_regs is None:
+    if not offset_regs:
         return phase_array
     phase_offset_list = [
         backend.mean(phase_array[region[0][0] : region[0][1], region[1][0] : region[1][1]]) for region in offset_regs

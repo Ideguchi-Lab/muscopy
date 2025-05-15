@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+---
+
+## Version 0.4.2 [2025-05-15]
+
 ### Added
 
 - Phase correct function dedicated for QPI and MIP-QPI [[#66](https://github.com/Ideguchi-Lab/muscopy/issues/66)]

@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 
 from muscopy.backend_manager import BackendManager
 from muscopy.dh import MuParameters, make_disk, print_all_parameters
-from muscopy.qpi import qpi
+from muscopy.qpi import correct_phase_offset, qpi
 
 # config
 SHOW_IMAGE = True
@@ -75,7 +75,22 @@ ref_hologram = backend.abs(ref_sample_array + ref_array) ** 2
 # %%
 # Extract phase of scattering wave with QPI
 
+offset_regions = [
+    ((5, 10), (5, 10)),
+    ((params.aperturesize_px - 10, params.aperturesize_px - 5), (5, 10)),
+    ((5, 10), (params.aperturesize_px - 10, params.aperturesize_px - 5)),
+    (
+        (params.aperturesize_px - 10, params.aperturesize_px - 5),
+        (params.aperturesize_px - 10, params.aperturesize_px - 5),
+    ),
+]
+
 phase_image = qpi(backend, hologram, ref_hologram, params, off_axis_center)
+
+# correct the phase offset by using the corner regions
+phase_image = correct_phase_offset(backend, phase_image, offset_regions)
+
+
 if bmg.backend == "cupy":
     phase_image = backend.asnumpy(phase_image)
 

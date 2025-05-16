@@ -4,6 +4,7 @@ This module provides:
 
 - `qpi`: A function to calculate the QPI phase image.
 - `mip_qpi`: A function to calculate the MIP-QPI phase image.
+- `correct_phase_offset`: A function to correct the phase offset of the QPI image.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from muscopy.backend_manager import ArrayProtocol
-    from muscopy.cfg import Region
+    from muscopy.cfg import OffsetRegions, Region
     from muscopy.dh import MuParameters
 
 
@@ -146,3 +147,34 @@ def mip_qpi(  # noqa: PLR0913
             array_div = 1 / array_div
 
     return backend.angle(array_div)
+
+
+def correct_phase_offset(
+    backend: types.ModuleType,
+    phase_array: ArrayProtocol,
+    offset_regs: OffsetRegions,
+) -> ArrayProtocol:
+    """Correct the phase offset of the phase array.
+
+    Parameters
+    ----------
+    backend : `types.ModuleType`
+        numpy or cupy module
+    phase_array : `ArrayProtocol`
+        Phase array to be corrected
+    offset_regs : `OffsetRegions`
+        The regions to be used for phase offset correction
+
+    Returns
+    -------
+    `ArrayProtocol`
+        The phase array with the offset corrected
+    """
+    if not offset_regs:
+        return phase_array
+    phase_offset_list = [
+        backend.mean(phase_array[region[0][0] : region[0][1], region[1][0] : region[1][1]]) for region in offset_regs
+    ]
+    phase_offset = backend.mean(backend.array(phase_offset_list))
+
+    return phase_array - phase_offset

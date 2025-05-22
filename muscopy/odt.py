@@ -19,6 +19,8 @@ import dataclasses
 from functools import cached_property
 from typing import TYPE_CHECKING
 
+import jax.numpy as jnp
+from jax import Array
 from tqdm import tqdm
 
 from muscopy.cfg import ArrayPrecision, OffsetRegions
@@ -27,9 +29,6 @@ from muscopy.qpi_utils import unwrap_phase
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
-    from types import ModuleType
-
-    from muscopy.backend_manager import ArrayProtocol, BackendManager
 
 
 @dataclasses.dataclass
@@ -183,29 +182,26 @@ class ScatteringSpectrum:
 
     Attributes
     ----------
-    array : `ArrayProtocol`
+    array : `Array`
         Scattering spectrum
     illumination_vector : `tuple`\[`int`, `int`\]
         Illumination vector in px unit
     """
 
-    array: ArrayProtocol
+    array: Array
     illumination_vector: tuple[int, int]
 
 
 def synthesize_spectrum(
-    backend: ModuleType,
     scattering_spectrums: Iterable[ScatteringSpectrum],
     params: ODTParameters,
     config: ODTConfig,
     mode: str = "Forward",
-) -> ArrayProtocol:
+) -> Array:
     r"""Synthesize scattering spectrums into 3D scattering potential.
 
     Parameters
     ----------
-    backend : `types.ModuleType`
-        Backend module to use
     scattering_spectrums : `collections.abc.Iterable`\[`ScatteringSpectrum`\]
         Collection of ScatteringSpectrum object
     params : `ODTParameters`
@@ -217,10 +213,10 @@ def synthesize_spectrum(
 
     Returns
     -------
-    `ArrayProtocol`
+    `Array`
         Synthesized scattering potential
     """
-    synthesized_spectrum = backend.zeros(
+    synthesized_spectrum = jnp.zeros(
         (
             2 * params.aperturesize_px + 1 - config.edge_size,
             2 * params.aperturesize_px + 1 - config.edge_size,
@@ -228,15 +224,14 @@ def synthesize_spectrum(
         ),
         dtype=config.precision.complex_precision(),
     )
-    synthesized_weight = backend.ones_like(synthesized_spectrum, dtype=config.precision.int_precision())
+    synthesized_weight = jnp.ones_like(synthesized_spectrum, dtype=config.precision.int_precision())
 
     print("Synthesize spectrum...")  # noqa: T201
     for scattering_spectrum in tqdm(scattering_spectrums):
         kz_disk = _calc_kz_disk(
-            backend, params, scattering_spectrum.array.shape, scattering_spectrum.illumination_vector, config.precision
+            jnp, params, scattering_spectrum.array.shape, scattering_spectrum.illumination_vector, config.precision
         )
         scattering_potential = _embed_3d_spectrum(
-            backend,
             scattering_spectrum.array * 2j * kz_disk,
             synthesized_spectrum.shape,
             params,
@@ -253,69 +248,59 @@ def synthesize_spectrum(
     return synthesized_spectrum
 
 
-def fill_hermite_components(backend: ModuleType, spectrum3d: ArrayProtocol) -> ArrayProtocol:
+def fill_hermite_components(spectrum3d: Array) -> Array:
     """Fill the hermite conjugated spectrum for transparent sample.
 
     Parameters
     ----------
-    backend : `types.ModuleType`
-        Backend module to calculate
-    spectrum3d : `ArrayProtocol`
+    spectrum3d : `Array`
         Spectrum of scattering potential
 
     Returns
     -------
-    `ArrayProtocol`
+    `Array`
         Filled spectrum of scattering potential
     """
-    conjugate_spectrum = backend.conjugate(backend.flip(spectrum3d, axis=(0, 1, 2)))
-    overlap_region = backend.logical_and(backend.abs(spectrum3d) > 0, backend.abs(conjugate_spectrum) > 0)
+    conjugate_spectrum = jnp.conjugate(jnp.flip(spectrum3d, axis=(0, 1, 2)))
+    overlap_region = jnp.abs(spectrum3d) > 0 & jnp.abs(conjugate_spectrum) > 0
     spectrum3d += conjugate_spectrum
     spectrum3d[overlap_region] /= 2
     return spectrum3d
 
 
-def calc_refractive_index(
-    backend: ModuleType, scattering_potential: ArrayProtocol, params: ODTParameters
-) -> ArrayProtocol:
+def calc_refractive_index(scattering_potential: Array, params: ODTParameters) -> Array:
     """Calculate the refractive index from the scattering potential.
 
     Parameters
     ----------
-    backend : `types.ModuleType`
-        Backend module to calulate
-    scattering_potential : `ArrayProtocol`
+    scattering_potential : `Array`
         scattering potential array
     params : `ODTParameters`
         ODT parameter instance
 
     Returns
     -------
-    `ArrayProtocol`
+    `Array`
         3D refractive index
     """
-    return params.n_sol * backend.sqrt(
-        backend.ones_like(scattering_potential)
-        + scattering_potential / (params.light_freq_px * params.freq_per_px) ** 2
+    return params.n_sol * jnp.sqrt(
+        jnp.ones_like(scattering_potential) + scattering_potential / (params.light_freq_px * params.freq_per_px) ** 2
     )
 
 
-def odt(  # noqa: PLR0914
-    bmg: BackendManager,
-    cp_spectrums: Sequence[ArrayProtocol],
-    ref_cp_spectrums: Sequence[ArrayProtocol],
+def odt(
+    cp_spectrums: Sequence[Array],
+    ref_cp_spectrums: Sequence[Array],
     params: ODTParameters,
     config: ODTConfig,
-) -> tuple[ArrayProtocol, ArrayProtocol]:
+) -> tuple[Array, Array]:
     r"""Optical Diffraction Tomography (ODT) reconstruction.
 
     Parameters
     ----------
-    bmg : `BackendManager`
-        Backend manager to use
-    cp_spectrums : `collections.abc.Sequence`\[`ArrayProtocol`\]
+    cp_spectrums : `collections.abc.Sequence`\[`Array`\]
         Spectrum of complex fields
-    ref_cp_spectrums : `collections.abc.Sequence`\[`ArrayProtocol`\]
+    ref_cp_spectrums : `collections.abc.Sequence`\[`Array`\]
         Reference spectrum of complex fields
     params : `ODTParameters`
         ODT parameter instance
@@ -324,117 +309,109 @@ def odt(  # noqa: PLR0914
 
     Returns
     -------
-    `tuple`\[`ArrayProtocol`, `ArrayProtocol`\]
+    `tuple`\[`Array`, `Array`\]
         3D refractive index, 3D spectrum
     """
     params.verify_parameters()
-    backend = bmg.get_backend()
     # weak scattering approximation
     scattering_spectrums = []
     for cp_spectrum, ref_cp_spectrum in zip(cp_spectrums, ref_cp_spectrums):
-        max_x, max_y, _ = _find_max_args(backend, cp_spectrum)
+        max_x, max_y, _ = _find_max_args(cp_spectrum)
         illumination_vector = (max_x - params.aperturesize_px // 2, max_y - params.aperturesize_px // 2)
-        expanded_cp_spectrum = _shift_dh_spectrum(backend, params, cp_spectrum, illumination_vector).astype(
+        expanded_cp_spectrum = _shift_dh_spectrum(params, cp_spectrum, illumination_vector).astype(
             config.precision.complex_precision()
         )
-        expanded_ref_cp_spectrum = _shift_dh_spectrum(backend, params, ref_cp_spectrum, illumination_vector).astype(
+        expanded_ref_cp_spectrum = _shift_dh_spectrum(params, ref_cp_spectrum, illumination_vector).astype(
             config.precision.complex_precision()
         )
-        cp_field = backend.fft.ifft2(backend.fft.ifftshift(expanded_cp_spectrum), norm="ortho")
-        ref_cp_field = backend.fft.ifft2(backend.fft.ifftshift(expanded_ref_cp_spectrum), norm="ortho")
+        cp_field = jnp.fft.ifft2(jnp.fft.ifftshift(expanded_cp_spectrum), norm="ortho")
+        ref_cp_field = jnp.fft.ifft2(jnp.fft.ifftshift(expanded_ref_cp_spectrum), norm="ortho")
         scattering_spectrum_array = _calc_1st_scattering_spectrum(
-            bmg, cp_field, ref_cp_field, params, config.approx_type, illumination_vector, config.offset_regions
+            cp_field, ref_cp_field, params, config.approx_type, illumination_vector, config.offset_regions
         )
         scattering_spectrum = ScatteringSpectrum(scattering_spectrum_array, illumination_vector)
         scattering_spectrums.append(scattering_spectrum)
 
-    synthesized_spectrum = synthesize_spectrum(backend, scattering_spectrums, params, config, mode="Forward")
+    synthesized_spectrum = synthesize_spectrum(scattering_spectrums, params, config, mode="Forward")
 
     if config.hermite_symmetry:
-        synthesized_spectrum = fill_hermite_components(backend, synthesized_spectrum)
+        synthesized_spectrum = fill_hermite_components(synthesized_spectrum)
 
-    scattering_potential = backend.fft.ifftn(backend.fft.ifftshift(synthesized_spectrum), norm="ortho")
+    scattering_potential = jnp.fft.ifftn(jnp.fft.ifftshift(synthesized_spectrum), norm="ortho")
 
-    scattering_potential = backend.fft.fftshift(scattering_potential, axes=(2))
+    scattering_potential = jnp.fft.fftshift(scattering_potential, axes=(2))
 
-    factor = params.spectrum2cpfield_xy**2 * params.spectrum2cpfield_z / (2 * backend.pi) ** 3
+    factor = params.spectrum2cpfield_xy**2 * params.spectrum2cpfield_z / (2 * jnp.pi) ** 3
     scattering_potential *= factor
 
-    refractive_index = calc_refractive_index(backend, scattering_potential, params)
+    refractive_index = calc_refractive_index(scattering_potential, params)
     return refractive_index, synthesized_spectrum
 
 
-def discard_higher_axial_freq(backend: ModuleType, array3d: ArrayProtocol, threshold: int) -> ArrayProtocol:
+def discard_higher_axial_freq(array3d: Array, threshold: int) -> Array:
     """Discard higher axial frequency.
 
     Parameters
     ----------
-    backend : `types.ModuleType`
-        Backend module to calculate
-    array3d : `ArrayProtocol`
+    array3d : `Array`
         3D array to be modulated
     threshold : `int`
         Number of pixels to be remained
 
     Returns
     -------
-    `ArrayProtocol`
+    `Array`
         3D array with higher axial frequency discarded
     """
-    norm_factor = backend.sqrt((array3d.shape[2] - 2 * threshold) / array3d.shape[2])
-    ft_array3d = backend.fft.fftshift(backend.fft.fftn(array3d, norm="ortho"))
+    norm_factor = jnp.sqrt((array3d.shape[2] - 2 * threshold) / array3d.shape[2])
+    ft_array3d = jnp.fft.fftshift(jnp.fft.fftn(array3d, norm="ortho"))
     discarded = ft_array3d[:, :, threshold:-threshold]
     del array3d, ft_array3d
     discarded *= norm_factor
-    return backend.fft.ifftn(backend.fft.ifftshift(discarded), norm="ortho")
+    return jnp.fft.ifftn(jnp.fft.ifftshift(discarded), norm="ortho")
 
 
 def zeropad_higher_axial_freq(
-    backend: ModuleType,
-    array3d: ArrayProtocol,
+    array3d: Array,
     number: int,
-) -> ArrayProtocol:
+) -> Array:
     """Zero pad the higher axial frequency.
 
     Parameters
     ----------
-    backend : `types.ModuleType`
-        Backend module to calculate
-    array3d : `ArrayProtocol`
+    array3d : `Array`
         3D array to be zero padded
     number : `int`
         Number of pixels to be zero padded
 
     Returns
     -------
-    `ArrayProtocol`
+    `Array`
         Zero padded 3D array
     """
-    norm_factor = backend.sqrt((array3d.shape[2] + 2 * number) / array3d.shape[2])
-    ft_array3d = backend.fft.fftshift(backend.fft.fftn(array3d, norm="ortho"))
+    norm_factor = jnp.sqrt((array3d.shape[2] + 2 * number) / array3d.shape[2])
+    ft_array3d = jnp.fft.fftshift(jnp.fft.fftn(array3d, norm="ortho"))
     del array3d
-    ft_array3d = backend.pad(
+    ft_array3d = jnp.pad(
         ft_array3d,
         ((0, 0), (0, 0), (number, number)),
         mode="constant",
         constant_values=0,
     )
     ft_array3d *= norm_factor
-    return backend.fft.ifftn(backend.fft.ifftshift(ft_array3d), norm="ortho")
+    return jnp.fft.ifftn(jnp.fft.ifftshift(ft_array3d), norm="ortho")
 
 
-def _find_max_args(backend: ModuleType, array: ArrayProtocol) -> tuple[int, int, float]:
-    max_value = backend.max(array)
-    max_index = backend.unravel_index(backend.argmax(array), array.shape)
-    max_x = max_index[0]
-    max_y = max_index[1]
+def _find_max_args(array: Array) -> tuple[int, int, float]:
+    max_value = float(jnp.max(array))
+    max_index = jnp.unravel_index(jnp.argmax(array), array.shape)
+    max_x = int(max_index[0])
+    max_y = int(max_index[1])
     return max_x, max_y, max_value
 
 
-def _shift_dh_spectrum(
-    backend: ModuleType, params: ODTParameters, cp_spectrum: ArrayProtocol, illumination_vector: tuple[int, int]
-) -> ArrayProtocol:
-    expanded_cp_spectrum = backend.zeros(
+def _shift_dh_spectrum(params: ODTParameters, cp_spectrum: Array, illumination_vector: tuple[int, int]) -> Array:
+    expanded_cp_spectrum = jnp.zeros(
         (2 * params.aperturesize_px + 1, 2 * params.aperturesize_px + 1), dtype=cp_spectrum.dtype
     )
 
@@ -446,19 +423,17 @@ def _shift_dh_spectrum(
 
 
 def _calc_1st_scattering_spectrum(  # noqa: PLR0913, PLR0917
-    bmg: BackendManager,
-    cp_field: ArrayProtocol,
-    ref_cp_field: ArrayProtocol,
+    cp_field: Array,
+    ref_cp_field: Array,
     params: ODTParameters,
     approx_type: str,
     illumination_vector: tuple[int, int],
     offset_regions: OffsetRegions = None,
-) -> ArrayProtocol:
-    backend = bmg.get_backend()
+) -> Array:
     if approx_type == "Born":
         scattering_field = (cp_field - ref_cp_field) / ref_cp_field
     elif approx_type == "Rytov":
-        scattering_field = _log_field(bmg, cp_field, ref_cp_field)
+        scattering_field = _log_field(cp_field, ref_cp_field)
     else:
         msg = f"Unknown approximation type: {approx_type}"
         raise ValueError(msg)
@@ -467,19 +442,18 @@ def _calc_1st_scattering_spectrum(  # noqa: PLR0913, PLR0917
     if offset_regions:
         amplitude_offset = 0.0
         for region in offset_regions:
-            amplitude_offset += backend.mean(
-                backend.abs(scattering_field[region[0][0] : region[0][1], region[1][0] : region[1][1]])
+            amplitude_offset += float(
+                jnp.mean(jnp.abs(scattering_field[region[0][0] : region[0][1], region[1][0] : region[1][1]]))
             )
         amplitude_offset /= len(offset_regions)
         scattering_field -= amplitude_offset
 
     scattering_spectrum = (
-        backend.fft.fftshift(backend.fft.fft2(scattering_field, norm="ortho"))
+        jnp.fft.fftshift(jnp.fft.fft2(scattering_field, norm="ortho"))
         * (params.cpfield_xy2spectrum) ** 2
-        * (2 * backend.pi)
+        * (2 * jnp.pi)
     )  # last factor is to adjust to the non-Unitary derivation in Tamamitsu's paper
     mask_for_synthesis = make_disk(
-        backend,
         (
             params.aperturesize_px + illumination_vector[0],
             params.aperturesize_px + illumination_vector[1],
@@ -492,42 +466,40 @@ def _calc_1st_scattering_spectrum(  # noqa: PLR0913, PLR0917
     return scattering_spectrum
 
 
-def _log_field(bmg: BackendManager, cp_field: ArrayProtocol, ref_cp_field: ArrayProtocol) -> ArrayProtocol:
-    backend = bmg.get_backend()
-    field_log = backend.log(cp_field + 1e-40)
-    field_log_real = backend.real(field_log)
-    field_log_imag = backend.imag(field_log)
-    ref_field_log = backend.log(ref_cp_field + 1e-40)
-    ref_field_log_real = backend.real(ref_field_log)
-    ref_field_log_imag = backend.imag(ref_field_log)
+def _log_field(cp_field: Array, ref_cp_field: Array) -> Array:
+    field_log = jnp.log(cp_field + 1e-40)
+    field_log_real = jnp.real(field_log)
+    field_log_imag = jnp.imag(field_log)
+    ref_field_log = jnp.log(ref_cp_field + 1e-40)
+    ref_field_log_real = jnp.real(ref_field_log)
+    ref_field_log_imag = jnp.imag(ref_field_log)
 
     amplitude = field_log_real - ref_field_log_real
-    phase = unwrap_phase(bmg, field_log_imag - ref_field_log_imag)
+    phase = unwrap_phase(field_log_imag - ref_field_log_imag)
 
     return amplitude + 1j * phase
 
 
-def _embed_3d_spectrum(  # noqa: PLR0913, PLR0917
-    backend: ModuleType,
-    spectrum2d: ArrayProtocol,
+def _embed_3d_spectrum(
+    spectrum2d: Array,
     shape_3d: tuple[int, int, int],
     params: ODTParameters,
     illumination_vector: tuple[int, int],
     mode: str,
-) -> ArrayProtocol:
-    xx, yy = backend.meshgrid(
-        backend.arange(-shape_3d[0] // 2, shape_3d[0] // 2),
-        backend.arange(
+) -> Array:
+    xx, yy = jnp.meshgrid(
+        jnp.arange(-shape_3d[0] // 2, shape_3d[0] // 2),
+        jnp.arange(
             -shape_3d[1] // 2,
             shape_3d[1] // 2,
         ),
         indexing="ij",
     )
 
-    _, _, zz = backend.meshgrid(
-        backend.arange(-shape_3d[0] // 2, shape_3d[0] // 2),
-        backend.arange(-shape_3d[1] // 2, shape_3d[1] // 2),
-        backend.arange(-shape_3d[2] // 2, shape_3d[2] // 2),
+    _, _, zz = jnp.meshgrid(
+        jnp.arange(-shape_3d[0] // 2, shape_3d[0] // 2),
+        jnp.arange(-shape_3d[1] // 2, shape_3d[1] // 2),
+        jnp.arange(-shape_3d[2] // 2, shape_3d[2] // 2),
         indexing="ij",
     )
 
@@ -535,35 +507,34 @@ def _embed_3d_spectrum(  # noqa: PLR0913, PLR0917
         params.aperturesize_px // 2
     ) ** 2
 
-    fz_circle = backend.sqrt(
+    fz_circle = jnp.sqrt(
         params.light_freq_px**2 - (xx - illumination_vector[0]) ** 2 - (yy - illumination_vector[1]) ** 2
-    ) - backend.sqrt(params.light_freq_px**2 - illumination_vector[0] ** 2 - illumination_vector[1] ** 2)
+    ) - jnp.sqrt(params.light_freq_px**2 - illumination_vector[0] ** 2 - illumination_vector[1] ** 2)
 
     if mode == "Backward":
         fz_circle = -fz_circle
 
     fz_value = fz_circle * circle
-    fz_tile = backend.tile(fz_value, (shape_3d[2], 1, 1))
+    fz_tile = jnp.tile(fz_value, (shape_3d[2], 1, 1))
     fz_tile = fz_tile.transpose(1, 2, 0)
-    fz_tile = fz_tile.astype(backend.int64)  # necessary for the equivalence check
+    fz_tile = fz_tile.astype(jnp.int64)  # necessary for the equivalence check
 
     fz_tile -= (fz_tile == 0) * 2 * params.freq_axial_extent_px
     fz_index = zz == fz_tile
 
-    array_tiled = backend.stack([spectrum2d] * shape_3d[2], axis=2)
+    array_tiled = jnp.stack([spectrum2d] * shape_3d[2], axis=2)
     return array_tiled * fz_index
 
 
 def _calc_kz_disk(
-    backend: ModuleType,
     params: ODTParameters,
     shape: tuple[int, int],
     illumination_vector: tuple[int, int],
     precision: ArrayPrecision,
-) -> ArrayProtocol:
-    xx, yy = backend.meshgrid(
-        backend.arange(-shape[0] // 2, shape[0] // 2),
-        backend.arange(-shape[1] // 2, shape[1] // 2),
+) -> Array:
+    xx, yy = jnp.meshgrid(
+        jnp.arange(-shape[0] // 2, shape[0] // 2),
+        jnp.arange(-shape[1] // 2, shape[1] // 2),
         indexing="ij",
     )
 

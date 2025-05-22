@@ -11,6 +11,7 @@ sample from a hologram. The example uses a simple off-axis holography setup with
 
 import math
 
+import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 
@@ -19,6 +20,8 @@ from muscopy.qpi import correct_phase_offset, qpi
 
 # config
 SHOW_IMAGE = True
+
+print(jax.default_backend())
 
 # %%
 # set Microscopy parameters

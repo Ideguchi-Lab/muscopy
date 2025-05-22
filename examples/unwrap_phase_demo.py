@@ -78,8 +78,7 @@ ref_hologram = jnp.abs(ref_sample_array + ref_array) ** 2
 phase_image = qpi(hologram, ref_hologram, params, off_axis_center)
 
 if SHOW_IMAGE:
-    phase_image_to_show = np.asarray(phase_image)
-    plt.imshow(phase_image_to_show)
+    plt.imshow(phase_image)
     plt.colorbar()
     plt.show()
 
@@ -89,7 +88,7 @@ unwrapped_mus = mus_unwrap_phase(phase_image)
 
 if SHOW_IMAGE:
     unwrapped_mus_to_show = np.asarray(unwrapped_mus)
-    plt.imshow(unwrapped_mus_to_show)
+    plt.imshow(unwrapped_mus)
     plt.colorbar()
     plt.title("Unwrapped phase with muscopy")
     plt.show()

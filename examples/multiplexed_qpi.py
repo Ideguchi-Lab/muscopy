@@ -51,12 +51,8 @@ sample_disk2 = make_disk(pos2, radius2, params.img_size_px)
 sample_array1 = jnp.exp(2j * jnp.pi / 3 * sample_disk1)
 sample_array2 = jnp.exp(2j * jnp.pi / 5 * sample_disk2)
 low_pass = make_disk(params.img_center, params.aperturesize_px // 2, params.img_size_px)
-sample_array1 = jnp.fft.ifft2(
-    jnp.fft.ifftshift(jnp.fft.fftshift(jnp.fft.fft2(sample_array1)) * low_pass)
-)
-sample_array2 = jnp.fft.ifft2(
-    jnp.fft.ifftshift(jnp.fft.fftshift(jnp.fft.fft2(sample_array2)) * low_pass)
-)
+sample_array1 = jnp.fft.ifft2(jnp.fft.ifftshift(jnp.fft.fftshift(jnp.fft.fft2(sample_array1)) * low_pass))
+sample_array2 = jnp.fft.ifft2(jnp.fft.ifftshift(jnp.fft.fftshift(jnp.fft.fft2(sample_array2)) * low_pass))
 sample_array1 /= jnp.sum(jnp.abs(sample_array1) ** 2) ** 0.5
 sample_array2 /= jnp.sum(jnp.abs(sample_array2) ** 2) ** 0.5
 
@@ -76,12 +72,8 @@ ref_array = jnp.exp(
 )
 ref_array /= jnp.sum(jnp.abs(ref_array) ** 2) ** 0.5
 
-hologram1 = (
-    jnp.abs(multiplex_matrix[0, 0] * sample_array1 + multiplex_matrix[0, 1] * sample_array2 + ref_array) ** 2
-)
-hologram2 = (
-    jnp.abs(multiplex_matrix[1, 0] * sample_array1 + multiplex_matrix[1, 1] * sample_array2 + ref_array) ** 2
-)
+hologram1 = jnp.abs(multiplex_matrix[0, 0] * sample_array1 + multiplex_matrix[0, 1] * sample_array2 + ref_array) ** 2
+hologram2 = jnp.abs(multiplex_matrix[1, 0] * sample_array1 + multiplex_matrix[1, 1] * sample_array2 + ref_array) ** 2
 
 ref_sample_array = jnp.ones_like(sample_array1)
 ref_sample_array /= jnp.sum(jnp.abs(ref_sample_array) ** 2) ** 0.5

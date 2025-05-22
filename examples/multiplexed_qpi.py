@@ -100,8 +100,11 @@ cp_fields = [cp_field1, cp_field2]
 
 # %%
 # calculate the demultiplexing matrix
-
+# transfer the multiplexing matrix to CPU due to cuSolver internal error
+cpu = jax.devices("cpu")[0]
+multiplex_matrix = jax.device_put(multiplex_matrix, device=cpu)
 demultiplexing_matrix = jnp.linalg.inv(multiplex_matrix)
+demultiplexing_matrix = jax.device_put(demultiplexing_matrix)
 
 
 # %%

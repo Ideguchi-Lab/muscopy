@@ -11,6 +11,7 @@ import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
+from numpy.typing import NDArray
 from skimage.restoration import unwrap_phase as skimage_unwrap_phase
 
 from muscopy.dh import MuParameters, make_disk, print_all_parameters
@@ -100,7 +101,7 @@ if SHOW_IMAGE:
 
 phase_image_np = np.asarray(phase_image)
 
-unwrapped_skimage = skimage_unwrap_phase(phase_image_np)
+unwrapped_skimage: NDArray[np.float64] = skimage_unwrap_phase(phase_image_np)  # type: ignore[no-untyped-call]
 
 if SHOW_IMAGE:
     plt.imshow(unwrapped_skimage)

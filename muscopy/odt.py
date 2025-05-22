@@ -16,7 +16,6 @@ This module provides:
 from __future__ import annotations
 
 import dataclasses
-from functools import cached_property
 from typing import TYPE_CHECKING
 
 import jax
@@ -75,7 +74,7 @@ class ODTParameters(MuParameters):
             msg = "NA of illumination cannot be greater than NA of the solvent."
             raise ValueError(msg)
 
-    @cached_property
+    @property
     def freq_axial_extent_px(self) -> int:
         """Calculate the axial extent of Fourier space in pixels.
 
@@ -86,7 +85,7 @@ class ODTParameters(MuParameters):
         """
         return self.aperturesize_px
 
-    @cached_property
+    @property
     def imgpx_lateral_m_per_px(self) -> float:
         """Calculate the lateral pixel size in meters (ODT).
 
@@ -97,7 +96,7 @@ class ODTParameters(MuParameters):
         """
         return self.px_size_m * self.img_size_px / (2 * self.aperturesize_px + 1)
 
-    @cached_property
+    @property
     def imgpx_axial_m_per_px(self) -> float:
         """Calculate the axial pixel size in meters.
 
@@ -108,7 +107,7 @@ class ODTParameters(MuParameters):
         """
         return 1 / (self.freq_per_px * self.freq_axial_extent_px)
 
-    @cached_property
+    @property
     def spectrum2cpfield_xy(self) -> float:
         """Lateral Fourier factor from spectrum to field.
 
@@ -117,9 +116,9 @@ class ODTParameters(MuParameters):
         `float`
             factor from spectrum to field
         """
-        return (self.freq_per_px / self.imgpx_lateral_m_per_px) ** 0.5
+        return float((self.freq_per_px / self.imgpx_lateral_m_per_px) ** 0.5)
 
-    @cached_property
+    @property
     def cpfield_xy2spectrum(self) -> float:
         """Lateral Fourier factor from field to spectrum.
 
@@ -128,9 +127,9 @@ class ODTParameters(MuParameters):
         `float`
             factor from field to spectrum
         """
-        return (self.imgpx_lateral_m_per_px / self.freq_per_px) ** 0.5
+        return float((self.imgpx_lateral_m_per_px / self.freq_per_px) ** 0.5)
 
-    @cached_property
+    @property
     def spectrum2cpfield_z(self) -> float:
         """Axial Fourier factor from spectrum to field.
 
@@ -139,9 +138,9 @@ class ODTParameters(MuParameters):
         `float`
             factor from spectrum to field.
         """
-        return (self.freq_per_px / self.imgpx_axial_m_per_px) ** 0.5
+        return float((self.freq_per_px / self.imgpx_axial_m_per_px) ** 0.5)
 
-    @cached_property
+    @property
     def cpfield_z2spectrum(self) -> float:
         """Axial Fourier factor from spectrum to field.
 
@@ -150,7 +149,7 @@ class ODTParameters(MuParameters):
         `float`
             factor from field to spectrum.
         """
-        return (self.imgpx_axial_m_per_px / self.freq_per_px) ** 0.5
+        return float((self.imgpx_axial_m_per_px / self.freq_per_px) ** 0.5)
 
 
 @dataclasses.dataclass

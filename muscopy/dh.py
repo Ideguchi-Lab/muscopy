@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import cmath
 import dataclasses
-import functools
 import inspect
 import math
 import typing
@@ -88,7 +87,7 @@ class MuParameters:
             msg = "NA cannot be greater than the refractive index of the solution."
             raise ValueError(msg)
 
-    @functools.cached_property
+    @property
     def img_center(self) -> tuple[int, int]:
         r"""Get the center position of the image.
 
@@ -99,7 +98,7 @@ class MuParameters:
         """
         return (self.img_size_px // 2, self.img_size_px // 2)
 
-    @functools.cached_property
+    @property
     def freq_per_px(self) -> float:
         """Frequency(1/meter) per pixel in the Fourier space.
 
@@ -110,7 +109,7 @@ class MuParameters:
         """
         return 1 / (self.px_size_m * self.img_size_px)
 
-    @functools.cached_property
+    @property
     def k_per_px(self) -> float:
         r"""Get the wave vector per pixel in the Fourier space.
 
@@ -121,7 +120,7 @@ class MuParameters:
         """
         return 2 * math.pi * self.freq_per_px
 
-    @functools.cached_property
+    @property
     def aperturesize_px(self) -> int:
         """Get the size of the aperture in pixel unit.
 
@@ -132,7 +131,7 @@ class MuParameters:
         """
         return 2 * round(self.na / self.wavelength_m / self.freq_per_px) + 1
 
-    @functools.cached_property
+    @property
     def light_freq_px(self) -> float:
         r"""Get the light frequency in pixel unit.
 
@@ -143,7 +142,7 @@ class MuParameters:
         """
         return self.n_sol / self.wavelength_m / self.freq_per_px
 
-    @functools.cached_property
+    @property
     def imgpx_m_per_px(self) -> float:
         """Get the size of the imaging pixel(QPI pixel) in meter unit.
 
@@ -154,7 +153,7 @@ class MuParameters:
         """
         return self.px_size_m * self.img_size_px / self.aperturesize_px
 
-    @functools.cached_property
+    @property
     def hologram2spectrum(self) -> float:
         """Fourier factor from hologram to spectrum.
 
@@ -163,9 +162,9 @@ class MuParameters:
         `float`
             factor from hologram to spectrum
         """
-        return (self.px_size_m / self.freq_per_px) ** 0.5
+        return float((self.px_size_m / self.freq_per_px) ** 0.5)
 
-    @functools.cached_property
+    @property
     def spectrum2cpfield(self) -> float:
         """Fourier factor from spectrum to complex field.
 
@@ -174,9 +173,9 @@ class MuParameters:
         `float`
             factor from spectrum to complex field
         """
-        return (self.freq_per_px / self.imgpx_m_per_px) ** 0.5
+        return float((self.freq_per_px / self.imgpx_m_per_px) ** 0.5)
 
-    @functools.cached_property
+    @property
     def cpfield2spectrum(self) -> float:
         """Fourier factor from complex field to spectrum.
 
@@ -185,7 +184,7 @@ class MuParameters:
         `float`
             factor from complex field to spectrum
         """
-        return (self.imgpx_m_per_px / self.freq_per_px) ** 0.5
+        return float((self.imgpx_m_per_px / self.freq_per_px) ** 0.5)
 
 
 def print_all_parameters(param: MuParameters, *, show_properties: bool = False) -> None:
@@ -209,7 +208,7 @@ def print_all_parameters(param: MuParameters, *, show_properties: bool = False) 
         print("\n=== Properties ===")  # noqa: T201
         # detect properties and cached_properties
         prop_members = dict(
-            inspect.getmembers(type(param), lambda m: isinstance(m, (property, functools.cached_property))),
+            inspect.getmembers(type(param), lambda m: isinstance(m, (property))),
         )
 
         dataclass_field_names = {field_obj.name for field_obj in dataclasses.fields(param)}

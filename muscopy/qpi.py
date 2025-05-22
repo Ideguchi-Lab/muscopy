@@ -18,7 +18,7 @@ from jax import Array
 from muscopy.dh import get_spectrum, offaxis_dh
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Sequence
 
     from muscopy.cfg import OffsetRegions, Region
     from muscopy.dh import MuParameters
@@ -38,7 +38,7 @@ def qpi(
     array: Array,
     reference: Array,
     params: MuParameters,
-    offaxis_centers: Iterable[tuple[int, int]],
+    offaxis_centers: Sequence[tuple[int, int]],
 ) -> list[Array]: ...
 
 
@@ -46,7 +46,7 @@ def qpi(
     array: Array,
     reference: Array,
     params: MuParameters,
-    offaxis_centers: tuple[int, int] | Iterable[tuple[int, int]],
+    offaxis_centers: tuple[int, int] | Sequence[tuple[int, int]],
 ) -> Array | list[Array]:
     r"""Calculate the QPI phase image.
 
@@ -58,7 +58,7 @@ def qpi(
         Reference hologram array
     params : `MuParameters`
         Microscopy Parameters class
-    offaxis_centers : `Iterable`\[`tuple`\[`int`, `int`\]\]
+    offaxis_centers : `collections.abc.Sequence`\[`tuple`\[`int`, `int`\]\]
         The crop centers of off-axis digital holography
 
     Returns

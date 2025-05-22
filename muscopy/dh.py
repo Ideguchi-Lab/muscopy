@@ -406,7 +406,7 @@ def offaxis_dh(
     array: Array,
     reference: Array,
     params: MuParameters,
-    offaxis_centers: Iterable[tuple[int, int]],
+    offaxis_centers: Sequence[tuple[int, int]],
 ) -> list[Array]: ...
 
 
@@ -414,7 +414,7 @@ def offaxis_dh(
     array: Array,
     reference: Array,
     params: MuParameters,
-    offaxis_centers: tuple[int, int] | Iterable[tuple[int, int]],
+    offaxis_centers: tuple[int, int] | Sequence[tuple[int, int]],
 ) -> Array | list[Array]:
     r"""Reconstruct the complex wave front using off-axis digital holography.
 
@@ -426,7 +426,7 @@ def offaxis_dh(
         Reference hologram array
     params : `MuParameters`
         Microscopy Parameters class
-    offaxis_centers : `tuple`\[`int`, `int`\] | `Iterable`\[`tuple`\[`int`, `int`\]\]
+    offaxis_centers : `tuple`\[`int`, `int`\] | `collections.abc.Sequence`\[`tuple`\[`int`, `int`\]\]
         The crop centers of off-axis digital holography
 
     Returns
@@ -446,7 +446,8 @@ def offaxis_dh(
 
     ft_array = jnp.fft.fftshift(jnp.fft.fft2(array)) * params.hologram2spectrum
     ft_reference = jnp.fft.fftshift(jnp.fft.fft2(reference)) * params.hologram2spectrum
-    if isinstance(offaxis_centers, tuple):
+    if isinstance(offaxis_centers[0], int):
+        offaxis_centers = typing.cast("tuple[int, int]", offaxis_centers)
         spectrum = get_spectrum(ft_array, params, offaxis_centers)
         ref_spectrum = get_spectrum(ft_reference, params, offaxis_centers)
         cp_field = jnp.fft.ifft2(jnp.fft.ifftshift(spectrum)) * params.spectrum2cpfield
@@ -454,6 +455,7 @@ def offaxis_dh(
         cp_field /= ref_cp_field
         return cp_field
 
+    offaxis_centers = typing.cast("list[tuple[int, int]]", offaxis_centers)
     spectrums = get_spectrums(ft_array, params, offaxis_centers)
     ref_spectrums = get_spectrums(ft_reference, params, offaxis_centers)
 

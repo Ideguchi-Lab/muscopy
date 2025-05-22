@@ -29,7 +29,6 @@ from jax import Array
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
-    from muscopy.backend_manager import _T
     from muscopy.cfg import OffsetRegions
 
 

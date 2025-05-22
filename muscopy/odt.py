@@ -177,6 +177,7 @@ class ODTConfig:
     offset_regions: OffsetRegions = None
 
 
+@dataclasses.dataclass
 class ScatteringSpectrum:
     r"""Data class to store scattering spectrum.
 

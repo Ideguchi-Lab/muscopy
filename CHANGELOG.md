@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Changed
+
+- Changed the array backend from numpy/cupy to JAX [[#53](https://github.com/Ideguchi-Lab/muscopy/issues/53)]
+  - This improved type stability [[[#62](https://github.com/Ideguchi-Lab/muscopy/issues/62)]]
+
+### Removed
+
+- `backend_manager` module [[#53](https://github.com/Ideguchi-Lab/muscopy/issues/53)]
+
 ---
 
 ## Version 0.4.2 [2025-05-15]

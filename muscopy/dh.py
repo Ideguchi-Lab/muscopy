@@ -252,7 +252,7 @@ def make_disk(
     return circle > radius**2 if highpass else circle <= radius**2
 
 
-def crop_array(array: Array[_T], center: tuple[int, int], width: int) -> Array[_T]:
+def crop_array(array: Array, center: tuple[int, int], width: int) -> Array:
     r"""Crop the array to the specified width around the center.
 
     Parameters

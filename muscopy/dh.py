@@ -19,16 +19,17 @@ import cmath
 import dataclasses
 import functools
 import inspect
+import math
 import typing
 from typing import TYPE_CHECKING
 
-import numpy as np
+import jax.numpy as jnp
+from jax import Array
 
 if TYPE_CHECKING:
-    import types
     from collections.abc import Iterable, Sequence
 
-    from muscopy.backend_manager import _T, ArrayProtocol, BackendManager
+    from muscopy.backend_manager import _T
     from muscopy.cfg import OffsetRegions
 
 
@@ -119,7 +120,7 @@ class MuParameters:
         `float`
             the wave vector per pixel in the Fourier space
         """
-        return 2 * np.pi * self.freq_per_px
+        return 2 * math.pi * self.freq_per_px
 
     @functools.cached_property
     def aperturesize_px(self) -> int:
@@ -220,19 +221,16 @@ def print_all_parameters(param: MuParameters, *, show_properties: bool = False) 
 
 
 def make_disk(
-    backend: types.ModuleType,
     center: tuple[int, int],
     radius: float,
     array_shape: int | tuple[int, int],
     *,
     highpass: bool = False,
-) -> ArrayProtocol[bool]:
+) -> Array:
     r"""Make a disk mask with specified center and radius.
 
     Parameters
     ----------
-    backend : `types.ModuleType`
-        numpy or cupy module
     center : `tuple`\[`int`, `int`\]
         The center position of the disk mask
     radius : `float`
@@ -244,22 +242,22 @@ def make_disk(
 
     Returns
     -------
-    `ArrayProtocol`\[`bool`\]
+    `jax.Array`
         The disk mask with specified center and radius
     """
     if isinstance(array_shape, int):
         array_shape = (array_shape, array_shape)
-    xx, yy = backend.meshgrid(backend.arange(array_shape[0]), backend.arange(array_shape[1]), indexing="ij")
+    xx, yy = jnp.meshgrid(jnp.arange(array_shape[0]), jnp.arange(array_shape[1]), indexing="ij")
     circle = (xx - center[0]) ** 2 + (yy - center[1]) ** 2
     return circle > radius**2 if highpass else circle <= radius**2
 
 
-def crop_array(array: ArrayProtocol[_T], center: tuple[int, int], width: int) -> ArrayProtocol[_T]:
+def crop_array(array: Array[_T], center: tuple[int, int], width: int) -> Array[_T]:
     r"""Crop the array to the specified width around the center.
 
     Parameters
     ----------
-    array : `ArrayProtocol`
+    array : `jax.Array`
         The array to be cropped
     center : `tuple`\[`int`, `int`\]
         The center position of the crop
@@ -268,7 +266,7 @@ def crop_array(array: ArrayProtocol[_T], center: tuple[int, int], width: int) ->
 
     Returns
     -------
-    `ArrayProtocol`
+    `jax.Array`
         The cropped array
     """
     return array[
@@ -277,22 +275,19 @@ def crop_array(array: ArrayProtocol[_T], center: tuple[int, int], width: int) ->
     ]
 
 
-def get_spectrum(  # noqa: PLR0913
-    backend: types.ModuleType,
-    ft_array: ArrayProtocol,
+def get_spectrum(
+    ft_array: Array,
     params: MuParameters,
     offaxis_center: tuple[int, int],
     *,
     crop_center: bool = False,
     c_r: int = 5,
-) -> ArrayProtocol:
+) -> Array:
     r"""Get the spectrum of the hologram array.
 
     Parameters
     ----------
-    backend : `types.ModuleType`
-        numpy or cupy module
-    ft_array : `ArrayProtocol`
+    ft_array : `jax.Array`
         Fourier spectrum of the hologram array
     params : `MuParameters`
         QPIParameters class
@@ -306,35 +301,32 @@ def get_spectrum(  # noqa: PLR0913
 
     Returns
     -------
-    `ArrayProtocol`
+    `jax.Array`
         The spectrum of complex amplitude
     """
-    mask = make_disk(backend, offaxis_center, params.aperturesize_px // 2, params.img_size_px)
+    mask = make_disk(offaxis_center, params.aperturesize_px // 2, params.img_size_px)
     ft_array *= mask
 
     if crop_center:
-        mask_highpass = make_disk(backend, offaxis_center, c_r, params.img_size_px, highpass=True)
+        mask_highpass = make_disk(offaxis_center, c_r, params.img_size_px, highpass=True)
         ft_array *= mask_highpass
 
     return crop_array(ft_array, offaxis_center, params.aperturesize_px)
 
 
-def get_spectrums(  # noqa: PLR0913
-    backend: types.ModuleType,
-    ft_array: ArrayProtocol,
+def get_spectrums(
+    ft_array: Array,
     params: MuParameters,
     offaxis_centers: Iterable[tuple[int, int]],
     *,
     crop_center: bool = False,
     c_r: int = 5,
-) -> list[ArrayProtocol]:
+) -> list[Array]:
     r"""Get the spectrums of the complex fileds.
 
     Parameters
     ----------
-    backend : `types.ModuleType`
-        numpy or cupy module
-    ft_array : `ArrayProtocol`
+    ft_array : `jax.Array`
         Fourier transformed hologram array
     params : `MuParameters`
         Microscopy Parameters class
@@ -348,31 +340,28 @@ def get_spectrums(  # noqa: PLR0913
 
     Returns
     -------
-    `list`\[`ArrayProtocol`\]
+    `list`\[`jax.Array`\]
         The spectrums of complex amplitude
     """
     cp_spectrums = []
     for offaxis_center in offaxis_centers:
-        cp_spectrum = get_spectrum(backend, ft_array, params, offaxis_center, crop_center=crop_center, c_r=c_r)
+        cp_spectrum = get_spectrum(ft_array, params, offaxis_center, crop_center=crop_center, c_r=c_r)
         cp_spectrums.append(cp_spectrum)
     return cp_spectrums
 
 
 def correct_offset(
-    backend: types.ModuleType,
-    array: ArrayProtocol,
+    array: Array,
     offset_regs: OffsetRegions,
     *,
     phase: bool = True,
     amplitude: bool = True,
-) -> ArrayProtocol:
+) -> Array:
     """Correct the phase and amplitude offset of the array.
 
     Parameters
     ----------
-    backend : `types.ModuleType`
-        numpy or cupy module
-    array : `ArrayProtocol`
+    array : `jax.Array`
         Complex amplitude array
     offset_regs : `OffsetRegions`
         The regions to calculate the offset
@@ -383,7 +372,7 @@ def correct_offset(
 
     Returns
     -------
-    `ArrayProtocol`
+    `jax.Array`
         The corrected array
     """
     if offset_regs is None:
@@ -393,54 +382,49 @@ def correct_offset(
     amplitude_offset_list = []
     for region in offset_regs:
         phase_offset_list.append(
-            backend.mean(backend.angle(array[region[0][0] : region[0][1], region[1][0] : region[1][1]])),
+            jnp.mean(jnp.angle(array[region[0][0] : region[0][1], region[1][0] : region[1][1]])),
         )
         amplitude_offset_list.append(
-            backend.mean(backend.abs(array[region[0][0] : region[0][1], region[1][0] : region[1][1]])),
+            jnp.mean(jnp.abs(array[region[0][0] : region[0][1], region[1][0] : region[1][1]])),
         )
 
-    phase_offset = backend.mean(backend.array(phase_offset_list)) if phase else 0
-    amplitude_scale = backend.mean(backend.array(amplitude_offset_list)) if amplitude else 1
+    phase_offset = jnp.mean(jnp.array(phase_offset_list)) if phase else 0
+    amplitude_scale = jnp.mean(jnp.array(amplitude_offset_list)) if amplitude else 1
 
     return array * cmath.exp(-1j * phase_offset) / amplitude_scale
 
 
 @typing.overload
 def offaxis_dh(
-    backend: types.ModuleType,
-    array: ArrayProtocol,
-    reference: ArrayProtocol,
+    array: Array,
+    reference: Array,
     params: MuParameters,
     offaxis_centers: tuple[int, int],
-) -> ArrayProtocol: ...
+) -> Array: ...
 
 
 @typing.overload
 def offaxis_dh(
-    backend: types.ModuleType,
-    array: ArrayProtocol,
-    reference: ArrayProtocol,
+    array: Array,
+    reference: Array,
     params: MuParameters,
     offaxis_centers: Iterable[tuple[int, int]],
-) -> list[ArrayProtocol]: ...
+) -> list[Array]: ...
 
 
 def offaxis_dh(
-    backend: types.ModuleType,
-    array: ArrayProtocol,
-    reference: ArrayProtocol,
+    array: Array,
+    reference: Array,
     params: MuParameters,
     offaxis_centers: tuple[int, int] | Iterable[tuple[int, int]],
-) -> ArrayProtocol | list[ArrayProtocol]:
+) -> Array | list[Array]:
     r"""Reconstruct the complex wave front using off-axis digital holography.
 
     Parameters
     ----------
-    backend : `types.ModuleType`
-        numpy or cupy module
-    array : `ArrayProtocol`
+    array : `jax.Array`
         Hologram array
-    reference : `ArrayProtocol`
+    reference : `jax.Array`
         Reference hologram array
     params : `MuParameters`
         Microscopy Parameters class
@@ -449,7 +433,7 @@ def offaxis_dh(
 
     Returns
     -------
-    `list`\[`ArrayProtocol`\]
+    `list`\[`jax.Array`\]
         The complex wave front
 
     Raises
@@ -462,24 +446,24 @@ def offaxis_dh(
         msg = "Array and reference must have the same shape"
         raise ValueError(msg)
 
-    ft_array = backend.fft.fftshift(backend.fft.fft2(array)) * params.hologram2spectrum
-    ft_reference = backend.fft.fftshift(backend.fft.fft2(reference)) * params.hologram2spectrum
+    ft_array = jnp.fft.fftshift(jnp.fft.fft2(array)) * params.hologram2spectrum
+    ft_reference = jnp.fft.fftshift(jnp.fft.fft2(reference)) * params.hologram2spectrum
     if isinstance(offaxis_centers, tuple):
-        spectrum = get_spectrum(backend, ft_array, params, offaxis_centers)
-        ref_spectrum = get_spectrum(backend, ft_reference, params, offaxis_centers)
-        cp_field = backend.fft.ifft2(backend.fft.ifftshift(spectrum)) * params.spectrum2cpfield
-        ref_cp_field = backend.fft.ifft2(backend.fft.ifftshift(ref_spectrum)) * params.spectrum2cpfield
+        spectrum = get_spectrum(ft_array, params, offaxis_centers)
+        ref_spectrum = get_spectrum(ft_reference, params, offaxis_centers)
+        cp_field = jnp.fft.ifft2(jnp.fft.ifftshift(spectrum)) * params.spectrum2cpfield
+        ref_cp_field = jnp.fft.ifft2(jnp.fft.ifftshift(ref_spectrum)) * params.spectrum2cpfield
         cp_field /= ref_cp_field
         return cp_field
 
-    spectrums = get_spectrums(backend, ft_array, params, offaxis_centers)
-    ref_spectrums = get_spectrums(backend, ft_reference, params, offaxis_centers)
+    spectrums = get_spectrums(ft_array, params, offaxis_centers)
+    ref_spectrums = get_spectrums(ft_reference, params, offaxis_centers)
 
     cp_fields = []
 
     for spectrum, ref_spectrum in zip(spectrums, ref_spectrums):
-        cp_field = backend.fft.ifft2(backend.fft.ifftshift(spectrum)) * params.spectrum2cpfield
-        ref_cp_field = backend.fft.ifft2(backend.fft.ifftshift(ref_spectrum)) * params.spectrum2cpfield
+        cp_field = jnp.fft.ifft2(jnp.fft.ifftshift(spectrum)) * params.spectrum2cpfield
+        ref_cp_field = jnp.fft.ifft2(jnp.fft.ifftshift(ref_spectrum)) * params.spectrum2cpfield
         cp_field /= ref_cp_field
         cp_fields.append(cp_field)
 
@@ -487,24 +471,21 @@ def offaxis_dh(
 
 
 def demultiplex_cp_arrays(
-    bmg: BackendManager,
-    cp_arrays: Sequence[ArrayProtocol],
-    demultiplexing_matrix: ArrayProtocol,
-) -> list[ArrayProtocol]:
+    cp_arrays: Sequence[Array],
+    demultiplexing_matrix: Array,
+) -> list[Array]:
     r"""Demultiplex a set of CP arrays using a demultiplexing matrix.
 
     Parameters
     ----------
-    bmg : `BackendManager`
-        Backend manager to use for the operation.
-    cp_arrays : `collections.abc.Sequence`\[`ArrayProtocol`\]
+    cp_arrays : `collections.abc.Sequence`\[`jax.Array`\]
         List of CP arrays to be demultiplexed.
-    demultiplexing_matrix : `ArrayProtocol`
+    demultiplexing_matrix : `jax.Array`
         Demultiplexing coefficient matrix.
 
     Returns
     -------
-    `list`\[`ArrayProtocol`\]
+    `list`\[`jax.Array`\]
         List of demultiplexed CP arrays.
 
     Raises
@@ -520,11 +501,10 @@ def demultiplex_cp_arrays(
         msg = "number of CP arrays must match the size of the demultiplexing matrix."
         raise ValueError(msg)
 
-    xp = bmg.get_backend()
-    stacked = xp.stack([xp.asarray(a) for a in cp_arrays], axis=0)
-    demultiplexing_matrix = xp.asarray(demultiplexing_matrix)
+    stacked = jnp.stack([jnp.asarray(a) for a in cp_arrays], axis=0)
+    demultiplexing_matrix = jnp.asarray(demultiplexing_matrix)
 
-    demultiplexed_arrays = xp.tensordot(
+    demultiplexed_arrays = jnp.tensordot(
         demultiplexing_matrix,
         stacked,
         axes=(1, 0),

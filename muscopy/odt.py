@@ -457,7 +457,7 @@ def _calc_1st_scattering_spectrum(  # noqa: PLR0913, PLR0917
             params.aperturesize_px + illumination_vector[1],
         ),
         params.aperturesize_px // 2,
-        cp_field.shape,
+        cp_field.shape[0],
     )
     return scattering_spectrum * mask_for_synthesis
 

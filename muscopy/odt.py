@@ -19,6 +19,7 @@ import dataclasses
 from functools import cached_property
 from typing import TYPE_CHECKING
 
+import jax
 import jax.numpy as jnp
 from jax import Array
 from tqdm import tqdm
@@ -240,13 +241,11 @@ def synthesize_spectrum(
             mode=mode,
         )
 
-        synthesized_spectrum += scattering_potential
-        synthesized_weight += scattering_potential != 0
+        synthesized_spectrum = synthesized_spectrum + scattering_potential  # noqa: PLR6104
+        synthesized_weight = synthesized_weight + (scattering_potential != 0)  # noqa: PLR6104
 
-    synthesized_weight -= synthesized_weight > 1
-    synthesized_spectrum /= synthesized_weight
-
-    return synthesized_spectrum
+    synthesized_weight = synthesized_weight - (synthesized_weight > 1)  # noqa: PLR6104
+    return synthesized_spectrum / synthesized_weight
 
 
 def fill_hermite_components(spectrum3d: Array) -> Array:
@@ -264,9 +263,8 @@ def fill_hermite_components(spectrum3d: Array) -> Array:
     """
     conjugate_spectrum = jnp.conjugate(jnp.flip(spectrum3d, axis=(0, 1, 2)))
     overlap_region = jnp.abs(spectrum3d) > 0 & jnp.abs(conjugate_spectrum) > 0
-    spectrum3d += conjugate_spectrum
-    spectrum3d[overlap_region] /= 2
-    return spectrum3d
+    spectrum3d = spectrum3d + conjugate_spectrum  # noqa: PLR6104
+    return jnp.where(overlap_region, spectrum3d / 2, spectrum3d)
 
 
 def calc_refractive_index(scattering_potential: Array, params: ODTParameters) -> Array:
@@ -416,11 +414,10 @@ def _shift_dh_spectrum(params: ODTParameters, cp_spectrum: Array, illumination_v
         (2 * params.aperturesize_px + 1, 2 * params.aperturesize_px + 1), dtype=cp_spectrum.dtype
     )
 
-    expanded_cp_spectrum[
+    return expanded_cp_spectrum.at[
         params.aperturesize_px // 2 - illumination_vector[0] : 3 * params.aperturesize_px // 2 - illumination_vector[0],
         params.aperturesize_px // 2 - illumination_vector[1] : 3 * params.aperturesize_px // 2 - illumination_vector[1],
-    ] = cp_spectrum
-    return expanded_cp_spectrum
+    ].set(cp_spectrum)
 
 
 def _calc_1st_scattering_spectrum(  # noqa: PLR0913, PLR0917
@@ -447,7 +444,7 @@ def _calc_1st_scattering_spectrum(  # noqa: PLR0913, PLR0917
                 jnp.mean(jnp.abs(scattering_field[region[0][0] : region[0][1], region[1][0] : region[1][1]]))
             )
         amplitude_offset /= len(offset_regions)
-        scattering_field -= amplitude_offset
+        scattering_field = scattering_field - amplitude_offset  # noqa: PLR6104
 
     scattering_spectrum = (
         jnp.fft.fftshift(jnp.fft.fft2(scattering_field, norm="ortho"))
@@ -462,9 +459,7 @@ def _calc_1st_scattering_spectrum(  # noqa: PLR0913, PLR0917
         params.aperturesize_px // 2,
         cp_field.shape,
     )
-    scattering_spectrum *= mask_for_synthesis
-
-    return scattering_spectrum
+    return scattering_spectrum * mask_for_synthesis
 
 
 def _log_field(cp_field: Array, ref_cp_field: Array) -> Array:
@@ -481,6 +476,7 @@ def _log_field(cp_field: Array, ref_cp_field: Array) -> Array:
     return amplitude + 1j * phase
 
 
+@jax.jit
 def _embed_3d_spectrum(
     spectrum2d: Array,
     shape_3d: tuple[int, int, int],
@@ -518,7 +514,7 @@ def _embed_3d_spectrum(
     fz_value = fz_circle * circle
     fz_tile = jnp.tile(fz_value, (shape_3d[2], 1, 1))
     fz_tile = fz_tile.transpose(1, 2, 0)
-    fz_tile = fz_tile.astype(jnp.int64)  # necessary for the equivalence check
+    fz_tile = fz_tile.astype(jnp.int32)  # necessary for the equivalence check
 
     fz_tile -= (fz_tile == 0) * 2 * params.freq_axial_extent_px
     fz_index = zz == fz_tile
@@ -542,6 +538,6 @@ def _calc_kz_disk(
     disk = (xx - illumination_vector[0]) ** 2 + (yy - illumination_vector[1]) ** 2
     disk_mask = disk <= (params.aperturesize_px // 2) ** 2
     fz_disk = (params.light_freq_px**2 - disk) * disk_mask
-    fz_disk[fz_disk < 0] = 0
+    fz_disk = jnp.where(fz_disk < 0, 0, fz_disk)
     kz_disk = fz_disk**0.5 * params.k_per_px
     return kz_disk.astype(precision.float_precision())

@@ -229,7 +229,7 @@ def synthesize_spectrum(
     print("Synthesize spectrum...")  # noqa: T201
     for scattering_spectrum in tqdm(scattering_spectrums):
         kz_disk = _calc_kz_disk(
-            jnp, params, scattering_spectrum.array.shape, scattering_spectrum.illumination_vector, config.precision
+            params, scattering_spectrum.array.shape, scattering_spectrum.illumination_vector, config.precision
         )
         scattering_potential = _embed_3d_spectrum(
             scattering_spectrum.array * 2j * kz_disk,

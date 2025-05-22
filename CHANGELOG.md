@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- typecheck CI [[#62](https://github.com/Ideguchi-Lab/muscopy/issues/62)]
+
 ### Changed
 
 - Changed the array backend from numpy/cupy to JAX [[#53](https://github.com/Ideguchi-Lab/muscopy/issues/53)]

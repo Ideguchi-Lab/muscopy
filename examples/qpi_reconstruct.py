@@ -88,7 +88,8 @@ phase_image = qpi(hologram, ref_hologram, params, off_axis_center)
 phase_image = correct_phase_offset(phase_image, offset_regions)
 
 if SHOW_IMAGE:
-    plt.imshow(phase_image, cmap="gray")
+    phase_image_to_show = jax.device_get(phase_image)
+    plt.imshow(phase_image_to_show)
     plt.colorbar()
     plt.show()
 # %%

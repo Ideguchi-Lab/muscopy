@@ -7,6 +7,7 @@ Demonstrate the unwrap phase functionality of the muscopy library.
 
 # %%
 
+import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
@@ -78,7 +79,8 @@ ref_hologram = jnp.abs(ref_sample_array + ref_array) ** 2
 phase_image = qpi(hologram, ref_hologram, params, off_axis_center)
 
 if SHOW_IMAGE:
-    plt.imshow(phase_image)
+    phase_image_to_show = jax.device_get(phase_image)
+    plt.imshow(phase_image_to_show)
     plt.colorbar()
     plt.show()
 
@@ -87,8 +89,8 @@ if SHOW_IMAGE:
 unwrapped_mus = mus_unwrap_phase(phase_image)
 
 if SHOW_IMAGE:
-    unwrapped_mus_to_show = np.asarray(unwrapped_mus)
-    plt.imshow(unwrapped_mus)
+    unwrapped_mus_to_show = jax.device_get(unwrapped_mus)
+    plt.imshow(unwrapped_mus_to_show)
     plt.colorbar()
     plt.title("Unwrapped phase with muscopy")
     plt.show()

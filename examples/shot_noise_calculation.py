@@ -7,6 +7,7 @@ Demonstration of the shot noise calculation from a hologram
 
 # %%
 
+import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 
@@ -73,14 +74,16 @@ phase_noise = calc_phase_noise(hologram, params, off_axis_center, full_well_capa
 
 # %%
 if SHOW_IMAGE:
+    visibility_to_show = jax.device_get(visibility)
+    phase_noise_to_show = jax.device_get(phase_noise)
     fig, ax = plt.subplots(1, 2, figsize=(10, 5))
     ax[0].imshow(visibility)
     ax[0].set_title("Visibility")
     ax[1].imshow(phase_noise)
     ax[1].set_title("Phase noise")
     # colorbar
-    fig.colorbar(ax[0].imshow(visibility), ax=ax[0])
-    fig.colorbar(ax[1].imshow(phase_noise), ax=ax[1])
+    fig.colorbar(ax[0].imshow(visibility_to_show), ax=ax[0])
+    fig.colorbar(ax[1].imshow(phase_noise_to_show), ax=ax[1])
     plt.show()
 
 # %%

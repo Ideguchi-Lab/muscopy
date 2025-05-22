@@ -8,6 +8,7 @@ complex fields obtained from multiplexed QPI. The example uses a simple multiple
 
 # %%
 # import modules
+import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 
@@ -86,8 +87,8 @@ cp_field1 = offaxis_dh(hologram1, ref_hologram, params, off_axis_center)
 cp_field2 = offaxis_dh(hologram2, ref_hologram, params, off_axis_center)
 
 if SHOW_IMAGE:
-    angle1 = jnp.angle(cp_field1)
-    angle2 = jnp.angle(cp_field2)
+    angle1 = jax.device_get(jnp.angle(cp_field1))
+    angle2 = jax.device_get(jnp.angle(cp_field2))
     fig, ax = plt.subplots(1, 2, figsize=(10, 5))
     ax[0].imshow(angle1, cmap="gray")
     ax[0].set_title("Complex field 1")
@@ -115,9 +116,11 @@ qpi2 = jnp.angle(demultiplexed_cp_fields[1])
 # show QPI images
 
 if SHOW_IMAGE:
+    qpi1_to_show = jax.device_get(qpi1)
+    qpi2_to_show = jax.device_get(qpi2)
     fig, ax = plt.subplots(1, 2, figsize=(10, 5))
-    ax[0].imshow(qpi1, cmap="gray")
+    ax[0].imshow(qpi1_to_show, cmap="gray")
     ax[0].set_title("QPI 1")
-    ax[1].imshow(qpi2, cmap="gray")
+    ax[1].imshow(qpi2_to_show, cmap="gray")
     ax[1].set_title("QPI 2")
     plt.show()

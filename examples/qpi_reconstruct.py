@@ -9,9 +9,11 @@ sample from a hologram. The example uses a simple off-axis holography setup with
 # %%
 # import modules
 
+import math
+
+import jax.numpy as jnp
 import matplotlib.pyplot as plt
 
-from muscopy.backend_manager import BackendManager
 from muscopy.dh import MuParameters, make_disk, print_all_parameters
 from muscopy.qpi import correct_phase_offset, qpi
 
@@ -33,44 +35,36 @@ params = MuParameters(
 print_all_parameters(params, show_properties=True)
 
 # %%
-# specify the backend
-bmg = BackendManager()
-bmg.use_numpy()
-
-print(f"{bmg.backend} backend is used.")
-backend = bmg.get_backend()
-
-# %%
 # create a hologram
 off_axis_center = (100, 100)
 
 radius = 30
-sample_disk = make_disk(backend, params.img_center, radius, params.img_size_px)
-sample_array = backend.exp(2j * backend.pi / 3 * sample_disk)
-low_pass = make_disk(backend, (params.img_center), params.aperturesize_px // 2, params.img_size_px)
-sample_array = backend.fft.ifft2(backend.fft.ifftshift(backend.fft.fftshift(backend.fft.fft2(sample_array)) * low_pass))
-sample_array /= backend.sum(backend.abs(sample_array) ** 2) ** 0.5
+sample_disk = make_disk(params.img_center, radius, params.img_size_px)
+sample_array = jnp.exp(2j * math.pi / 3 * sample_disk)
+low_pass = make_disk(params.img_center, params.aperturesize_px // 2, params.img_size_px)
+sample_array = jnp.fft.ifft2(jnp.fft.ifftshift(jnp.fft.fftshift(jnp.fft.fft2(sample_array)) * low_pass))
+sample_array /= jnp.sum(jnp.abs(sample_array) ** 2) ** 0.5
 
-xx, yy = backend.meshgrid(
-    backend.arange(params.img_size_px),
-    backend.arange(params.img_size_px),
+xx, yy = jnp.meshgrid(
+    jnp.arange(params.img_size_px),
+    jnp.arange(params.img_size_px),
     indexing="ij",
 )
-ref_array = backend.exp(
+ref_array = jnp.exp(
     -2j
-    * backend.pi
+    * jnp.pi
     * (
         xx * (off_axis_center[0] - params.img_center[0]) / (params.img_size_px)
         + yy * (off_axis_center[1] - params.img_center[1]) / (params.img_size_px)
     )
 )
-ref_array /= backend.sum(backend.abs(ref_array) ** 2) ** 0.5
+ref_array /= jnp.sum(jnp.abs(ref_array) ** 2) ** 0.5
 
-hologram = backend.abs(sample_array + ref_array) ** 2
+hologram = jnp.abs(sample_array + ref_array) ** 2
 
-ref_sample_array = backend.ones_like(sample_array)
-ref_sample_array /= backend.sum(backend.abs(ref_sample_array) ** 2) ** 0.5
-ref_hologram = backend.abs(ref_sample_array + ref_array) ** 2
+ref_sample_array = jnp.ones_like(sample_array)
+ref_sample_array /= jnp.sum(jnp.abs(ref_sample_array) ** 2) ** 0.5
+ref_hologram = jnp.abs(ref_sample_array + ref_array) ** 2
 
 # %%
 # Extract phase of scattering wave with QPI
@@ -85,14 +79,10 @@ offset_regions = [
     ),
 ]
 
-phase_image = qpi(backend, hologram, ref_hologram, params, off_axis_center)
+phase_image = qpi(hologram, ref_hologram, params, off_axis_center)
 
 # correct the phase offset by using the corner regions
-phase_image = correct_phase_offset(backend, phase_image, offset_regions)
-
-
-if bmg.backend == "cupy":
-    phase_image = backend.asnumpy(phase_image)
+phase_image = correct_phase_offset(phase_image, offset_regions)
 
 if SHOW_IMAGE:
     plt.imshow(phase_image, cmap="gray")

@@ -7,18 +7,18 @@ This module provides:
 
 import pathlib
 
-import numpy as np
+import jax.numpy as jnp
 
 
 def _dummy_image_generator(num: int = 100, size: tuple[int, int] = (512, 512)) -> None:
     if not pathlib.Path("dummy_images").exists():
         pathlib.Path("dummy_images").mkdir()
     for i in range(num // 2):
-        image = np.zeros(size)
-        np.save("dummy_images/" + str(i) + ".npy", image)
+        image = jnp.zeros(size)
+        jnp.save("dummy_images/" + str(i) + ".npy", image)
     for i in range(num // 2, num):
-        image = np.ones(size)
-        np.save("dummy_images/" + str(i) + ".npy", image)
+        image = jnp.ones(size)
+        jnp.save("dummy_images/" + str(i) + ".npy", image)
 
 
 def check_overlap(path: str) -> None:
@@ -32,15 +32,15 @@ def check_overlap(path: str) -> None:
     filelist = list(pathlib.Path(path).iterdir())
     for i in range(len(filelist)):
         for j in range(i + 1, len(filelist)):
-            image1 = np.load(str(filelist[i]))
-            image2 = np.load(str(filelist[j]))
+            image1 = jnp.load(str(filelist[i]))
+            image2 = jnp.load(str(filelist[j]))
             dif = image1 - image2
-            if np.sum(dif) == 0:
+            if jnp.sum(dif) == 0:
                 print(filelist[i], filelist[j])  # noqa: T201
-                print("max" + str(filelist[i]) + ": " + str(np.max(image1)))  # noqa: T201
-                print("max" + str(filelist[j]) + ": " + str(np.max(image2)))  # noqa: T201
-                print("min" + str(filelist[i]) + ": " + str(np.min(image1)))  # noqa: T201
-                print("min" + str(filelist[j]) + ": " + str(np.min(image2)))  # noqa: T201
+                print("max" + str(filelist[i]) + ": " + str(jnp.max(image1)))  # noqa: T201
+                print("max" + str(filelist[j]) + ": " + str(jnp.max(image2)))  # noqa: T201
+                print("min" + str(filelist[i]) + ": " + str(jnp.min(image1)))  # noqa: T201
+                print("min" + str(filelist[j]) + ": " + str(jnp.min(image2)))  # noqa: T201
     print("end")  # noqa: T201
 
 

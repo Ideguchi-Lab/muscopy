@@ -2,3 +2,7 @@ sphinx
 sphinx_gallery
 sphinx-rtd-theme
 scikit-image
+
+numpy >= 1.22.0
+scipy >= 1.10.0
+matplotlib >= 3.5.0

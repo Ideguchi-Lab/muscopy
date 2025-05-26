@@ -12,90 +12,85 @@ from __future__ import annotations
 import typing
 from typing import TYPE_CHECKING
 
+import jax.numpy as jnp
+from jax import Array
+
 from muscopy.dh import get_spectrum, offaxis_dh
 
 if TYPE_CHECKING:
-    import types
-    from collections.abc import Iterable
+    from collections.abc import Sequence
 
-    from muscopy.backend_manager import ArrayProtocol
     from muscopy.cfg import OffsetRegions, Region
     from muscopy.dh import MuParameters
 
 
 @typing.overload
 def qpi(
-    backend: types.ModuleType,
-    array: ArrayProtocol,
-    reference: ArrayProtocol,
+    array: Array,
+    reference: Array,
     params: MuParameters,
     offaxis_centers: tuple[int, int],
-) -> ArrayProtocol: ...
+) -> Array: ...
 
 
 @typing.overload
 def qpi(
-    backend: types.ModuleType,
-    array: ArrayProtocol,
-    reference: ArrayProtocol,
+    array: Array,
+    reference: Array,
     params: MuParameters,
-    offaxis_centers: Iterable[tuple[int, int]],
-) -> list[ArrayProtocol]: ...
+    offaxis_centers: Sequence[tuple[int, int]],
+) -> list[Array]: ...
 
 
 def qpi(
-    backend: types.ModuleType,
-    array: ArrayProtocol,
-    reference: ArrayProtocol,
+    array: Array,
+    reference: Array,
     params: MuParameters,
-    offaxis_centers: tuple[int, int] | Iterable[tuple[int, int]],
-) -> ArrayProtocol | list[ArrayProtocol]:
+    offaxis_centers: tuple[int, int] | Sequence[tuple[int, int]],
+) -> Array | list[Array]:
     r"""Calculate the QPI phase image.
 
     Parameters
     ----------
-    backend : `types.ModuleType`
-        numpy or cupy module
-    array : `ArrayProtocol`
+    array : `Array`
         Hologram array
-    reference : `ArrayProtocol`
+    reference : `Array`
         Reference hologram array
     params : `MuParameters`
         Microscopy Parameters class
-    offaxis_centers : `Iterable`\[`tuple`\[`int`, `int`\]\]
+    offaxis_centers : `collections.abc.Sequence`\[`tuple`\[`int`, `int`\]\]
         The crop centers of off-axis digital holography
 
     Returns
     -------
-    `list`\[`ArrayProtocol`\]
+    `list`\[`Array`\]
         The QPI phase image
     """
-    cp_fields = offaxis_dh(backend, array, reference, params, offaxis_centers)
+    cp_fields = offaxis_dh(array, reference, params, offaxis_centers)
 
     if isinstance(cp_fields, list):
-        return [backend.angle(cp_field) for cp_field in cp_fields]
+        return [jnp.angle(cp_field) for cp_field in cp_fields]
 
-    return backend.angle(cp_fields)
+    return jnp.angle(cp_fields)
 
 
 def mip_qpi(  # noqa: PLR0913
-    backend: types.ModuleType,
-    array_on: ArrayProtocol,
-    array_off: ArrayProtocol,
+    array_on: Array,
+    array_off: Array,
     params: MuParameters,
     offaxis_center: tuple[int, int],
     *,
     crop_center: bool = False,
     c_r: int = 5,
     mip_center_reg: Region | None = None,
-) -> ArrayProtocol:
+) -> Array:
     r"""Calculate the MIP-QPI phase image.
 
     Parameters
     ----------
-    array_on : `ArrayProtocol`
+    array_on : `Array`
         MIR ON hologram array
-    array_off : `ArrayProtocol`
+    array_off : `Array`
         MIR OFF hologram array
     params : `MuParameters`
         Micorsocpy Parameters class
@@ -111,7 +106,7 @@ def mip_qpi(  # noqa: PLR0913
 
     Returns
     -------
-    `ArrayProtocol`
+    `Array`
         The MIP-QPI phase image
 
     Raises
@@ -123,20 +118,20 @@ def mip_qpi(  # noqa: PLR0913
         msg = "Array on and off must have the same shape"
         raise ValueError(msg)
 
-    ft_array_on = backend.fft.fftshift(backend.fft.fft2(array_on)) * params.hologram2spectrum
-    ft_array_off = backend.fft.fftshift(backend.fft.fft2(array_off)) * params.hologram2spectrum
+    ft_array_on = jnp.fft.fftshift(jnp.fft.fft2(array_on)) * params.hologram2spectrum
+    ft_array_off = jnp.fft.fftshift(jnp.fft.fft2(array_off)) * params.hologram2spectrum
 
-    spectrum_on = get_spectrum(backend, ft_array_on, params, offaxis_center, crop_center=crop_center, c_r=c_r)
-    spectrum_off = get_spectrum(backend, ft_array_off, params, offaxis_center, crop_center=crop_center, c_r=c_r)
+    spectrum_on = get_spectrum(ft_array_on, params, offaxis_center, crop_center=crop_center, c_r=c_r)
+    spectrum_off = get_spectrum(ft_array_off, params, offaxis_center, crop_center=crop_center, c_r=c_r)
 
-    cp_field_on = backend.fft.ifft2(backend.fft.ifftshift(spectrum_on)) * params.spectrum2cpfield
-    cp_field_off = backend.fft.ifft2(backend.fft.ifftshift(spectrum_off)) * params.spectrum2cpfield
+    cp_field_on = jnp.fft.ifft2(jnp.fft.ifftshift(spectrum_on)) * params.spectrum2cpfield
+    cp_field_off = jnp.fft.ifft2(jnp.fft.ifftshift(spectrum_off)) * params.spectrum2cpfield
 
     array_div = cp_field_on / cp_field_off
 
     if mip_center_reg is not None:
-        center_phase = backend.mean(
-            backend.angle(
+        center_phase = jnp.mean(
+            jnp.angle(
                 array_div[
                     mip_center_reg[0][0] : mip_center_reg[0][1],
                     mip_center_reg[1][0] : mip_center_reg[1][1],
@@ -146,35 +141,32 @@ def mip_qpi(  # noqa: PLR0913
         if center_phase < 0:
             array_div = 1 / array_div
 
-    return backend.angle(array_div)
+    return jnp.angle(array_div)
 
 
 def correct_phase_offset(
-    backend: types.ModuleType,
-    phase_array: ArrayProtocol,
+    phase_array: Array,
     offset_regs: OffsetRegions,
-) -> ArrayProtocol:
+) -> Array:
     """Correct the phase offset of the phase array.
 
     Parameters
     ----------
-    backend : `types.ModuleType`
-        numpy or cupy module
-    phase_array : `ArrayProtocol`
+    phase_array : `Array`
         Phase array to be corrected
     offset_regs : `OffsetRegions`
         The regions to be used for phase offset correction
 
     Returns
     -------
-    `ArrayProtocol`
+    `Array`
         The phase array with the offset corrected
     """
     if not offset_regs:
         return phase_array
     phase_offset_list = [
-        backend.mean(phase_array[region[0][0] : region[0][1], region[1][0] : region[1][1]]) for region in offset_regs
+        jnp.mean(phase_array[region[0][0] : region[0][1], region[1][0] : region[1][1]]) for region in offset_regs
     ]
-    phase_offset = backend.mean(backend.array(phase_offset_list))
+    phase_offset = jnp.mean(jnp.array(phase_offset_list))
 
     return phase_array - phase_offset

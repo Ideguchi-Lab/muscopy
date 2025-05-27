@@ -18,7 +18,6 @@ from __future__ import annotations
 import dataclasses
 from typing import TYPE_CHECKING
 
-import jax
 import jax.numpy as jnp
 from jax import Array
 from tqdm import tqdm
@@ -83,7 +82,7 @@ class ODTParameters(MuParameters):
         `int`
             The axial extent of Fourier space in pixels.
         """
-        return self.aperturesize_px
+        return 2 * self.aperturesize_px // 2 + 1
 
     @property
     def imgpx_lateral_m_per_px(self) -> float:
@@ -234,7 +233,7 @@ def synthesize_spectrum(
         )
         scattering_potential = _embed_3d_spectrum(
             scattering_spectrum.array * 2j * kz_disk,
-            synthesized_spectrum.shape,
+            (synthesized_spectrum.shape[0], synthesized_spectrum.shape[1], synthesized_spectrum.shape[2]),
             params,
             scattering_spectrum.illumination_vector,
             mode=mode,
@@ -261,7 +260,7 @@ def fill_hermite_components(spectrum3d: Array) -> Array:
         Filled spectrum of scattering potential
     """
     conjugate_spectrum = jnp.conjugate(jnp.flip(spectrum3d, axis=(0, 1, 2)))
-    overlap_region = jnp.abs(spectrum3d) > 0 & jnp.abs(conjugate_spectrum) > 0
+    overlap_region = (jnp.abs(spectrum3d) > 0) & (jnp.abs(conjugate_spectrum) > 0)
     spectrum3d = spectrum3d + conjugate_spectrum  # noqa: PLR6104
     return jnp.where(overlap_region, spectrum3d / 2, spectrum3d)
 
@@ -314,7 +313,7 @@ def odt(
     # weak scattering approximation
     scattering_spectrums = []
     for cp_spectrum, ref_cp_spectrum in zip(cp_spectrums, ref_cp_spectrums):
-        max_x, max_y, _ = _find_max_args(cp_spectrum)
+        max_x, max_y, _ = _find_max_args(jnp.abs(ref_cp_spectrum))
         illumination_vector = (max_x - params.aperturesize_px // 2, max_y - params.aperturesize_px // 2)
         expanded_cp_spectrum = _shift_dh_spectrum(params, cp_spectrum, illumination_vector).astype(
             config.precision.complex_precision()
@@ -475,7 +474,7 @@ def _log_field(cp_field: Array, ref_cp_field: Array) -> Array:
     return amplitude + 1j * phase
 
 
-@jax.jit
+# @jax.jit
 def _embed_3d_spectrum(
     spectrum2d: Array,
     shape_3d: tuple[int, int, int],
@@ -511,11 +510,11 @@ def _embed_3d_spectrum(
         fz_circle = -fz_circle
 
     fz_value = fz_circle * circle
+    fz_value -= (1 - circle) * 2 * params.freq_axial_extent_px
     fz_tile = jnp.tile(fz_value, (shape_3d[2], 1, 1))
     fz_tile = fz_tile.transpose(1, 2, 0)
     fz_tile = fz_tile.astype(jnp.int32)  # necessary for the equivalence check
 
-    fz_tile -= (fz_tile == 0) * 2 * params.freq_axial_extent_px
     fz_index = zz == fz_tile
 
     array_tiled = jnp.stack([spectrum2d] * shape_3d[2], axis=2)

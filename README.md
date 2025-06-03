@@ -7,19 +7,19 @@ A repository containg microscopy converters and test sets.
 First, clone this repository into your local machine
 
 ```sh
-git clone git@github.com:Ideguchi-Lab/microscopy_converters.git
+git clone git@github.com:Ideguchi-Lab/muscopy.git
 ```
 
 Then, you can install this library as usual. I recommend to install it in editable mode because if you find a bug, you can fix it without unintall.
 
 ```sh
-(YOUR_VIRTUAL_ENV) pip install -e microscopy_converters
+(YOUR_VIRTUAL_ENV) pip install -e ./muscopy
 ```
 
 If you are willing to contribute, you can install development toolkit with the following installation.
 
 ```sh
-(YOUR_VIRTUAL_ENV) pip install -r microscopy_converters/requirements-dev.txt
+(YOUR_VIRTUAL_ENV) pip install -e ./muscopy[dev]
 ```
 
 ## Linter guide
@@ -27,8 +27,20 @@ If you are willing to contribute, you can install development toolkit with the f
 I described linter config in pyproject.toml file, so you can lint and check codes through typing
 
 ```sh
-black ./muscopy   # lint code
-isort ./muscopy   # properly reorder package imoort sentences
-pflake8 ./muscopy # check PEP regulations
+ruff check ./muscopy    # code style check
+ruff format ./muscopy   # code formatter
 mypy ./muscopy    # static type analysis
+pyright ./muscopy    # static type analysis
 ```
+
+## Docs
+
+You can build the documentation with the following command.
+
+```sh
+pip install -e ./muscopy[docs]
+cd ./docs
+make html
+```
+
+Then, you can find the documentation in `build/html/index.html`.

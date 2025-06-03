@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+---
+
+## Version 0.5.0 [2025-06-03]
+
 ### Added
 
 - typecheck CI [[#62](https://github.com/Ideguchi-Lab/muscopy/issues/62)]

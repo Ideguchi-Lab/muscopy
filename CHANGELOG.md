@@ -18,6 +18,7 @@
 ### Removed
 
 - `backend_manager` module [[#53](https://github.com/Ideguchi-Lab/muscopy/issues/53)]
+- Removed support for `py39`, `py310`, and `py311`.
 
 ---
 

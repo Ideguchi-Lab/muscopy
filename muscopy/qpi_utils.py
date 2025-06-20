@@ -10,62 +10,67 @@ import jax.scipy as jsp
 from jax import Array
 
 
-def unwrap_phase(phase_image: Array) -> Array:
+def unwrap_phase(phase_image: Array, *, roi: Array | None = None, keep_mean: bool = True) -> Array:
     """Unwraps the phase of a 2D image using the Poisson solver.
 
     Parameters
     ----------
     phase_image : `Array`
         The wrapped phase image to be unwrapped.
+    roi : `Array`, optional
+        A region of interest mask where the unwrapping should be applied. If `None`,
+        the entire image is considered. Default is `None`.
+    keep_mean : `bool`, optional
+        If `True`, the mean of the original phase image is added back to the unwrapped phase.
+        Default is `True`.
 
     Returns
     -------
     `Array`
         The unwrapped phase image.
     """
-    dx = jnp.concatenate(
-        (
-            jnp.zeros((phase_image.shape[0], 1)),
-            _wraptopi(jnp.diff(phase_image, axis=1, n=1)),
-            jnp.zeros((phase_image.shape[0], 1)),
-        ),
-        axis=1,
-    )
-    dy = jnp.concatenate(
-        (
-            jnp.zeros((1, phase_image.shape[1])),
-            _wraptopi(jnp.diff(phase_image, axis=0, n=1)),
-            jnp.zeros((1, phase_image.shape[1])),
-        ),
-        axis=0,
-    )
+    if roi is None:
+        roi = jnp.ones_like(phase_image)
 
-    rho = jnp.diff(dx, axis=1, n=1) + jnp.diff(dy, axis=0, n=1)
-    return _solve_poisson(rho)
+    wrapped = jnp.where(roi, phase_image, 0.0)
+
+    dx = jnp.zeros_like(wrapped)
+    dx = dx.at[:, 1:].set(_wraptopi(jnp.diff(wrapped, axis=1)))
+    dy = jnp.zeros_like(wrapped)
+    dy = dy.at[1:, :].set(_wraptopi(jnp.diff(wrapped, axis=0)))
+    rho = jnp.diff(dx, axis=1, prepend=0.0) + jnp.diff(dy, axis=0, prepend=0.0)
+
+    rho = jnp.where(roi, rho, 0.0)
+
+    phi = _solve_poisson(rho)
+    phi = jnp.where(roi, phi, phase_image)
+
+    if keep_mean:
+        phi = phi + phase_image.mean()  # noqa: PLR6104
+
+    return phi
 
 
 def _wraptopi(x: Array) -> Array:
-    xwrap = jnp.remainder(x, 2 * jnp.pi)
-    mask = jnp.abs(xwrap) > jnp.pi
-    xwrap = jnp.where(mask, xwrap - 2 * jnp.pi * jnp.sign(xwrap), xwrap)
-    mask1 = x < 0
-    mask2 = jnp.remainder(x, jnp.pi) == 0
-    mask3 = jnp.remainder(x, 2 * jnp.pi) != 0
-    return jnp.where(mask1 & mask2 & mask3, xwrap - 2 * jnp.pi, xwrap)
+    return (x + jnp.pi) % (2.0 * jnp.pi) - jnp.pi
 
 
 def _solve_poisson(rho: Array) -> Array:
     dct_rho = _dct2(rho)
     n, m = rho.shape
     i, j = jnp.meshgrid(jnp.arange(0, n), jnp.arange(0, m), indexing="ij")
-    dct_phi = dct_rho / (2 * (jnp.cos(jnp.pi * i / n) + jnp.cos(jnp.pi * j / m) - 2))
-    dct_phi = dct_phi.at[0, 0].set(0)
+
+    denom = 2.0 * (jnp.cos(jnp.pi * i / n) + jnp.cos(jnp.pi * j / m) - 2.0)
+    denom_safe = jnp.where((i == 0) & (j == 0), 1.0, denom)
+
+    dct_phi = dct_rho / denom_safe
+    dct_phi = dct_phi.at[0, 0].set(0.0)
     return _idct2(dct_phi)
 
 
-def _dct2(block: Array) -> Array:
-    return jsp.fft.dct(jsp.fft.dct(block.T, norm="ortho").T, norm="ortho")
+def _dct2(x: Array) -> Array:
+    return jsp.fft.dct(jsp.fft.dct(x.T, type=2, norm="ortho").T, type=2, norm="ortho")
 
 
-def _idct2(block: Array) -> Array:
-    return jsp.fft.idct(jsp.fft.idct(block.T, norm="ortho").T, norm="ortho")
+def _idct2(x: Array) -> Array:
+    return jsp.fft.idct(jsp.fft.idct(x.T, type=2, norm="ortho").T, type=2, norm="ortho")

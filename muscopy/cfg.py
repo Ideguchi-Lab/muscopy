@@ -1,11 +1,11 @@
 """Configuration module for microscopy converters."""
 
-from typing import TypeAlias, Union
+from typing import TypeAlias
 
 Region: TypeAlias = tuple[tuple[int, int], tuple[int, int]]
 Regions: TypeAlias = list[Region]
-OffsetRegions: TypeAlias = Union[Regions, None]
-MIPRegion: TypeAlias = Union[Region, None]
+OffsetRegions: TypeAlias = Regions | None
+MIPRegion: TypeAlias = Region | None
 
 
 class ArrayPrecision:

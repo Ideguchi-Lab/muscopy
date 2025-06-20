@@ -312,7 +312,7 @@ def odt(
     params.verify_parameters()
     # weak scattering approximation
     scattering_spectrums = []
-    for cp_spectrum, ref_cp_spectrum in zip(cp_spectrums, ref_cp_spectrums):
+    for cp_spectrum, ref_cp_spectrum in zip(cp_spectrums, ref_cp_spectrums, strict=False):
         max_x, max_y, _ = _find_max_args(jnp.abs(ref_cp_spectrum))
         illumination_vector = (max_x - params.aperturesize_px // 2, max_y - params.aperturesize_px // 2)
         expanded_cp_spectrum = _shift_dh_spectrum(params, cp_spectrum, illumination_vector).astype(

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- Improved `unwarp_phase` routine to avoid unintended modification [[#73](https://github.com/Ideguchi-Lab/muscopy/issues/73)]
+
 ---
 
 ## Version 0.5.0 [2025-06-03]

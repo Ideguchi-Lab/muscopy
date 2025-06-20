@@ -17,6 +17,12 @@ def unwrap_phase(phase_image: Array, *, roi: Array | None = None, keep_mean: boo
     ----------
     phase_image : `Array`
         The wrapped phase image to be unwrapped.
+    roi : `Array`, optional
+        A region of interest mask where the unwrapping should be applied. If `None`,
+        the entire image is considered. Default is `None`.
+    keep_mean : `bool`, optional
+        If `True`, the mean of the original phase image is added back to the unwrapped phase.
+        Default is `True`.
 
     Returns
     -------

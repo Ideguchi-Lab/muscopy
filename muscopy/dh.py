@@ -461,7 +461,7 @@ def offaxis_dh(
 
     cp_fields = []
 
-    for spectrum, ref_spectrum in zip(spectrums, ref_spectrums):
+    for spectrum, ref_spectrum in zip(spectrums, ref_spectrums, strict=False):
         cp_field = jnp.fft.ifft2(jnp.fft.ifftshift(spectrum)) * params.spectrum2cpfield
         ref_cp_field = jnp.fft.ifft2(jnp.fft.ifftshift(ref_spectrum)) * params.spectrum2cpfield
         cp_field /= ref_cp_field

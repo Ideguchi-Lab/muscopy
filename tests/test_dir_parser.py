@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Callable
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -14,6 +14,9 @@ from muscopy.dir_parser import (
     recursive_numpy_parser,
     tiff_parser,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 # ----------------------------------------------------------------------------- #
 # Helper utilities for the test suite

@@ -51,7 +51,7 @@ phase_disk = make_disk(center, radius, params.img_size_px)
 
 # Create amplitude modulation (Gaussian)
 xx, yy = jnp.meshgrid(jnp.arange(params.img_size_px), jnp.arange(params.img_size_px), indexing="ij")
-gaussian_amp = jnp.exp(-((xx - center[0])**2 + (yy - center[1])**2) / (2 * (radius/2)**2))
+gaussian_amp = jnp.exp(-((xx - center[0])**2 + (yy - center[1])**2) / (2 * (radius / 2)**2))
 
 # Combined object field: amplitude modulation + phase step
 phase_step = math.pi / 2  # 90 degree phase step
@@ -67,7 +67,7 @@ print("\\nGenerating phase-shifted holograms...")
 
 # Define phase shifts for 4-step phase shifting
 num_steps = 4
-phase_shifts = jnp.linspace(0, 2*math.pi, num_steps, endpoint=False)
+phase_shifts = jnp.linspace(0, 2 * math.pi, num_steps, endpoint=False)
 ref_amplitude = 1.0
 
 print(f"Phase shifts: {phase_shifts} rad")
@@ -100,8 +100,14 @@ reconstructed_field = inline_dh(
 )
 
 print(f"Reconstructed field shape: {reconstructed_field.shape}")
-print(f"Reconstructed amplitude range: {jnp.min(jnp.abs(reconstructed_field)):.3f} - {jnp.max(jnp.abs(reconstructed_field)):.3f}")
-print(f"Reconstructed phase range: {jnp.min(jnp.angle(reconstructed_field)):.3f} - {jnp.max(jnp.angle(reconstructed_field)):.3f} rad")
+print(
+    f"Reconstructed amplitude range: {jnp.min(jnp.abs(reconstructed_field)):.3f} - "
+    f"{jnp.max(jnp.abs(reconstructed_field)):.3f}"
+)
+print(
+    f"Reconstructed phase range: {jnp.min(jnp.angle(reconstructed_field)):.3f} - "
+    f"{jnp.max(jnp.angle(reconstructed_field)):.3f} rad"
+)
 
 # %%
 # Calculate reconstruction quality metrics
@@ -135,7 +141,7 @@ if SHOW_IMAGE:
     for i in range(num_steps):
         ax = axes[0, i]
         im = ax.imshow(holograms[i], cmap='gray')
-        ax.set_title(f'Hologram {i+1}\\nδ = {jnp.degrees(phase_shifts[i]):.0f}°')
+        ax.set_title(f'Hologram {i + 1}\\nδ = {jnp.degrees(phase_shifts[i]):.0f}°')
         ax.axis('off')
         plt.colorbar(im, ax=ax, shrink=0.6)
 
@@ -206,13 +212,13 @@ if SHOW_IMAGE:
 
 # %%
 # Summary
-print("\\n" + "="*60)
+print("\\n" + "=" * 60)
 print("PHASE-SHIFTING INLINE DIGITAL HOLOGRAPHY RECONSTRUCTION")
-print("="*60)
+print("=" * 60)
 print(f"Number of phase shifts: {num_steps}")
-print(f"Phase shift step: {360/num_steps:.1f} degrees")
+print(f"Phase shift step: {360 / num_steps:.1f} degrees")
 print(f"Reference amplitude: {ref_amplitude}")
-print(f"Reconstruction quality:")
+print("Reconstruction quality:")
 print(f"  - Amplitude correlation: {amp_correlation:.4f}")
 print(f"  - Phase RMSE: {phase_rmse:.4f} rad ({jnp.degrees(phase_rmse):.2f}°)")
 print("\\nPS-IDH provides high-quality reconstruction without off-axis sampling limitations!")

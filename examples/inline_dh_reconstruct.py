@@ -51,7 +51,7 @@ phase_disk = make_disk(center, radius, params.img_size_px)
 
 # Create amplitude modulation (Gaussian)
 xx, yy = jnp.meshgrid(jnp.arange(params.img_size_px), jnp.arange(params.img_size_px), indexing="ij")
-gaussian_amp = jnp.exp(-((xx - center[0])**2 + (yy - center[1])**2) / (2 * (radius / 2)**2))
+gaussian_amp = jnp.exp(-((xx - center[0]) ** 2 + (yy - center[1]) ** 2) / (2 * (radius / 2) ** 2))
 
 # Combined object field: amplitude modulation + phase step
 phase_step = math.pi / 2  # 90 degree phase step
@@ -82,7 +82,7 @@ for i, delta in enumerate(phase_shifts):
     hologram_field = object_field + reference_field
 
     # Intensity measurement
-    intensity = jnp.abs(hologram_field)**2
+    intensity = jnp.abs(hologram_field) ** 2
     holograms = holograms.at[i].set(intensity)
 
 print(f"Hologram stack shape: {holograms.shape}")
@@ -92,12 +92,7 @@ print(f"Intensity range: {jnp.min(holograms):.3f} - {jnp.max(holograms):.3f}")
 # Reconstruct using Phase-Shifting Inline Digital Holography
 print("\\nPerforming PS-IDH reconstruction...")
 
-reconstructed_field = inline_dh(
-    i_stack=holograms,
-    deltas=phase_shifts,
-    params=params,
-    ref_amp=ref_amplitude
-)
+reconstructed_field = inline_dh(i_stack=holograms, deltas=phase_shifts, params=params, ref_amp=ref_amplitude)
 
 print(f"Reconstructed field shape: {reconstructed_field.shape}")
 print(
@@ -125,7 +120,7 @@ reconstructed_phase = jnp.angle(reconstructed_field)
 object_mask = original_amp > 0.1 * jnp.max(original_amp)
 # Unwrap phase difference for better comparison
 phase_diff = jnp.angle(jnp.exp(1j * (original_phase - reconstructed_phase)))
-phase_rmse = jnp.sqrt(jnp.mean((phase_diff[object_mask])**2))
+phase_rmse = jnp.sqrt(jnp.mean((phase_diff[object_mask]) ** 2))
 
 print(f"Amplitude correlation: {amp_correlation:.4f}")
 print(f"Phase RMSE in object region: {phase_rmse:.4f} rad ({jnp.degrees(phase_rmse):.2f} degrees)")
@@ -140,74 +135,74 @@ if SHOW_IMAGE:
     # Row 1: Input holograms
     for i in range(num_steps):
         ax = axes[0, i]
-        im = ax.imshow(holograms[i], cmap='gray')
-        ax.set_title(f'Hologram {i + 1}\\nδ = {jnp.degrees(phase_shifts[i]):.0f}°')
-        ax.axis('off')
+        im = ax.imshow(holograms[i], cmap="gray")
+        ax.set_title(f"Hologram {i + 1}\\nδ = {jnp.degrees(phase_shifts[i]):.0f}°")
+        ax.axis("off")
         plt.colorbar(im, ax=ax, shrink=0.6)
 
     # Row 2: Original object
     ax = axes[1, 0]
-    im = ax.imshow(jnp.abs(object_field), cmap='viridis')
-    ax.set_title('Original Amplitude')
-    ax.axis('off')
+    im = ax.imshow(jnp.abs(object_field), cmap="viridis")
+    ax.set_title("Original Amplitude")
+    ax.axis("off")
     plt.colorbar(im, ax=ax, shrink=0.6)
 
     ax = axes[1, 1]
-    im = ax.imshow(jnp.angle(object_field), cmap='hsv', vmin=-math.pi, vmax=math.pi)
-    ax.set_title('Original Phase')
-    ax.axis('off')
+    im = ax.imshow(jnp.angle(object_field), cmap="hsv", vmin=-math.pi, vmax=math.pi)
+    ax.set_title("Original Phase")
+    ax.axis("off")
     plt.colorbar(im, ax=ax, shrink=0.6)
 
     # Row 3: Reconstructed object
     ax = axes[1, 2]
-    im = ax.imshow(jnp.abs(reconstructed_field), cmap='viridis')
-    ax.set_title('Reconstructed Amplitude')
-    ax.axis('off')
+    im = ax.imshow(jnp.abs(reconstructed_field), cmap="viridis")
+    ax.set_title("Reconstructed Amplitude")
+    ax.axis("off")
     plt.colorbar(im, ax=ax, shrink=0.6)
 
     ax = axes[1, 3]
-    im = ax.imshow(jnp.angle(reconstructed_field), cmap='hsv', vmin=-math.pi, vmax=math.pi)
-    ax.set_title('Reconstructed Phase')
-    ax.axis('off')
+    im = ax.imshow(jnp.angle(reconstructed_field), cmap="hsv", vmin=-math.pi, vmax=math.pi)
+    ax.set_title("Reconstructed Phase")
+    ax.axis("off")
     plt.colorbar(im, ax=ax, shrink=0.6)
 
     # Row 3: Difference plots
     amp_diff = jnp.abs(reconstructed_field) - jnp.abs(object_field)
     ax = axes[2, 0]
-    im = ax.imshow(amp_diff, cmap='RdBu_r')
-    ax.set_title('Amplitude Difference')
-    ax.axis('off')
+    im = ax.imshow(amp_diff, cmap="RdBu_r")
+    ax.set_title("Amplitude Difference")
+    ax.axis("off")
     plt.colorbar(im, ax=ax, shrink=0.6)
 
     phase_diff_wrapped = jnp.angle(jnp.exp(1j * (jnp.angle(reconstructed_field) - jnp.angle(object_field))))
     ax = axes[2, 1]
-    im = ax.imshow(phase_diff_wrapped, cmap='RdBu_r', vmin=-math.pi, vmax=math.pi)
-    ax.set_title('Phase Difference (wrapped)')
-    ax.axis('off')
+    im = ax.imshow(phase_diff_wrapped, cmap="RdBu_r", vmin=-math.pi, vmax=math.pi)
+    ax.set_title("Phase Difference (wrapped)")
+    ax.axis("off")
     plt.colorbar(im, ax=ax, shrink=0.6)
 
     # Line profiles
     center_line = params.img_center[0]
     ax = axes[2, 2]
-    ax.plot(jnp.abs(object_field[center_line, :]), 'b-', label='Original', linewidth=2)
-    ax.plot(jnp.abs(reconstructed_field[center_line, :]), 'r--', label='Reconstructed', linewidth=2)
-    ax.set_title('Amplitude Profile')
-    ax.set_xlabel('Pixel')
-    ax.set_ylabel('Amplitude')
+    ax.plot(jnp.abs(object_field[center_line, :]), "b-", label="Original", linewidth=2)
+    ax.plot(jnp.abs(reconstructed_field[center_line, :]), "r--", label="Reconstructed", linewidth=2)
+    ax.set_title("Amplitude Profile")
+    ax.set_xlabel("Pixel")
+    ax.set_ylabel("Amplitude")
     ax.legend()
     ax.grid(True, alpha=0.3)
 
     ax = axes[2, 3]
-    ax.plot(jnp.angle(object_field[center_line, :]), 'b-', label='Original', linewidth=2)
-    ax.plot(jnp.angle(reconstructed_field[center_line, :]), 'r--', label='Reconstructed', linewidth=2)
-    ax.set_title('Phase Profile')
-    ax.set_xlabel('Pixel')
-    ax.set_ylabel('Phase (rad)')
+    ax.plot(jnp.angle(object_field[center_line, :]), "b-", label="Original", linewidth=2)
+    ax.plot(jnp.angle(reconstructed_field[center_line, :]), "r--", label="Reconstructed", linewidth=2)
+    ax.set_title("Phase Profile")
+    ax.set_xlabel("Pixel")
+    ax.set_ylabel("Phase (rad)")
     ax.legend()
     ax.grid(True, alpha=0.3)
 
     plt.tight_layout()
-    plt.suptitle('Phase-Shifting Inline Digital Holography Reconstruction', fontsize=16, y=0.98)
+    plt.suptitle("Phase-Shifting Inline Digital Holography Reconstruction", fontsize=16, y=0.98)
     plt.show()
 
 # %%

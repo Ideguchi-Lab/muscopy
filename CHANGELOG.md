@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Added
+
+- Inline digital holography (IDH) functionality [[#57](https://github.com/Ideguchi-Lab/muscopy/issues/57)]
+  - `meshgrid_freq`: Creates frequency coordinate meshgrid
+  - `propagate_fresnel`: Implements Fresnel (Angular Spectrum) propagation
+  - `support_constraint`: Applies support constraint for twin-image suppression
+  - `correct_offset_idh`: Corrects phase and amplitude offset for IDH
+  - `inline_dh`: Main IDH reconstruction function with optional twin-image suppression
+
 ### Changed
 
 - Improved `unwarp_phase` routine to avoid unintended modification [[#73](https://github.com/Ideguchi-Lab/muscopy/issues/73)]

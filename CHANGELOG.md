@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Added
+
+- Inline digital holography reconstruction functionality [[#57](https://github.com/Ideguchi-Lab/muscopy/issues/57)]
+  - `ps_idh_reconstruct()`: Core phase-shifting inline digital holography reconstruction
+  - `inline_dh()`: High-level interface for inline DH with validation
+  - Support for known phase shifts with future blind reconstruction capability
+  - Addresses sampling resolution limitations of off-axis DH beyond Nyquist-Shannon limit
+
 ### Changed
 
 - Improved `unwarp_phase` routine to avoid unintended modification [[#73](https://github.com/Ideguchi-Lab/muscopy/issues/73)]

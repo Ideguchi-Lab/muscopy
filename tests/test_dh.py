@@ -7,11 +7,16 @@ import pytest
 from muscopy.dh import (
     MuParameters,
     correct_offset,
+    correct_offset_idh,
     crop_array,
     get_spectrum,
     get_spectrums,
+    inline_dh,
     make_disk,
+    meshgrid_freq,
     print_all_parameters,
+    propagate_fresnel,
+    support_constraint,
 )
 
 
@@ -163,6 +168,119 @@ def test_correct_offset_flags() -> None:
     expected_amp_false = array * jnp.exp(-1j * phase_offset)
     corrected_amp_false = correct_offset(array, offset_regs, phase=True, amplitude=False)
     assert jnp.allclose(corrected_amp_false, expected_amp_false, atol=1e-7)
+
+
+def test_meshgrid_freq() -> None:
+    """Test meshgrid_freq function."""
+    img_size_px = 8
+    freq_per_px = 0.1
+    fx, fy = meshgrid_freq(img_size_px, freq_per_px)
+
+    assert fx.shape == (img_size_px, img_size_px)
+    assert fy.shape == (img_size_px, img_size_px)
+
+    # Check if frequencies match expected 1D frequency array
+    expected_freq = jnp.fft.fftfreq(img_size_px, 1 / freq_per_px)
+    expected_fx, expected_fy = jnp.meshgrid(expected_freq, expected_freq, indexing="ij")
+    assert jnp.allclose(fx, expected_fx)
+    assert jnp.allclose(fy, expected_fy)
+
+
+def test_propagate_fresnel() -> None:
+    """Test propagate_fresnel function with plane wave."""
+    params = MuParameters(na=0.1, wavelength_m=500e-9, img_size_px=32, px_size_m=1e-6, n_sol=1.0)
+
+    # Create a plane wave (constant amplitude)
+    plane_wave = jnp.ones((params.img_size_px, params.img_size_px), dtype=jnp.complex64)
+    z_obj_m = 1e-3  # 1mm propagation
+
+    propagated = propagate_fresnel(plane_wave, params, z_obj_m)
+
+    # For a plane wave, amplitude should remain approximately constant
+    amplitude_variation = jnp.std(jnp.abs(propagated))
+    assert amplitude_variation < 1e-6
+
+
+def test_support_constraint() -> None:
+    """Test support_constraint function."""
+    params = MuParameters(na=0.1, wavelength_m=500e-9, img_size_px=32, px_size_m=1e-6, n_sol=1.0)
+
+    # Create a complex field
+    field = jnp.ones((params.img_size_px, params.img_size_px), dtype=jnp.complex64)
+
+    constrained = support_constraint(field, params)
+
+    # Check that values outside the support are zero
+    mask = make_disk(params.img_center, radius=params.img_size_px // 4, array_shape=params.img_size_px)
+    assert jnp.allclose(constrained, jnp.where(mask, field, 0))
+
+
+def test_correct_offset_idh() -> None:
+    """Test correct_offset_idh function."""
+    params = MuParameters(na=0.1, wavelength_m=500e-9, img_size_px=32, px_size_m=1e-6, n_sol=1.0)
+
+    # Create a complex field with known phase and amplitude offset
+    phase_offset = 0.5
+    amp_scale = 2.0
+    field = (
+        amp_scale * jnp.exp(1j * phase_offset) * jnp.ones((params.img_size_px, params.img_size_px), dtype=jnp.complex64)
+    )
+
+    corrected = correct_offset_idh(field, params)
+
+    # Check that the central region has been normalized
+    roi = crop_array(corrected, params.img_center, width=16)
+    assert jnp.allclose(jnp.mean(jnp.angle(roi)), 0, atol=1e-6)
+    assert jnp.allclose(jnp.mean(jnp.abs(roi)), 1, atol=1e-6)
+
+
+def test_inline_dh_basic() -> None:
+    """Test basic functionality of inline_dh."""
+    params = MuParameters(na=0.1, wavelength_m=500e-9, img_size_px=32, px_size_m=1e-6, n_sol=1.0)
+
+    # Create a simple hologram (intensity pattern)
+    hologram = jnp.ones((params.img_size_px, params.img_size_px))
+    z_obj_m = 1e-3  # 1mm object distance
+
+    # Test without twin image suppression
+    result = inline_dh(hologram, params, z_obj_m, twin_iter=0)
+
+    assert result.shape == hologram.shape
+    assert result.dtype == jnp.complex64
+
+
+def test_inline_dh_parameter_validation() -> None:
+    """Test parameter validation in inline_dh."""
+    params = MuParameters(na=-0.1, wavelength_m=500e-9, img_size_px=32, px_size_m=1e-6, n_sol=1.0)
+    hologram = jnp.ones((32, 32))
+    z_obj_m = 1e-3
+
+    # Should raise ValueError due to negative NA
+    with pytest.raises(ValueError, match="NA cannot be negative"):
+        inline_dh(hologram, params, z_obj_m)
+
+
+def test_inline_dh_negative_hologram() -> None:
+    """Test that inline_dh raises error for negative hologram values."""
+    params = MuParameters(na=0.1, wavelength_m=500e-9, img_size_px=32, px_size_m=1e-6, n_sol=1.0)
+    hologram = jnp.array([[-1.0, 1.0], [1.0, 1.0]])
+    z_obj_m = 1e-3
+
+    with pytest.raises(ValueError, match="Hologram cannot contain negative values"):
+        inline_dh(hologram, params, z_obj_m)
+
+
+def test_inline_dh_with_twin_suppression() -> None:
+    """Test inline_dh with twin image suppression."""
+    params = MuParameters(na=0.1, wavelength_m=500e-9, img_size_px=32, px_size_m=1e-6, n_sol=1.0)
+    hologram = jnp.ones((params.img_size_px, params.img_size_px))
+    z_obj_m = 1e-3
+
+    # Test with twin image suppression
+    result = inline_dh(hologram, params, z_obj_m, twin_iter=2)
+
+    assert result.shape == hologram.shape
+    assert result.dtype == jnp.complex64
 
 
 if __name__ == "__main__":

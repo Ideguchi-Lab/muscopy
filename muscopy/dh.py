@@ -6,6 +6,11 @@ This module provides:
 - `print_all_parameters`: A function to print all parameters of `MuParameters` dataclass.
 - `make_disk`: A function to create a disk mask.
 - `crop_array`: A function to crop an array.
+- `meshgrid_freq`: A function to create frequency coordinate meshgrid.
+- `propagate_fresnel`: A function to propagate field using Fresnel method.
+- `support_constraint`: A function to apply support constraint for twin-image suppression.
+- `correct_offset_idh`: A function to correct phase and amplitude offset for IDH.
+- `inline_dh`: A function to reconstruct complex field using inline digital holography.
 - `get_spectrum`: A function to get the spectrum of the hologram array.
 - `get_spectrums`: A function to get the spectrums of the complex fields.
 - `correct_offset`: A function to correct the phase and amplitude offset of the array.
@@ -271,6 +276,141 @@ def crop_array(array: Array, center: tuple[int, int], width: int) -> Array:
         center[0] - width // 2 : center[0] + width // 2 + 1,
         center[1] - width // 2 : center[1] + width // 2 + 1,
     ]
+
+
+def meshgrid_freq(img_size_px: int, freq_per_px: float) -> tuple[Array, Array]:
+    r"""Create frequency coordinate meshgrid.
+
+    Parameters
+    ----------
+    img_size_px : `int`
+        Size of the image in pixels
+    freq_per_px : `float`
+        Frequency per pixel
+
+    Returns
+    -------
+    `tuple`\[`jax.Array`, `jax.Array`\]
+        Frequency coordinates fx, fy
+    """
+    freq_1d = jnp.fft.fftfreq(img_size_px, 1 / freq_per_px)
+    fx, fy = jnp.meshgrid(freq_1d, freq_1d, indexing="ij")
+    return fx, fy
+
+
+def propagate_fresnel(u0: Array, params: MuParameters, z_obj_m: float) -> Array:
+    """Propagate field using Fresnel (Angular Spectrum) method.
+
+    Parameters
+    ----------
+    u0 : `jax.Array`
+        Complex field at sensor plane
+    params : `MuParameters`
+        Microscopy parameters
+    z_obj_m : `float`
+        Propagation distance in meters (+z for object→sensor)
+
+    Returns
+    -------
+    `jax.Array`
+        Propagated complex field
+    """
+    fx, fy = meshgrid_freq(params.img_size_px, params.freq_per_px)
+
+    # Angular spectrum transfer function
+    h = jnp.exp(-1j * jnp.pi * params.wavelength_m * z_obj_m * (fx**2 + fy**2))
+
+    u1 = jnp.fft.fft2(u0)
+    u2 = u1 * h
+    return jnp.fft.ifft2(u2)
+
+
+def support_constraint(u: Array, params: MuParameters) -> Array:
+    """Apply support constraint for twin-image suppression.
+
+    Parameters
+    ----------
+    u : `jax.Array`
+        Complex field
+    params : `MuParameters`
+        Microscopy parameters
+
+    Returns
+    -------
+    `jax.Array`
+        Field with support constraint applied
+    """
+    mask = make_disk(params.img_center, radius=params.img_size_px // 4, array_shape=params.img_size_px)
+    return jnp.where(mask, u, 0)
+
+
+def correct_offset_idh(obj_field: Array, params: MuParameters) -> Array:
+    """Correct phase and amplitude offset for IDH.
+
+    Parameters
+    ----------
+    obj_field : `jax.Array`
+        Complex object field
+    params : `MuParameters`
+        Microscopy parameters
+
+    Returns
+    -------
+    `jax.Array`
+        Offset-corrected field
+    """
+    roi = crop_array(obj_field, params.img_center, width=16)
+    phase_off = jnp.mean(jnp.angle(roi))
+    amp_scale = jnp.mean(jnp.abs(roi))
+    return obj_field * jnp.exp(-1j * phase_off) / amp_scale
+
+
+def inline_dh(hologram: Array, params: MuParameters, z_obj_m: float, twin_iter: int = 0) -> Array:
+    """Reconstruct complex field using inline digital holography.
+
+    Parameters
+    ----------
+    hologram : `jax.Array`
+        Intensity hologram image
+    params : `MuParameters`
+        Microscopy parameters
+    z_obj_m : `float`
+        Object distance in meters
+    twin_iter : `int`, optional
+        Number of twin-image suppression iterations, by default 0
+
+    Returns
+    -------
+    `jax.Array`
+        Reconstructed complex object field
+
+    Raises
+    ------
+    ValueError
+        If hologram contains negative values
+    """
+    params.verify_parameters()
+
+    if jnp.any(hologram < 0):
+        msg = "Hologram cannot contain negative values"
+        raise ValueError(msg)
+
+    # 1. Get amplitude from intensity
+    amp = jnp.sqrt(jnp.clip(hologram, a_min=0))
+    field = amp.astype(jnp.complex64)  # Initial phase is zero
+
+    # 2. Back-propagate (sensor → object)
+    obj_field = propagate_fresnel(field, params, -z_obj_m)
+
+    # 3. Twin-image suppression (optional)
+    for _ in range(twin_iter):
+        obj_field = support_constraint(obj_field, params)
+        field = propagate_fresnel(obj_field, params, z_obj_m)
+        field = amp * jnp.exp(1j * jnp.angle(field))
+        obj_field = propagate_fresnel(field, params, -z_obj_m)
+
+    # 4. Offset correction
+    return correct_offset_idh(obj_field, params)
 
 
 def get_spectrum(

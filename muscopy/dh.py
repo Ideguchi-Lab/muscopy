@@ -11,6 +11,8 @@ This module provides:
 - `correct_offset`: A function to correct the phase and amplitude offset of the array.
 - `offaxis_dh`: A function to reconstruct the complex wave front using off-axis digital holography.
 - `demultiplex_cp_arrays`: A function to demultiplex a set of CP arrays using a demultiplexing matrix.
+- `ps_idh_reconstruct`: A function for phase-shifting inline digital holography reconstruction.
+- `inline_dh`: A function to reconstruct complex wave front using inline digital holography.
 """
 
 from __future__ import annotations
@@ -511,3 +513,130 @@ def demultiplex_cp_arrays(
     )
 
     return [demultiplexed_arrays[i] for i in range(demultiplexed_arrays.shape[0])]
+
+
+def ps_idh_reconstruct(i_stack: Array, deltas: Array, ref_amp: float = 1.0) -> Array:
+    """Phase-shifting inline digital holography reconstruction.
+
+    Reconstruct complex amplitude from phase-shifted inline holograms
+    using the formula: Ô(x,y) = (1/M) * Σ I_k * exp(-j*δ_k) / (2*R)
+
+    Parameters
+    ----------
+    i_stack : `jax.Array`
+        Stack of phase-shifted hologram intensity images, shape (M, H, W)
+    deltas : `jax.Array`
+        Phase shift values for each hologram [rad], shape (M,)
+    ref_amp : `float`, optional
+        Reference beam amplitude R, by default 1.0
+
+    Returns
+    -------
+    `jax.Array`
+        Reconstructed complex field Ô(x,y), shape (H, W), dtype complex64
+
+    Raises
+    ------
+    ValueError
+        If i_stack and deltas have incompatible shapes
+    """
+    if i_stack.shape[0] != deltas.shape[0]:
+        msg = f"Number of holograms ({i_stack.shape[0]}) must match number of phase shifts ({deltas.shape[0]})"
+        raise ValueError(msg)
+
+    # Create phase coefficients with broadcasting shape (M, 1, 1)
+    coeff = jnp.exp(-1j * deltas)[:, None, None]
+
+    # Compute complex amplitude reconstruction
+    o_hat = jnp.mean(i_stack * coeff, axis=0)
+
+    # Apply final normalization
+    return o_hat / (2 * ref_amp)
+
+
+@typing.overload
+def inline_dh(
+    i_stack: Array,
+    deltas: Array,
+    params: MuParameters,
+    *,
+    ref_amp: float = 1.0,
+    blind_reconstruction: bool = False,
+) -> Array: ...
+
+
+@typing.overload
+def inline_dh(
+    i_stack: Array,
+    deltas: None,
+    params: MuParameters,
+    *,
+    ref_amp: float = 1.0,
+    blind_reconstruction: bool = False,
+) -> tuple[Array, Array]: ...
+
+
+def inline_dh(
+    i_stack: Array,
+    deltas: Array | None,
+    params: MuParameters,
+    *,
+    ref_amp: float = 1.0,
+    blind_reconstruction: bool = False,
+) -> Array | tuple[Array, Array]:
+    """Reconstruct complex wave front using inline digital holography.
+
+    This function supports both phase-shifting inline digital holography (PS-IDH)
+    with known phase shifts and blind reconstruction when phase shifts are unknown.
+
+    Parameters
+    ----------
+    i_stack : `jax.Array`
+        Stack of hologram intensity images, shape (M, H, W)
+    deltas : `jax.Array` | `None`
+        Phase shift values [rad], shape (M,). If None, blind reconstruction is used
+    params : `MuParameters`
+        Microscopy parameters (used for validation and future extensions)
+    ref_amp : `float`, optional
+        Reference beam amplitude, by default 1.0
+    blind_reconstruction : `bool`, optional
+        Force blind reconstruction even if deltas is provided, by default False
+
+    Returns
+    -------
+    `jax.Array` | `tuple`[`jax.Array`, `jax.Array`]
+        If deltas provided: complex field Ô(x,y), shape (H, W)
+        If blind reconstruction: (complex field, estimated phase shifts)
+
+    Raises
+    ------
+    ValueError
+        If parameters are invalid or array shapes are incompatible
+    NotImplementedError
+        If blind reconstruction is requested (future implementation)
+    """
+    params.verify_parameters()
+
+    expected_ndim = 3
+    if i_stack.ndim != expected_ndim:
+        msg = f"i_stack must be 3D array with shape (M, H, W), got shape {i_stack.shape}"
+        raise ValueError(msg)
+
+    num_holograms = i_stack.shape[0]
+
+    # Known phase shifts case
+    if deltas is not None and not blind_reconstruction:
+        if deltas.shape[0] != num_holograms:
+            msg = f"Number of phase shifts ({deltas.shape[0]}) must match number of holograms ({num_holograms})"
+            raise ValueError(msg)
+
+        return ps_idh_reconstruct(i_stack, deltas, ref_amp)
+
+    # Blind reconstruction case
+    # TODO(@masa10-f): Implement alternating minimization for blind phase shift estimation (#57)
+    # 1. Fix deltas, solve for O using ps_idh_reconstruct
+    # 2. Fix O, update deltas via minimizing ||I_k - |O + R*exp(j*delta_k)|^2||^2
+    # 3. Repeat until convergence
+    # 4. Initialize with equally spaced phase shifts: jnp.linspace(0, 2*pi, num_holograms, endpoint=False)
+    msg = "Blind reconstruction not yet implemented. Please provide phase shifts (deltas)."
+    raise NotImplementedError(msg)

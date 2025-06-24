@@ -604,7 +604,7 @@ def inline_dh(
 
     Returns
     -------
-    `jax.Array` | `tuple`\\[`jax.Array`, `jax.Array`\\]
+    `jax.Array` | `tuple`\[`jax.Array`, `jax.Array`\]
         If deltas provided: complex field Ô(x,y), shape (H, W)
         If blind reconstruction: (complex field, estimated phase shifts)
 

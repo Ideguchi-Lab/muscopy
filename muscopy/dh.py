@@ -584,7 +584,7 @@ def inline_dh(
     ref_amp: float = 1.0,
     blind_reconstruction: bool = False,
 ) -> Array | tuple[Array, Array]:
-    """Reconstruct complex wave front using inline digital holography.
+    r"""Reconstruct complex wave front using inline digital holography.
 
     This function supports both phase-shifting inline digital holography (PS-IDH)
     with known phase shifts and blind reconstruction when phase shifts are unknown.
@@ -604,7 +604,7 @@ def inline_dh(
 
     Returns
     -------
-    `jax.Array` | `tuple`[`jax.Array`, `jax.Array`]
+    `jax.Array` | `tuple`\\[`jax.Array`, `jax.Array`\\]
         If deltas provided: complex field Ô(x,y), shape (H, W)
         If blind reconstruction: (complex field, estimated phase shifts)
 

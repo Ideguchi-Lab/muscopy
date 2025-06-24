@@ -135,3 +135,6 @@ odt_test_data
 
 docs/source/gallery/*
 docs/source/sg_execution_times.rst
+
+# Implementation notes (not tracked)
+implement.md

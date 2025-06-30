@@ -439,7 +439,19 @@ def pt_signal_1st_order(
     -------
     `tuple`\[`jax.Array`, `jax.Array`\]
         Photothermal signal and its Fourier transform
+
+    Raises
+    ------
+    ValueError
+        If the number of spectrums in hot and cold datasets do not match,
+        or if the number of reference spectrums does not match the number of spectrums in hot and cold datasets.
     """
+    if len(cp_spectrums_hot) != len(cp_spectrums_cold):
+        msg = "The number of spectrums in hot and cold datasets must be the same"
+        raise ValueError(msg)
+    if len(ref_cp_spectrums) != len(cp_spectrums_hot):
+        msg = "The number of reference spectrums must match the number of spectrums in hot and cold datasets"
+        raise ValueError(msg)
     _, synthesized_spectrum_hot = odt(cp_spectrums_hot, ref_cp_spectrums, params, config)
     _, synthesized_spectrum_cold = odt(cp_spectrums_cold, ref_cp_spectrums, params, config)
 

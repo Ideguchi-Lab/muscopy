@@ -385,7 +385,8 @@ def calculate_odt_difference(  # noqa: PLR0913, PLR0917
     Raises
     ------
     ValueError
-        If the input datasets have different numbers of spectrums
+        If the input datasets have different numbers of spectrums or reference spectrums,
+        or if the number of spectrums and reference spectrums don't match within each dataset
     """
     if len(cp_spectrums_1) != len(cp_spectrums_2):
         msg = "The number of spectrums in both datasets must be the same"

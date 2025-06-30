@@ -210,7 +210,7 @@ def test_ps_idh_reconstruct_shape_mismatch() -> None:
     i_stack = jnp.ones((4, 32, 32))
     deltas = jnp.array([0.0, jnp.pi / 2, jnp.pi])  # Wrong number of phase shifts
 
-    with pytest.raises(ValueError, match="Number of holograms .* must match number of phase shifts"):
+    with pytest.raises(ValueError, match=r"Number of holograms .* must match number of phase shifts"):
         ps_idh_reconstruct(i_stack, deltas)
 
 
@@ -250,7 +250,7 @@ def test_inline_dh_phase_shift_mismatch() -> None:
     i_stack = jnp.ones((4, 32, 32))
     deltas = jnp.array([0.0, jnp.pi])  # Wrong number
 
-    with pytest.raises(ValueError, match="Number of phase shifts .* must match number of holograms"):
+    with pytest.raises(ValueError, match=r"Number of phase shifts .* must match number of holograms"):
         inline_dh(i_stack, deltas, params)
 
 

@@ -544,14 +544,16 @@ def ps_idh_reconstruct(i_stack: Array, deltas: Array, ref_amp: float = 1.0) -> A
         msg = f"Number of holograms ({i_stack.shape[0]}) must match number of phase shifts ({deltas.shape[0]})"
         raise ValueError(msg)
 
+    # deltas should be aligned with the same interval
+
     # Create phase coefficients with broadcasting shape (M, 1, 1)
-    coeff = jnp.exp(-1j * deltas)[:, None, None]
+    coeff = jnp.exp(1j * deltas)[:, None, None]
 
     # Compute complex amplitude reconstruction
     o_hat = jnp.mean(i_stack * coeff, axis=0)
 
     # Apply final normalization
-    return o_hat / (2 * ref_amp)
+    return o_hat / ref_amp
 
 
 @typing.overload
@@ -584,7 +586,7 @@ def inline_dh(
     ref_amp: float = 1.0,
     blind_reconstruction: bool = False,
 ) -> Array | tuple[Array, Array]:
-    """Reconstruct complex wave front using inline digital holography.
+    r"""Reconstruct complex wave front using inline digital holography.
 
     This function supports both phase-shifting inline digital holography (PS-IDH)
     with known phase shifts and blind reconstruction when phase shifts are unknown.
@@ -604,7 +606,7 @@ def inline_dh(
 
     Returns
     -------
-    `jax.Array` | `tuple`[`jax.Array`, `jax.Array`]
+    `jax.Array` | `tuple`\[`jax.Array`, `jax.Array`\]
         If deltas provided: complex field Ô(x,y), shape (H, W)
         If blind reconstruction: (complex field, estimated phase shifts)
 

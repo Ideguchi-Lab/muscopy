@@ -7,7 +7,7 @@ complex amplitude from phase-shifted inline holograms. The example shows the wor
 for Phase-Shifting Inline Digital Holography (PS-IDH) with synthetic data.
 
 Unlike off-axis digital holography, inline DH can overcome sampling resolution limitations
-imposed by the Nyquist-Shannon limit for large phase shifts.
+imposed by the Nyquist-Shannon limit for large phase shifts at the cost of longer acquisition times.
 """
 
 # %%
@@ -56,6 +56,11 @@ gaussian_amp = jnp.exp(-((xx - center[0]) ** 2 + (yy - center[1]) ** 2) / (2 * (
 # Combined object field: amplitude modulation + phase step
 phase_step = math.pi / 2  # 90 degree phase step
 object_field = gaussian_amp * jnp.exp(1j * phase_step * phase_disk)
+
+# apply low pass filter
+ft_object_field = jnp.fft.fftshift(jnp.fft.fft2(object_field))
+low_pass = make_disk(center, params.aperturesize_px // 2, params.img_size_px)
+object_field = jnp.fft.ifft2(jnp.fft.ifftshift(ft_object_field * low_pass))
 
 print(f"Object field shape: {object_field.shape}")
 print(f"Object field amplitude range: {jnp.min(jnp.abs(object_field)):.3f} - {jnp.max(jnp.abs(object_field)):.3f}")

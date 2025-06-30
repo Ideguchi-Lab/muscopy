@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+---
+
+## Version 0.5.1 [2025-06-30]
+
 ### Added
 
 - Inline digital holography reconstruction functionality [[#57](https://github.com/Ideguchi-Lab/muscopy/issues/57)]

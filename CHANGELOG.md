@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Added
+
+- ODT difference calculation functionality [[#48](https://github.com/Ideguchi-Lab/muscopy/issues/48)]
+  - `calculate_odt_difference()`: Calculate the difference between two ODT reconstructions with same parameters
+  - `pt_signal_1st_order()`: Calculate Photothermal signal with 1st order approximation
+  - Added comprehensive test coverage for input validation
+
 ---
 
 ## Version 0.5.1 [2025-06-30]

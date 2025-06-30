@@ -544,14 +544,16 @@ def ps_idh_reconstruct(i_stack: Array, deltas: Array, ref_amp: float = 1.0) -> A
         msg = f"Number of holograms ({i_stack.shape[0]}) must match number of phase shifts ({deltas.shape[0]})"
         raise ValueError(msg)
 
+    # deltas should be aligned with the same interval
+
     # Create phase coefficients with broadcasting shape (M, 1, 1)
-    coeff = jnp.exp(-1j * deltas)[:, None, None]
+    coeff = jnp.exp(1j * deltas)[:, None, None]
 
     # Compute complex amplitude reconstruction
     o_hat = jnp.mean(i_stack * coeff, axis=0)
 
     # Apply final normalization
-    return o_hat / (2 * ref_amp)
+    return o_hat / ref_amp
 
 
 @typing.overload

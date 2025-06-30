@@ -9,6 +9,7 @@ This module provides:
 - `fill_hermite_components`: A function to fill the hermite conjugated spectrum for transparent sample.
 - `calc_refractive_index`: A function to calculate the refractive index from the scattering potential.
 - `odt`: A function to perform ODT reconstruction.
+- `calculate_odt_difference`: A function to calculate the difference between two ODT reconstructions.
 - `discard_higher_axial_freq`: A function to discard higher axial frequency.
 - `zeropad_higher_axial_freq`: A function to zero pad the higher axial frequency.
 """
@@ -519,6 +520,71 @@ def _embed_3d_spectrum(
 
     array_tiled = jnp.stack([spectrum2d] * shape_3d[2], axis=2)
     return array_tiled * fz_index
+
+
+def calculate_odt_difference(  # noqa: PLR0913, PLR0917
+    cp_spectrums_1: Sequence[Array],
+    ref_cp_spectrums_1: Sequence[Array],
+    cp_spectrums_2: Sequence[Array],
+    ref_cp_spectrums_2: Sequence[Array],
+    params: ODTParameters,
+    config: ODTConfig,
+) -> tuple[Array, Array, Array]:
+    """Calculate the difference between two ODT reconstructions with same parameters.
+
+    This function performs ODT reconstruction on two different datasets using identical
+    parameters and returns the difference in refractive index and scattering potential.
+
+    Parameters
+    ----------
+    cp_spectrums_1 : `collections.abc.Sequence`[`Array`]
+        First dataset: spectrum of complex fields
+    ref_cp_spectrums_1 : `collections.abc.Sequence`[`Array`]
+        First dataset: reference spectrum of complex fields
+    cp_spectrums_2 : `collections.abc.Sequence`[`Array`]
+        Second dataset: spectrum of complex fields
+    ref_cp_spectrums_2 : `collections.abc.Sequence`[`Array`]
+        Second dataset: reference spectrum of complex fields
+    params : `ODTParameters`
+        ODT parameter instance (same for both datasets)
+    config : `ODTConfig`
+        ODT configuration (same for both datasets)
+
+    Returns
+    -------
+    `tuple`[`Array`, `Array`, `Array`]
+        Difference in refractive index (dataset1 - dataset2),
+        refractive index from dataset1,
+        refractive index from dataset2
+
+    Raises
+    ------
+    ValueError
+        If the input datasets have different numbers of spectrums
+    """
+    if len(cp_spectrums_1) != len(cp_spectrums_2):
+        msg = "The number of spectrums in both datasets must be the same"
+        raise ValueError(msg)
+    if len(ref_cp_spectrums_1) != len(ref_cp_spectrums_2):
+        msg = "The number of reference spectrums in both datasets must be the same"
+        raise ValueError(msg)
+    if len(cp_spectrums_1) != len(ref_cp_spectrums_1):
+        msg = "The number of spectrums and reference spectrums must match in dataset 1"
+        raise ValueError(msg)
+    if len(cp_spectrums_2) != len(ref_cp_spectrums_2):
+        msg = "The number of spectrums and reference spectrums must match in dataset 2"
+        raise ValueError(msg)
+
+    print("Reconstructing ODT from dataset 1...")  # noqa: T201
+    refractive_index_1, _ = odt(cp_spectrums_1, ref_cp_spectrums_1, params, config)
+
+    print("Reconstructing ODT from dataset 2...")  # noqa: T201
+    refractive_index_2, _ = odt(cp_spectrums_2, ref_cp_spectrums_2, params, config)
+
+    # Calculate the difference
+    refractive_index_diff = refractive_index_1 - refractive_index_2
+
+    return refractive_index_diff, refractive_index_1, refractive_index_2
 
 
 def _calc_kz_disk(

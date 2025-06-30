@@ -32,8 +32,14 @@ class TestCalculateODTDifference:
     def test_mismatched_spectrum_count(self) -> None:
         """Test that ValueError is raised when spectrum counts don't match."""
         # Create mock data with mismatched counts
-        cp_spectrums_1 = [jnp.ones((self.spectrum_size, self.spectrum_size)) + 0j, jnp.ones((self.spectrum_size, self.spectrum_size)) + 0j]
-        ref_cp_spectrums_1 = [jnp.ones((self.spectrum_size, self.spectrum_size)) + 0j, jnp.ones((self.spectrum_size, self.spectrum_size)) + 0j]
+        cp_spectrums_1 = [
+            jnp.ones((self.spectrum_size, self.spectrum_size)) + 0j,
+            jnp.ones((self.spectrum_size, self.spectrum_size)) + 0j,
+        ]
+        ref_cp_spectrums_1 = [
+            jnp.ones((self.spectrum_size, self.spectrum_size)) + 0j,
+            jnp.ones((self.spectrum_size, self.spectrum_size)) + 0j,
+        ]
         cp_spectrums_2 = [jnp.ones((self.spectrum_size, self.spectrum_size)) + 0j]  # Different count
         ref_cp_spectrums_2 = [jnp.ones((self.spectrum_size, self.spectrum_size)) + 0j]
 
@@ -52,7 +58,10 @@ class TestCalculateODTDifference:
         cp_spectrums_1 = [jnp.ones((self.spectrum_size, self.spectrum_size)) + 0j]
         ref_cp_spectrums_1 = [jnp.ones((self.spectrum_size, self.spectrum_size)) + 0j]
         cp_spectrums_2 = [jnp.ones((self.spectrum_size, self.spectrum_size)) + 0j]
-        ref_cp_spectrums_2 = [jnp.ones((self.spectrum_size, self.spectrum_size)) + 0j, jnp.ones((self.spectrum_size, self.spectrum_size)) + 0j]  # Different count
+        ref_cp_spectrums_2 = [
+            jnp.ones((self.spectrum_size, self.spectrum_size)) + 0j,
+            jnp.ones((self.spectrum_size, self.spectrum_size)) + 0j,
+        ]  # Different count
 
         with pytest.raises(ValueError, match="The number of reference spectrums in both datasets must be the same"):
             calculate_odt_difference(
@@ -68,9 +77,15 @@ class TestCalculateODTDifference:
         """Test that ValueError is raised when spectrum and reference counts don't match in dataset 1."""
         # Make sure the first two checks pass, but the third check fails
         cp_spectrums_1 = [jnp.ones((self.spectrum_size, self.spectrum_size)) + 0j]
-        ref_cp_spectrums_1 = [jnp.ones((self.spectrum_size, self.spectrum_size)) + 0j, jnp.ones((self.spectrum_size, self.spectrum_size)) + 0j]  # Different count from cp_spectrums_1
+        ref_cp_spectrums_1 = [
+            jnp.ones((self.spectrum_size, self.spectrum_size)) + 0j,
+            jnp.ones((self.spectrum_size, self.spectrum_size)) + 0j,
+        ]  # Different count from cp_spectrums_1
         cp_spectrums_2 = [jnp.ones((self.spectrum_size, self.spectrum_size)) + 0j]
-        ref_cp_spectrums_2 = [jnp.ones((self.spectrum_size, self.spectrum_size)) + 0j, jnp.ones((self.spectrum_size, self.spectrum_size)) + 0j]  # Same count as ref_cp_spectrums_1
+        ref_cp_spectrums_2 = [
+            jnp.ones((self.spectrum_size, self.spectrum_size)) + 0j,
+            jnp.ones((self.spectrum_size, self.spectrum_size)) + 0j,
+        ]  # Same count as ref_cp_spectrums_1
 
         with pytest.raises(ValueError, match="The number of spectrums and reference spectrums must match in dataset 1"):
             calculate_odt_difference(

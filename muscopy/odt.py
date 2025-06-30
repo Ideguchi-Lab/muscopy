@@ -354,20 +354,20 @@ def calculate_odt_difference(  # noqa: PLR0913, PLR0917
     params: ODTParameters,
     config: ODTConfig,
 ) -> tuple[Array, Array, Array]:
-    """Calculate the difference between two ODT reconstructions with same parameters.
+    r"""Calculate the difference between two ODT reconstructions with same parameters.
 
     This function performs ODT reconstruction on two different datasets using identical
     parameters and returns the difference in refractive index and scattering potential.
 
     Parameters
     ----------
-    cp_spectrums_1 : `collections.abc.Sequence`[`Array`]
+    cp_spectrums_1 : `collections.abc.Sequence`\[`Array`\]
         First dataset: spectrum of complex fields
-    ref_cp_spectrums_1 : `collections.abc.Sequence`[`Array`]
+    ref_cp_spectrums_1 : `collections.abc.Sequence`\[`Array`\]
         First dataset: reference spectrum of complex fields
-    cp_spectrums_2 : `collections.abc.Sequence`[`Array`]
+    cp_spectrums_2 : `collections.abc.Sequence`\[`Array`\]
         Second dataset: spectrum of complex fields
-    ref_cp_spectrums_2 : `collections.abc.Sequence`[`Array`]
+    ref_cp_spectrums_2 : `collections.abc.Sequence`\[`Array`\]
         Second dataset: reference spectrum of complex fields
     params : `ODTParameters`
         ODT parameter instance (same for both datasets)
@@ -376,7 +376,7 @@ def calculate_odt_difference(  # noqa: PLR0913, PLR0917
 
     Returns
     -------
-    `tuple`[`Array`, `Array`, `Array`]
+    `tuple`\[`Array`, `Array`, `Array`\]
         Difference in refractive index (dataset1 - dataset2),
         refractive index from dataset1,
         refractive index from dataset2

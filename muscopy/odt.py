@@ -10,6 +10,7 @@ This module provides:
 - `calc_refractive_index`: A function to calculate the refractive index from the scattering potential.
 - `odt`: A function to perform ODT reconstruction.
 - `calculate_odt_difference`: A function to calculate the difference between two ODT reconstructions.
+- `pt_signal_1st_order`: A function to calculate the Photothermal signal with 1st order approximation.
 - `discard_higher_axial_freq`: A function to discard higher axial frequency.
 - `zeropad_higher_axial_freq`: A function to zero pad the higher axial frequency.
 """
@@ -409,6 +410,46 @@ def calculate_odt_difference(  # noqa: PLR0913, PLR0917
     refractive_index_diff = refractive_index_1 - refractive_index_2
 
     return refractive_index_diff, refractive_index_1, refractive_index_2
+
+
+def pt_signal_1st_order(
+    cp_spectrums_hot: Sequence[Array],
+    cp_spectrums_cold: Sequence[Array],
+    ref_cp_spectrums: Sequence[Array],
+    params: ODTParameters,
+    config: ODTConfig,
+) -> tuple[Array, Array]:
+    r"""Calculate the Photothermal signal with 1st order approximation.
+
+    Parameters
+    ----------
+    cp_spectrums_hot : `collections.abc.Sequence`\[`Array`\]
+        Complex field spectrum of the hot sample
+    cp_spectrums_cold : `collections.abc.Sequence`\[`Array`\]
+        Complex field spectrum of the cold sample
+    ref_cp_spectrums : `collections.abc.Sequence`\[`Array`\]
+        Reference complex field spectrum
+    params : `ODTParameters`
+        ODT parameter instance
+    config : `ODTConfig`
+        ODT configuration
+
+    Returns
+    -------
+    `tuple`\[`jax.Array`, `jax.Array`\]
+        Photothermal signal and its Fourier transform
+    """
+    _, synthesized_spectrum_hot = odt(cp_spectrums_hot, ref_cp_spectrums, params, config)
+    _, synthesized_spectrum_cold = odt(cp_spectrums_cold, ref_cp_spectrums, params, config)
+
+    scattering_potential_pt = synthesized_spectrum_hot - synthesized_spectrum_cold
+    ft_pt_signal = scattering_potential_pt / (params.light_freq_px * params.k_per_px) ** 2 / params.n_sol * 2 * jnp.pi
+    pt_signal = jnp.fft.ifftn(jnp.fft.ifftshift(ft_pt_signal), norm="ortho")
+
+    factor = params.spectrum2cpfield_xy**2 * params.spectrum2cpfield_z / (2 * jnp.pi) ** 3
+    pt_signal *= factor
+
+    return pt_signal, ft_pt_signal
 
 
 def discard_higher_axial_freq(array3d: Array, threshold: int) -> Array:

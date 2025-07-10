@@ -8,6 +8,7 @@
   - `calculate_odt_difference()`: Calculate the difference between two ODT reconstructions with same parameters
   - `pt_signal_1st_order()`: Calculate Photothermal signal with 1st order approximation
   - Added comprehensive test coverage for input validation
+- ODT demonstration with `muscopy-mlbsim` library.
 
 ---
 

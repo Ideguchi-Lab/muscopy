@@ -6,3 +6,5 @@ scikit-image
 numpy >= 1.22.0
 scipy >= 1.10.0
 matplotlib >= 3.5.0
+
+git+https://github.com/Ideguchi-Lab/muscopy-mlbsim.git

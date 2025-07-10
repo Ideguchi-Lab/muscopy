@@ -30,7 +30,6 @@ from muscopy.cfg import ArrayPrecision
 from muscopy.dh import get_spectrum
 from muscopy.odt import ODTConfig, ODTParameters, odt
 
-# Check if muscopy_mlbsim is available
 try:
     from muscopy_mlbsim import (  # pyright: ignore[reportMissingImports]
         HologramGenerator,
@@ -43,8 +42,9 @@ try:
     MLB_AVAILABLE = True
 except ImportError:
     MLB_AVAILABLE = False
-    print("muscopy_mlbsim is not installed. This example requires muscopy_mlbsim.")
-    sys.exit(1)
+    print("Warning: muscopy_mlbsim is not installed. This example requires muscopy_mlbsim.")
+    print("Skipping example execution.")
+    sys.exit(0)  # Exit gracefully if muscopy_mlbsim is not available
 
 
 class HologramSetGenerator:
@@ -57,6 +57,10 @@ class HologramSetGenerator:
         offaxis_center: tuple[int, int],
         precision: ArrayPrecision,
     ) -> None:
+        if not MLB_AVAILABLE:
+            msg = "muscopy_mlbsim is required but not available"
+            raise ImportError(msg)
+
         self.odt_params = odt_params
         self.mlb_params = mlb_params
         self.precision = precision
@@ -475,7 +479,31 @@ def visualize_synthetic_spectra_profiles(synthetic_spectra: Array) -> None:  # n
 def main() -> None:  # noqa: PLR0914
     """Demonstrate ODT with MLB simulation."""
     if not MLB_AVAILABLE:
-        print("This example requires muscopy_mlbsim package.")
+        print("Skipping ODT with MLB simulation demo - muscopy_mlbsim not available.")
+        # Create a simple placeholder plot for documentation
+        _, ax = plt.subplots(figsize=(8, 6))
+        message = (
+            "muscopy_mlbsim Required\n\n"
+            "This example requires the muscopy_mlbsim package.\n"
+            "Please install it with:\n"
+            "pip install -e ./muscopy-mlbsim"
+        )
+        ax.text(
+            0.5,
+            0.5,
+            message,
+            ha="center",
+            va="center",
+            fontsize=12,
+            bbox={"boxstyle": "round,pad=0.3", "facecolor": "lightgray"},
+        )
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+        ax.axis("off")
+        plt.title("ODT with MLB Simulation Example")
+        plt.tight_layout()
+        plt.savefig("odt_mlb_simulation_placeholder.png", dpi=150, bbox_inches="tight")
+        plt.show()
         return
 
     # Setup parameters
@@ -522,9 +550,4 @@ def main() -> None:  # noqa: PLR0914
 
 
 if __name__ == "__main__":
-    if not MLB_AVAILABLE:
-        print("Error: muscopy_mlbsim package is required for this example.")
-        print("Please install it with: pip install -e ./muscopy-mlbsim")
-        sys.exit(1)
-
     main()

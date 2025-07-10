@@ -20,6 +20,7 @@ Requirements:
 import sys
 import typing
 
+import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
@@ -29,6 +30,9 @@ from tqdm import tqdm
 from muscopy.cfg import ArrayPrecision
 from muscopy.dh import get_spectrum
 from muscopy.odt import ODTConfig, ODTParameters, odt
+
+from ilabvis.mouse_cursor2d import CursorVisualizer
+from ilabvis.slice_visualizer import SlicingVisualizer
 
 # Check if muscopy_mlbsim is available
 try:
@@ -256,7 +260,9 @@ def _generate_holograms(
     odt_params: ODTParameters,
     mlb_params: MLBParameters,
     scattering_potential: Array,
+    offaxis_center: tuple[int, int],
     precision: ArrayPrecision,
+    num_angles: int = 60,
 ) -> tuple[list[Array], list[Array]]:
     r"""Generate hologram sets.
 
@@ -265,11 +271,9 @@ def _generate_holograms(
     tuple[list[Array], list[Array]]
         Target holograms and reference holograms
     """
-    offaxis_center = (100, 100)
-
     print("Setting up hologram generator...")
     hol_gen = HologramSetGenerator(odt_params, mlb_params, offaxis_center, precision)
-    hol_gen.set_illumination_angles(60)  # Fewer angles for faster computation
+    hol_gen.set_illumination_angles(num_angles)  # Fewer angles for faster computation
     hol_gen.set_scattering_potential(scattering_potential)
 
     return hol_gen.generate_hologram_set()
@@ -279,6 +283,7 @@ def _extract_spectra(
     target_holograms: list[Array],
     ref_holograms: list[Array],
     odt_params: ODTParameters,
+    offaxis_center: tuple[int, int],
 ) -> tuple[list[Array], list[Array]]:
     r"""Extract complex field spectra from holograms.
 
@@ -290,7 +295,6 @@ def _extract_spectra(
     print("Extracting complex field spectra...")
     cp_spectrums = []
     ref_cp_spectrums = []
-    offaxis_center = (100, 100)
 
     for target_hol, ref_hol in zip(target_holograms, ref_holograms, strict=True):
         # Convert to complex field spectrum
@@ -319,9 +323,9 @@ def _visualize_results(
     n_reconstructed_np = np.array(n_reconstructed) if hasattr(n_reconstructed, "__array__") else n_reconstructed
 
     # Cross-sections through the center
-    center_z = n_reconstructed_np.shape[0] // 2
+    center_x = n_reconstructed_np.shape[0] // 2
     center_y = n_reconstructed_np.shape[1] // 2
-    center_x = n_reconstructed_np.shape[2] // 2
+    center_z = n_reconstructed_np.shape[2] // 2
 
     # Create figure with subplots
     _, axes = plt.subplots(2, 3, figsize=(15, 10))
@@ -336,7 +340,7 @@ def _visualize_results(
     plt.colorbar(im1, ax=axes[0, 0])
 
     # Cross-sections of reconstruction
-    im2 = axes[0, 1].imshow(n_reconstructed_np[center_z, :, :], cmap="viridis")
+    im2 = axes[0, 1].imshow(n_reconstructed_np[:, :, center_z], cmap="viridis")
     axes[0, 1].set_title("XY Cross-section (Center Z)")
     axes[0, 1].set_xlabel("x [px]")
     axes[0, 1].set_ylabel("y [px]")
@@ -344,26 +348,26 @@ def _visualize_results(
 
     im3 = axes[0, 2].imshow(n_reconstructed_np[:, center_y, :], cmap="viridis")
     axes[0, 2].set_title("XZ Cross-section (Center Y)")
-    axes[0, 2].set_xlabel("x [px]")
-    axes[0, 2].set_ylabel("z [px]")
+    axes[0, 2].set_xlabel("z [px]")
+    axes[0, 2].set_ylabel("x [px]")
     plt.colorbar(im3, ax=axes[0, 2])
 
-    im4 = axes[1, 0].imshow(n_reconstructed_np[:, :, center_x], cmap="viridis")
+    im4 = axes[1, 0].imshow(n_reconstructed_np[center_x, :, :], cmap="viridis")
     axes[1, 0].set_title("YZ Cross-section (Center X)")
-    axes[1, 0].set_xlabel("y [px]")
-    axes[1, 0].set_ylabel("z [px]")
+    axes[1, 0].set_xlabel("z [px]")
+    axes[1, 0].set_ylabel("y [px]")
     plt.colorbar(im4, ax=axes[1, 0])
 
     # Profile through center
-    profile = n_reconstructed_np[center_z, center_y, :]
+    profile = n_reconstructed_np[center_x, center_y, :]
     axes[1, 1].plot(profile)
-    axes[1, 1].set_title("Central Profile (X direction)")
-    axes[1, 1].set_xlabel("x [px]")
+    axes[1, 1].set_title("Central Profile (Z direction)")
+    axes[1, 1].set_xlabel("z [px]")
     axes[1, 1].set_ylabel("Δn")
     axes[1, 1].grid(True)
 
     # Show max projection
-    max_proj = np.max(n_reconstructed_np, axis=0)
+    max_proj = np.max(n_reconstructed_np, axis=2)
     im6 = axes[1, 2].imshow(max_proj, cmap="viridis")
     axes[1, 2].set_title("Maximum Projection (Z axis)")
     axes[1, 2].set_xlabel("x [px]")
@@ -391,6 +395,8 @@ def main() -> None:
 
     # Setup parameters
     odt_params, mlb_params, precision = _setup_parameters()
+    offaxis_center = (200, 200)
+    num_angles = 10  # Number of illumination angles for tomographic acquisition
 
     # Generate sample (sphere)
     print("Generating spherical sample...")
@@ -402,10 +408,14 @@ def main() -> None:
     print(f"Memory usage: {scattering_potential.nbytes / 1024**2:.1f} MB")
 
     # Generate holograms
-    target_holograms, ref_holograms = _generate_holograms(odt_params, mlb_params, scattering_potential, precision)
+    target_holograms, ref_holograms = _generate_holograms(
+        odt_params, mlb_params, scattering_potential, offaxis_center, precision, num_angles
+    )
+    # CursorVisualizer(jax.device_get(target_holograms[0])).run()
 
     # Extract complex field spectra
-    cp_spectrums, ref_cp_spectrums = _extract_spectra(target_holograms, ref_holograms, odt_params)
+    cp_spectrums, ref_cp_spectrums = _extract_spectra(target_holograms, ref_holograms, odt_params, offaxis_center)
+    # CursorVisualizer(jax.device_get(jnp.log(jnp.abs(cp_spectrums[0]) + 1e-12))).run()
 
     # ODT reconstruction
     print("Performing ODT reconstruction...")
@@ -416,7 +426,7 @@ def main() -> None:
         edge_size=0,
     )
 
-    refractive_index, _ = odt(cp_spectrums, ref_cp_spectrums, odt_params, odt_config)
+    refractive_index, synthetic_spectra = odt(cp_spectrums, ref_cp_spectrums, odt_params, odt_config)
 
     # Convert to real refractive index
     n_reconstructed = jnp.real(refractive_index) - odt_params.n_sol

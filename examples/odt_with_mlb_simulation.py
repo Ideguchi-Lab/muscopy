@@ -224,6 +224,7 @@ def _setup_parameters() -> tuple[ODTParameters, MLBParameters, ArrayPrecision]:
     tuple[ODTParameters, MLBParameters, ArrayPrecision]
         ODT parameters, MLB parameters, and array precision settings
     """
+    # Use 32-bit precision to avoid JAX complex128 warnings (complex64 is sufficient)
     precision = ArrayPrecision(int_length=16, float_length=32)
 
     # ODT parameters
@@ -252,7 +253,7 @@ def _setup_parameters() -> tuple[ODTParameters, MLBParameters, ArrayPrecision]:
     return odt_params, mlb_params, precision
 
 
-def _generate_holograms(
+def _generate_holograms(  # noqa: PLR0913, PLR0917
     odt_params: ODTParameters,
     mlb_params: MLBParameters,
     scattering_potential: Array,
@@ -383,7 +384,7 @@ def _visualize_results(
     print(f"Recovery ratio: {n_reconstructed_np.max() / delta_n:.2f}")
 
 
-def visualize_synthetic_spectra_profiles(synthetic_spectra: Array) -> None:
+def visualize_synthetic_spectra_profiles(synthetic_spectra: Array) -> None:  # noqa: PLR0914, PLR0915
     """Visualize XY and XZ profiles of synthetic_spectra with log scale.
 
     Parameters
@@ -400,18 +401,8 @@ def visualize_synthetic_spectra_profiles(synthetic_spectra: Array) -> None:
     # Get array dimensions and print for debugging
     print(f"Synthetic spectra shape: {log_abs_spectra.shape}")
 
-    if len(log_abs_spectra.shape) == 3:
-        nx, ny, nz = log_abs_spectra.shape
-        angle_data = log_abs_spectra
-    elif len(log_abs_spectra.shape) == 4:
-        num_angles, nx, ny, nz = log_abs_spectra.shape
-        # Select middle angle for visualization
-        middle_angle_idx = num_angles // 2
-        angle_data = log_abs_spectra[middle_angle_idx]
-        print(f"Using angle index {middle_angle_idx} out of {num_angles} angles")
-    else:
-        msg = f"Unexpected synthetic_spectra shape: {log_abs_spectra.shape}. Expected 3D or 4D array."
-        raise ValueError(msg)
+    nx, ny, nz = log_abs_spectra.shape
+    angle_data = log_abs_spectra
     center_x = nx // 2
     center_y = ny // 2
     center_z = nz // 2
@@ -478,14 +469,10 @@ def visualize_synthetic_spectra_profiles(synthetic_spectra: Array) -> None:
     print(f"Data type: {spectra_np.dtype}")
     print(f"Log|amplitude| range: [{log_abs_spectra.min():.4f}, {log_abs_spectra.max():.4f}]")
     print(f"Original |amplitude| range: [{np.abs(spectra_np).min():.2e}, {np.abs(spectra_np).max():.2e}]")
-    if len(log_abs_spectra.shape) == 4:
-        print(f"Number of angles: {log_abs_spectra.shape[0]}")
-        print(f"3D volume shape: {log_abs_spectra.shape[1:]}")
-    else:
-        print(f"3D volume shape: {log_abs_spectra.shape}")
+    print(f"3D volume shape: {log_abs_spectra.shape}")
 
 
-def main() -> None:
+def main() -> None:  # noqa: PLR0914
     """Demonstrate ODT with MLB simulation."""
     if not MLB_AVAILABLE:
         print("This example requires muscopy_mlbsim package.")
@@ -509,11 +496,9 @@ def main() -> None:
     target_holograms, ref_holograms = _generate_holograms(
         odt_params, mlb_params, scattering_potential, offaxis_center, precision, num_angles
     )
-    # CursorVisualizer(jax.device_get(target_holograms[0])).run()
 
     # Extract complex field spectra
     cp_spectrums, ref_cp_spectrums = _extract_spectra(target_holograms, ref_holograms, odt_params, offaxis_center)
-    # CursorVisualizer(jax.device_get(jnp.log(jnp.abs(cp_spectrums[0]) + 1e-12))).run()
 
     # ODT reconstruction
     print("Performing ODT reconstruction...")

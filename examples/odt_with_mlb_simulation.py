@@ -1,9 +1,9 @@
 """
 Demonstration of ODT reconstruction using MLB simulation
-=======================================================
+========================================================
 
 This example demonstrates how to use the `muscopy.odt` function combined with
-`muscopy_mlbsim` to perform Optical Diffraction Tomography (ODT) reconstruction
+muscopy_mlbsim to perform Optical Diffraction Tomography (ODT) reconstruction
 from synthetic holograms generated using Multi-layer Born (MLB) forward simulation.
 
 The workflow includes:

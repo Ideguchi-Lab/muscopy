@@ -83,7 +83,7 @@ class HologramSetGenerator:
 
         Parameters
         ----------
-        potential : `Array`
+        potential : Array
             3D scattering potential array
         """
         self.mlb_forward.set_scattering_potential(potential)
@@ -96,7 +96,7 @@ class HologramSetGenerator:
 
         Returns
         -------
-        `tuple`\[`list`\[`Array`\], `list`\[`Array`\]\]
+        tuple[list[Array], list[Array]]
             Target holograms and reference holograms
 
         Raises
@@ -176,7 +176,7 @@ def generate_sphere_potential(
 
     Returns
     -------
-    `Array`
+    Array
         3D scattering potential array
     """
     if precision is None:
@@ -221,7 +221,7 @@ def _setup_parameters() -> tuple[ODTParameters, MLBParameters, ArrayPrecision]:
 
     Returns
     -------
-    `tuple`\[`ODTParameters`, `MLBParameters`, `ArrayPrecision`\]
+    tuple[ODTParameters, MLBParameters, ArrayPrecision]
         ODT parameters, MLB parameters, and array precision settings
     """
     precision = ArrayPrecision(int_length=16, float_length=32)
@@ -262,7 +262,7 @@ def _generate_holograms(
 
     Returns
     -------
-    `tuple`\[`list`\[`Array`\], `list`\[`Array`\]\]
+    tuple[list[Array], list[Array]]
         Target holograms and reference holograms
     """
     offaxis_center = (100, 100)
@@ -284,7 +284,7 @@ def _extract_spectra(
 
     Returns
     -------
-    `tuple`\[`list`\[`Array`\], `list`\[`Array`\]\]
+    tuple[list[Array], list[Array]]
         Complex field spectra and reference spectra
     """
     print("Extracting complex field spectra...")

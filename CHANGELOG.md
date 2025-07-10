@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+---
+
+## Version 0.5.2 [2025-07-10]
+
 ### Added
 
 - ODT difference calculation functionality [[#48](https://github.com/Ideguchi-Lab/muscopy/issues/48)]

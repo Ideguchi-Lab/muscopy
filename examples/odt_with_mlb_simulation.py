@@ -20,7 +20,6 @@ Requirements:
 import sys
 import typing
 
-import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
@@ -30,9 +29,6 @@ from tqdm import tqdm
 from muscopy.cfg import ArrayPrecision
 from muscopy.dh import get_spectrum
 from muscopy.odt import ODTConfig, ODTParameters, odt
-
-from ilabvis.mouse_cursor2d import CursorVisualizer
-from ilabvis.slice_visualizer import SlicingVisualizer
 
 # Check if muscopy_mlbsim is available
 try:
@@ -387,6 +383,108 @@ def _visualize_results(
     print(f"Recovery ratio: {n_reconstructed_np.max() / delta_n:.2f}")
 
 
+def visualize_synthetic_spectra_profiles(synthetic_spectra: Array) -> None:
+    """Visualize XY and XZ profiles of synthetic_spectra with log scale.
+
+    Parameters
+    ----------
+    synthetic_spectra : Array
+        3D complex array with shape (x, y, z)
+    """
+    print("Visualizing synthetic spectra profiles...")
+
+    # Convert to numpy for matplotlib and take log of absolute values
+    spectra_np = np.array(synthetic_spectra) if hasattr(synthetic_spectra, "__array__") else synthetic_spectra
+    log_abs_spectra = np.log(np.abs(spectra_np) + 1e-12)  # Add small value to avoid log(0)
+
+    # Get array dimensions and print for debugging
+    print(f"Synthetic spectra shape: {log_abs_spectra.shape}")
+
+    if len(log_abs_spectra.shape) == 3:
+        nx, ny, nz = log_abs_spectra.shape
+        angle_data = log_abs_spectra
+    elif len(log_abs_spectra.shape) == 4:
+        num_angles, nx, ny, nz = log_abs_spectra.shape
+        # Select middle angle for visualization
+        middle_angle_idx = num_angles // 2
+        angle_data = log_abs_spectra[middle_angle_idx]
+        print(f"Using angle index {middle_angle_idx} out of {num_angles} angles")
+    else:
+        msg = f"Unexpected synthetic_spectra shape: {log_abs_spectra.shape}. Expected 3D or 4D array."
+        raise ValueError(msg)
+    center_x = nx // 2
+    center_y = ny // 2
+    center_z = nz // 2
+
+    # Create figure with subplots
+    _, axes = plt.subplots(2, 3, figsize=(15, 10))
+
+    # XY profile (center Z)
+    xy_profile = angle_data[:, :, center_z]
+    im1 = axes[0, 0].imshow(xy_profile, cmap="viridis", aspect="equal")
+    axes[0, 0].set_title(f"XY Profile (Z={center_z})")
+    axes[0, 0].set_xlabel("Y [px]")
+    axes[0, 0].set_ylabel("X [px]")
+    plt.colorbar(im1, ax=axes[0, 0], label="log|amplitude|")
+
+    # XZ profile (center Y)
+    xz_profile = angle_data[:, center_y, :]
+    im2 = axes[0, 1].imshow(xz_profile, cmap="viridis", aspect="equal")
+    axes[0, 1].set_title(f"XZ Profile (Y={center_y})")
+    axes[0, 1].set_xlabel("Z [px]")
+    axes[0, 1].set_ylabel("X [px]")
+    plt.colorbar(im2, ax=axes[0, 1], label="log|amplitude|")
+
+    # YZ profile (center X)
+    yz_profile = angle_data[center_x, :, :]
+    im3 = axes[0, 2].imshow(yz_profile, cmap="viridis", aspect="equal")
+    axes[0, 2].set_title(f"YZ Profile (X={center_x})")
+    axes[0, 2].set_xlabel("Z [px]")
+    axes[0, 2].set_ylabel("Y [px]")
+    plt.colorbar(im3, ax=axes[0, 2], label="log|amplitude|")
+
+    # Line profiles
+    # X direction through center
+    x_line = angle_data[:, center_y, center_z]
+    axes[1, 0].plot(x_line)
+    axes[1, 0].set_title("X-direction Profile")
+    axes[1, 0].set_xlabel("X [px]")
+    axes[1, 0].set_ylabel("log|amplitude|")
+    axes[1, 0].grid(True)
+
+    # Y direction through center
+    y_line = angle_data[center_x, :, center_z]
+    axes[1, 1].plot(y_line)
+    axes[1, 1].set_title("Y-direction Profile")
+    axes[1, 1].set_xlabel("Y [px]")
+    axes[1, 1].set_ylabel("log|amplitude|")
+    axes[1, 1].grid(True)
+
+    # Z direction through center
+    z_line = angle_data[center_x, center_y, :]
+    axes[1, 2].plot(z_line)
+    axes[1, 2].set_title("Z-direction Profile")
+    axes[1, 2].set_xlabel("Z [px]")
+    axes[1, 2].set_ylabel("log|amplitude|")
+    axes[1, 2].grid(True)
+
+    plt.tight_layout()
+    plt.savefig("synthetic_spectra_profiles.png", dpi=150, bbox_inches="tight")
+    plt.show()
+
+    # Print summary
+    print("\nSynthetic Spectra Summary:")
+    print(f"Shape: {spectra_np.shape}")
+    print(f"Data type: {spectra_np.dtype}")
+    print(f"Log|amplitude| range: [{log_abs_spectra.min():.4f}, {log_abs_spectra.max():.4f}]")
+    print(f"Original |amplitude| range: [{np.abs(spectra_np).min():.2e}, {np.abs(spectra_np).max():.2e}]")
+    if len(log_abs_spectra.shape) == 4:
+        print(f"Number of angles: {log_abs_spectra.shape[0]}")
+        print(f"3D volume shape: {log_abs_spectra.shape[1:]}")
+    else:
+        print(f"3D volume shape: {log_abs_spectra.shape}")
+
+
 def main() -> None:
     """Demonstrate ODT with MLB simulation."""
     if not MLB_AVAILABLE:
@@ -420,7 +518,7 @@ def main() -> None:
     # ODT reconstruction
     print("Performing ODT reconstruction...")
     odt_config = ODTConfig(
-        approx_type="Born",
+        approx_type="Rytov",
         hermite_symmetry=True,
         precision=precision,
         edge_size=0,
@@ -433,6 +531,9 @@ def main() -> None:
 
     # Visualization
     _visualize_results(n_reconstructed, target_holograms, delta_n)
+
+    # Visualize synthetic spectra profiles
+    visualize_synthetic_spectra_profiles(synthetic_spectra)
 
 
 if __name__ == "__main__":

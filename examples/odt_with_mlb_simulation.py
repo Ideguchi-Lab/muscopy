@@ -17,7 +17,8 @@ Requirements:
 - GPU support (JAX) is recommended for faster computation
 """
 
-import sys
+# pyright: reportPossiblyUnboundVariable=false, reportInvalidTypeForm=false
+
 import typing
 
 import jax.numpy as jnp
@@ -44,7 +45,11 @@ except ImportError:
     MLB_AVAILABLE = False
     print("Warning: muscopy_mlbsim is not installed. This example requires muscopy_mlbsim.")
     print("Skipping example execution.")
-    sys.exit(0)  # Exit gracefully if muscopy_mlbsim is not available
+    HologramGenerator: typing.Any = None  # type: ignore[no-redef]
+    MLBForward: typing.Any = None  # type: ignore[no-redef]
+    MLBParameters: typing.Any = None  # type: ignore[no-redef]
+    get_oblique_wave_fft: typing.Any = None  # type: ignore[no-redef]
+    get_scatter_potential: typing.Any = None  # type: ignore[no-redef]
 
 
 class HologramSetGenerator:

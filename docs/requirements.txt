@@ -1,5 +1,5 @@
-sphinx
-sphinx_gallery
+sphinx >= 7.4.0
+sphinx_gallery >= 0.17.0
 sphinx-rtd-theme
 scikit-image
 

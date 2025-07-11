@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- specify version requirements for documentation dependencies [[#67](https://github.com/Ideguchi-Lab/muscopy/issues/67)]
+
 ---
 
 ## Version 0.5.2 [2025-07-10]

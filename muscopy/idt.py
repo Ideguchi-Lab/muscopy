@@ -21,7 +21,30 @@ from muscopy.dh import MuParameters, make_disk
 from muscopy.cfg import OffsetRegions, ArrayPrecision
 from muscopy.qpi_utils import unwrap_phase
 
+"""
+Outline
+-------
+Step 1: Collect intensity images under different angles
+	I_list = [I_1, I_2, …]
+	illum_angles = [ui_1, ui_2,…]
+Step 2: Subtract background and normalize
+	g_l = (I_l - I_background) / I_background
+	g_list = [g_1, g_2, …]
+Step 3: Fourier Transform each image
+	g_tilde_l = fft2(g_l)
+	g_tilde_list = [g_tilde_1, …]
+Step 4: Build Transfer Functions, depends on slice depth (z) and the angel of illumination
+	H_Re[l, m, x, y] #phase
+	H_Im[l, m, x, y] #absorption
+Step 5: Solve inverse problem
+	Δε_Re[m] = ifft( weighted_sum_over_l( H_Re_conj × g̃ ) / (|H_Re|² + α) )
+	Δε_Im[m] = same thing but with H_Im and β
+Slice by slice reconstruct 
+	Δε_Re[x, y, z] 
+	Δε_Im[x, y, z]
+Step 6: Convert permittivity to refractive index
 
+"""
 @dataclasses.dataclass
 class IDTParameters(MuParameters):
     """

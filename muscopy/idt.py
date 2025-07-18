@@ -72,7 +72,12 @@ class IDTParameters(MuParameters):
         transverse frequency
     η(ui) : `int`
         axial spatial frequency
-        
+    L : `int`
+        number of illumination angles
+    M : `int`
+        number of slices
+    
+
     """
 
     na_illumination: float = 1.0
@@ -125,8 +130,25 @@ def I(Ii, Iis, Isi):
     """
     return(Ii + Iis + Isi)
 
+#L: number of images, M: number of slices, img_size_px: image size
+Δε_Re = []
+Δε_Im = []
 
-H_Re = jnp.zeros((L, M, Nx, Ny), dtype=complex)
+for m in range(M):  # for each depth slice
+
+ for l in range(L):  # for each illumination angle
+     H_Re_lm = H_Re[l, m]  # transfer function for phase
+    H_Im_lm = H_Im[l, m]  # transfer function for absorption
+ 
+    g_tilde_l = g_tilde[l]  # FFT of normalized intensity image l
+    H_Re_conj = jnp.conj(H_Re_lm)
+    H_Im_conj = jnp.conj(H_Im_lm)
+
+    # Regularization terms 
+    alpha = 1e-3
+    beta = 1e-3
+
+H_Re = jnp.zeros((L, M, img_size_px), dtype=complex)
 H_Im = jnp.zeros_like(H_Re)
 
 for l, ui in enumerate(illum_angles):

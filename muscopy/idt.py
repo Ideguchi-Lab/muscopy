@@ -1,7 +1,5 @@
 """Intensity Diffraction Tomography (IDT) module."""
 
-#Start IDT psuedocode
-
 #Download packages like
 
 """import dataclasses
@@ -64,6 +62,17 @@ class IDTParameters(MuParameters):
         Refractive index of the solution   
     na_illumination : `float`
         Maximum illumination numerical aperture
+    I_list : `tuple`
+        Difference intensity images
+    illum_angles : `tuple`
+        The different angles of the intensity image
+    S_i : `float`
+        Intensity of the ith LED
+    ui : `int`
+        transverse frequency
+    η(ui) : `int`
+        axial spatial frequency
+        
     """
 
     na_illumination: float = 1.0
@@ -101,6 +110,21 @@ for I in I_list:
     store(g) or g_list.append(g)
 
 
+def Ii(S_i, P):
+    """
+    defines the incident intensity
+    """
+    return(S_i * (|P| ** 2))
+
+
+
+def I(Ii, Iis, Isi):
+    """
+    The intensity interference information betweent the scattered and unscattered
+     fields
+    """
+    return(Ii + Iis + Isi)
+
 
 H_Re = jnp.zeros((L, M, Nx, Ny), dtype=complex)
 H_Im = jnp.zeros_like(H_Re)
@@ -119,12 +143,15 @@ g_tilde = jnp.fft.fft2(g_list, norm"ortho")
 arr = jnp.Array([])
 arr_conj = arr.conjugate()
 arr_conj = jnp.conj(arr)
+H_Re_conj = H_Re.conjugate()
+H_Im_conj = H_Im.conjugate()
+
 
 #deconvolve_slice (H_Re, H_Im, g_tilde, alpha, beta)
 for each slice m:
-    A = ∑|H_Re| ** 2 + α * ∑|H_Im| ** 2 + β - cross_terms
-    Δε_Re[m] = jnp.fft.ifft2 ( (1/A) * [sum(H_Re_conj *  g_tilde) - cross_term] )
-    Δε_Im[m] = jnp.fft.ifft2 ( (1/A) * [sum(H_Im_conj * g_tilde) - cross_term] )
+    A = sum(|H_Re| ** 2 + α) * sum(|H_Im| ** 2 + β) - ((sum(H_Re * H_Im_conj))*(sum(H_Re_conj*H_Im)))
+    Δε_Re[m] = jnp.fft.ifft2 ( (1/A) * [sum(H_Re_conj *  g_tilde) - (sum(H_Re_conj * H_Im) * (sum(H_Im_conj * g_tilde)))] )
+    Δε_Im[m] = jnp.fft.ifft2 ( (1/A) * [sum(H_Im_conj * g_tilde) - (sum(H_Re * H_Im_conj) * (sum(H_Re_conj * g_tilde)))] )
 #loop over all m slices
 
 

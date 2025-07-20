@@ -1,5 +1,14 @@
 """Intensity Diffraction Tomography (IDT) module."""
 
+#Download packages like
+
+"""import dataclasses
+from typing import TYPE_CHECKING
+
+import jax.numpy as jnp
+from jax import Array
+from tqdm import tqdm
+and Muscopy"""
 import dataclasses
 import math
 from typing import TYPE_CHECKING, Sequence
@@ -86,9 +95,9 @@ class IDTParameters:
     I_list: tuple
     illum_angles: tuple
     LED_i: float
-    k: float = 2 * math.pi / wavelength_m
+    k: 2 * math.pi / wavelength_m
     ui: int
-    η: float = (k ** 2 - abs(ui) ** 2) ** (1 / 2)
+    η: (k ** 2 - |ui| ** 2) ** (1/2)
     L: int
     M: int
 
@@ -96,33 +105,10 @@ class IDTParameters:
 #load images
 
 
-#convert all I_m to float32 and normalize each image
-#Pupil function - P(u)
-def make_pupil(Nx, Ny, NA, wavelength_m, px_size_m) -> Array:
-    """
-    Defines P(u) the pupil in equations.
-    Represents the slightly shifted window each LED angle gives shifted into Fourier space.
-    """
-    kx = jnp.fft.fftfreq(Nx, Ny, d=px_size_m)
-    ky = jnp.fft.fftfreq(Nx, Ny, d=px_size_m)
-    KX, KY = jnp.meshgrid(kx, ky, indexing='ij')
-    freq_radius = jnp.sqrt(KX**2 + KY**2)
-    freq_per_px = 1 / (px_size_m * Nx)
-
-    cutoff = NA / wavelength_m / freq_per_px
-    P = (freq_radius <= cutoff).astype(jnp.float32)
-    return P
-    #offaixs shift of pupil is detmerined by ui
-
-    #a pair of shifted pupils shiftig to opposite directions are super-imposed...
-    #in the TFs (twin-image holography) illustrated by computed phase and absorption TFs
-
-
 ##################################################
 # Step 1: Collect Intensity Images
 ##################################################
 
-# which can be generated from Multi-layer Born simulator or experiments
 data_path = "path_to_data"
 bg_path = "path_to_background"
 
@@ -134,7 +120,7 @@ Ii = jnp.load(bg_path)
 # Step 2: Subtract and Normalize
 ###################################################
 
-def compute_g_list(I_list: Sequence[Array], Ii:jnp.ndarray, normalize: bool = True) -> list[Array]:
+def g_list(I_list: Sequence[Array], Ii:jnp.ndarray, normalize: bool = True) -> list[Array]:
     """Computes list of intensity constrasts g_l for each illumination angle.
 
     Parameters
@@ -157,38 +143,43 @@ def compute_g_list(I_list: Sequence[Array], Ii:jnp.ndarray, normalize: bool = Tr
             g_list.append(g)
     return g_list
 
-
-g_list = compute_g_list(I_list, Ii, normalize=True)
-
-##################################################
-# Step 3: Fourier Transform each image
-##################################################
-
-def fourier_transform(g_list: Sequence[Array]) -> list[Array]:
+#convert all I_m to float32 and normalize each image
+#Pupil function - P(u)
+def make_pupil(Nx, Ny, NA, wavelength_m, px_size_m):
     """
-    Computes the Fourier Transform of each g_l in g_list.
-
-    Parameters
-    ----------
-    g_list : list of [Nx, Ny] arrays
-        Intensity differences per angle (spatial domain)
-
-    Returns
-    -------
-    g_tilde_list : list of [Nx, Ny] arrays
-        Fourier Transforms of g_l (frequency domain)
+    Defines P(u) the pupil in equations.
+    Represents the slightly shifted window each LED angle gives shifted into Fourier space.
     """
-    g_tilde_list = []
-    for g_l in g_list:
-        g_tilde = jnp.fft.fft2(g_l, norm="ortho")  # FFT with orthonormal normalization
-        g_tilde_list.append(g_tilde)
-    return g_tilde_list
+    kx = jnp.fft.fftfreq(Nx, Ny, d=px_size_m)
+    ky = jnp.fft.fftfreq(Nx, Ny, d=px_size_m)
+    KX, KY = jnp.meshgrid(kx, ky, indexing='ij')
+    freq_radius = jnp.sqrt(KX**2 + KY**2)
+    freq_per_px = 1 / (px_size_m * Nx)
 
-g_tilde_list = fourier_transform(g_list)
+    cutoff = NA / wavelength_m / freq_per_px
+    P = (freq_radius <= cutoff).astype(jnp.float32)
+    return P
+    #offaixs shift of pupil is detmerined by ui
 
-##################################################
-# Step 4: Build Transfer Functions
-##################################################
+    #a pair of shifted pupils shiftig to opposite directions are super-imposed...
+    #in the TFs (twin-image holography) illustrated by computed phase and absorption TFs
+
+
+
+def Ii(LED_i, P):
+    """
+    defines the incident intensity
+    """
+    return(LED_i * (| make_pupil() | ** 2))
+
+
+
+def I(Ii, Iis, Isi):
+    """
+    The intensity interference information betweent the scattered and unscattered
+     fields
+    """
+    return(Ii + Iis + Isi)
 
 # build_transfer_functions():
 #L: number of images, M: number of slices, Nx, Ny: image size

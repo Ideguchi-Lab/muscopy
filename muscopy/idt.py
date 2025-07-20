@@ -21,6 +21,7 @@ from __future__ import annotations
 from muscopy.dh import MuParameters, make_disk
 from muscopy.cfg import OffsetRegions, ArrayPrecision
 from muscopy.qpi_utils import unwrap_phase
+from muscopy.dir_parser import numpy_parser
 
 """
 Outline
@@ -40,8 +41,8 @@ Step 4: Build Transfer Functions, depends on slice depth (z) and the angel of il
 Step 5: Solve inverse problem
 	Δε_Re[m] = ifft( weighted_sum_over_l( H_Re_conj * g̃ ) / (|H_Re|² + α) )
 	Δε_Im[m] = same thing but with H_Im and β
-Slice by slice reconstruct 
-	Δε_Re[x, y, z] 
+Slice by slice reconstruct
+	Δε_Re[x, y, z]
 	Δε_Im[x, y, z]
 Step 6: Convert permittivity to refractive index
 
@@ -60,11 +61,11 @@ class IDTParameters:
     Nx : `int`
         Size of the image in pixels. We assume square image and = Ny
     Ny : `int`
-        Size of the image in pixelss. 
+        Size of the image in pixelss.
     px_size_m : `float`
          Pixel size in meters
     n_sol : `float`
-        Refractive index of the solution   
+        Refractive index of the solution
     na_illumination : `float`
         Maximum illumination numerical aperture
     I_list : `tuple`
@@ -98,23 +99,30 @@ class IDTParameters:
     ui: int
     η: (k ** 2 - |ui| ** 2) ** (1/2)
     L: int
-    M: int 
+    M: int
 
 #ValueError Nx=Ny must be true
 #load images
-"""
-Load intensity images for m = 1 to m
-    Load I_m (Nx,Ny under lth illumination)
-"""
-#generate I_list: [I_1, I_2, ...I_m]
-for I in I_list:
-    Ii = estimate_background(I)
-   
 
-def g_list(I_list: Sequence[jnp.ndarray], Ii:jnp.ndarray, normalize: bool = True) -> list[jnp.ndarray]
-    """
-    Computes list of intensity constrasts g_l for each illumination angle.
-    
+
+##################################################
+# Step 1: Collect Intensity Images
+##################################################
+
+data_path = "path_to_data"
+bg_path = "path_to_background"
+
+data_images_path = numpy_parser(data_path)
+I_list = [jnp.load(image_path) for image_path in data_images_path]
+Ii = jnp.load(bg_path)
+
+##################################################
+# Step 2: Subtract and Normalize
+###################################################
+
+def g_list(I_list: Sequence[Array], Ii:jnp.ndarray, normalize: bool = True) -> list[Array]:
+    """Computes list of intensity constrasts g_l for each illumination angle.
+
     Parameters
     ----------
     I_list : list of [Nx, Ny] arrays of Intensity images
@@ -122,16 +130,16 @@ def g_list(I_list: Sequence[jnp.ndarray], Ii:jnp.ndarray, normalize: bool = True
     Ii : background intensity image for subtraction
     normalize : bool
         whether or not to normalize
-        
+
     Returns
     -------
     g_list : list of [Nx, Ny] arrays
         Intensity different or contrast for each angle.
     """
-    g_list[]
+    g_list = []
     for I_m in I_list:
         if normalize:
-            g = (I - Ii) / Ii
+            g = (I_m - Ii) / Ii
             g_list.append(g)
     return g_list
 
@@ -183,7 +191,7 @@ def g_tilde_l(g_l):
 
 def reconstruct_spectrum(g_list, H_list):
     """
-    Reconstructs the 3D scattering spectrum Δε from g_list and H_list 
+    Reconstructs the 3D scattering spectrum Δε from g_list and H_list
 
     Parameters
     ----------
@@ -203,7 +211,7 @@ for l in range(L):  # for each illumination angle
     H_Re_conj = jnp.conj(H_Re_lm)
     H_Im_conj = jnp.conj(H_Im_lm)
 
-    # Regularization terms 
+    # Regularization terms
     alpha = 1e-3
     beta = 1e-3
     #axial direction regulation term is 4 * na / wavelength_m

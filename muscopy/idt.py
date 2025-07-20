@@ -192,13 +192,10 @@ g_tilde_list = fourier_transform(g_list)
 
 # build_transfer_functions():
 #L: number of images, M: number of slices, Nx, Ny: image size
-Δε_Re = []
-Δε_Im = []
+delta_ε_Re = []
+delta_ε_Im = []
 
-def g_tilde_l(g_l):
-    return jnp.fft.fft2(g_l, norm"ortho")
-
-def reconstruct_spectrum(g_list, H_list):
+def reconstruct_spectrum(g_list: Sequence[Array], H_list: Sequence[Array]) -> Array:
     """
     Reconstructs the 3D scattering spectrum Δε from g_list and H_list
 
@@ -214,28 +211,28 @@ def reconstruct_spectrum(g_list, H_list):
     delta_eps_k : 3D array (Nx, Ny, Nz)
         Estimated scattering potential in Fourier space
     """
-for m in range(M):  # for each depth slice
+    assert len(g_list) == len(H_list)
+    l_angles = len(g_list)
 
-for l in range(L):  # for each illumination angle
-    H_Re_conj = jnp.conj(H_Re_lm)
-    H_Im_conj = jnp.conj(H_Im_lm)
+    #get shape
+    Nx, Ny = g_list[0].shape
+    Nz = H_list[0].shape[2]
 
-    # Regularization terms
-    alpha = 1e-3
-    beta = 1e-3
-    #axial direction regulation term is 4 * na / wavelength_m
-    #axial elongation in Fourier is up to (2 - 2 * (1 - na **2) ** (1/2)) / wavelength_m
+    for m in range(M):  # for each depth slice
 
-assert len(g_list) == len(H_list)
-l_angles = len(g_list)
+        for l in range(L):  # for each illumination angle
+            H_Re_conj = jnp.conj(H_Re_lm)
+            H_Im_conj = jnp.conj(H_Im_lm)
 
-#get shape
-Nx, Ny = g_list[0].shape
-Nz = H_list[0].shape[2]
+        # Regularization terms
+        alpha = 1e-3
+        beta = 1e-3
+        #axial direction regulation term is 4 * na / wavelength_m
+        #axial elongation in Fourier is up to (2 - 2 * (1 - na **2) ** (1/2)) / wavelength_m
+
 
 def transfer_functions(kx, ky, kz, illum_angles, k) -> list[jnp.ndarray]
-    """
-       Generate a list of 3D transfer functions H_l(kx, ky, kz)
+    """Generate a list of 3D transfer functions H_l(kx, ky, kz)
     for each illumination angle.
 
     Parameters
@@ -255,7 +252,7 @@ def transfer_functions(kx, ky, kz, illum_angles, k) -> list[jnp.ndarray]
     H_list = []
     for (kx, ky) in illum_angles:
         #scattered wavevector z-component
-        kz = jnp.sqrt (k ** 2 - kx ** 2 - ky** 2)
+        kz = jnp.sqrt(k ** 2 - kx ** 2 - ky** 2)
         H_l = (1 / (2 * kz)) * jnp.exp(-1j * kz)
         H_l = k ** 2 / (2 * kz) * make_pupil
         H_list.append(H_l)

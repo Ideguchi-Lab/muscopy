@@ -149,7 +149,7 @@ Ii = jnp.load(bg_path)
 
 
 def compute_g_list(I_list: Sequence[Array], Ii: jnp.ndarray, normalize: bool = True) -> list[Array]:
-    """Computes list of intensity constrasts g_l for each illumination angle.
+    """Compute list of intensity constrasts g_l for each illumination angle.
 
     Parameters
     ----------
@@ -181,7 +181,7 @@ g_list = compute_g_list(I_list, Ii, normalize=True)
 
 def fourier_transform(g_list: Sequence[Array]) -> list[Array]:
     """
-    Computes the Fourier Transform of each g_l in g_list.
+    Compute the Fourier Transform of each g_l in g_list.
 
     Parameters
     ----------
@@ -208,7 +208,7 @@ g_tilde_list = fourier_transform(g_list)
 
 
 def make_green_func(params: IDTParameters, u_shift: tuple[float, float], z: float) -> Array:
-    """Generates the Green's function for a given illumination angle.
+    """Generate the Green's function for a given illumination angle.
 
     Parameters
     ----------

@@ -38,6 +38,8 @@ Slice by slice reconstruct
 Step 6: Convert permittivity to refractive index
 
 """
+
+
 @dataclasses.dataclass
 class IDTParameters:
     """
@@ -76,6 +78,7 @@ class IDTParameters:
     M : `int`
         number of slices
     """
+
     na: float
     wavelength_m: float
     Nx: int
@@ -88,7 +91,7 @@ class IDTParameters:
     LED_i: float
     k: float = 2 * math.pi / wavelength_m
     ui: int
-    η: float = (k ** 2 - abs(ui) ** 2) ** (1 / 2)
+    η: float = (k**2 - abs(ui) ** 2) ** (1 / 2)
     L: int
     M: int
 
@@ -102,12 +105,12 @@ class IDTParameters:
         return 1 / (self.px_size_m * self.Nx)
 
 
-#ValueError Nx=Ny must be true
-#load images
+# ValueError Nx=Ny must be true
+# load images
 
 
-#convert all I_m to float32 and normalize each image
-#Pupil function - P(u)
+# convert all I_m to float32 and normalize each image
+# Pupil function - P(u)
 def make_pupil(Nx, Ny, NA, wavelength_m, px_size_m) -> Array:
     """
     Defines P(u) the pupil in equations.
@@ -115,17 +118,17 @@ def make_pupil(Nx, Ny, NA, wavelength_m, px_size_m) -> Array:
     """
     kx = jnp.fft.fftfreq(Nx, Ny, d=px_size_m)
     ky = jnp.fft.fftfreq(Nx, Ny, d=px_size_m)
-    KX, KY = jnp.meshgrid(kx, ky, indexing='ij')
+    KX, KY = jnp.meshgrid(kx, ky, indexing="ij")
     freq_radius = jnp.sqrt(KX**2 + KY**2)
     freq_per_px = 1 / (px_size_m * Nx)
 
     cutoff = NA / wavelength_m / freq_per_px
     P = (freq_radius <= cutoff).astype(jnp.float32)
     return P
-    #offaixs shift of pupil is detmerined by ui
+    # offaixs shift of pupil is detmerined by ui
 
-    #a pair of shifted pupils shiftig to opposite directions are super-imposed...
-    #in the TFs (twin-image holography) illustrated by computed phase and absorption TFs
+    # a pair of shifted pupils shiftig to opposite directions are super-imposed...
+    # in the TFs (twin-image holography) illustrated by computed phase and absorption TFs
 
 
 ##################################################
@@ -144,7 +147,8 @@ Ii = jnp.load(bg_path)
 # Step 2: Subtract and Normalize
 ###################################################
 
-def compute_g_list(I_list: Sequence[Array], Ii:jnp.ndarray, normalize: bool = True) -> list[Array]:
+
+def compute_g_list(I_list: Sequence[Array], Ii: jnp.ndarray, normalize: bool = True) -> list[Array]:
     """Computes list of intensity constrasts g_l for each illumination angle.
 
     Parameters
@@ -174,6 +178,7 @@ g_list = compute_g_list(I_list, Ii, normalize=True)
 # Step 3: Fourier Transform each image
 ##################################################
 
+
 def fourier_transform(g_list: Sequence[Array]) -> list[Array]:
     """
     Computes the Fourier Transform of each g_l in g_list.
@@ -193,6 +198,7 @@ def fourier_transform(g_list: Sequence[Array]) -> list[Array]:
         g_tilde = jnp.fft.fft2(g_l, norm="ortho")  # FFT with orthonormal normalization
         g_tilde_list.append(g_tilde)
     return g_tilde_list
+
 
 g_tilde_list = fourier_transform(g_list)
 
@@ -221,11 +227,11 @@ def make_green_func(params: IDTParameters, u_shift: tuple[float, float], z: floa
     xx, yy = jnp.meshgrid(
         jnp.arange(-params.aperturesize_px, params.aperturesize_px),
         jnp.arange(-params.aperturesize_px, params.aperturesize_px),
-        indexing='ij'
+        indexing="ij",
     )
     ux = xx + u_shift[0]
     uy = yy + u_shift[1]
-    uz_squared = params.k ** 2 - ux ** 2 - uy ** 2
+    uz_squared = params.k**2 - ux**2 - uy**2
     mask = uz_squared > 0  # Ensure kz is real
     uz = jnp.sqrt(uz_squared)
     uz = uz * mask  # Set imaginary parts to zero where uz_squared < 0
@@ -237,124 +243,47 @@ def make_pupil(params: IDTParameters, u_shift: tuple[float, float]) -> Array:
     return make_disk(u_shift, params.aperturesize_px / 2, 2 * params.aperturesize_px + 1)
 
 
-def transfer_func_re(params: IDTParameters, u_illumination: tuple[float, float], z: float, incident_intensity: float) -> Array:
+def transfer_func_re(
+    params: IDTParameters, u_illumination: tuple[float, float], z: float, incident_intensity: float
+) -> Array:
     u_ill_x, u_ill_y = u_illumination
-    u_ill_z = (params.k ** 2 - u_ill_x ** 2 - u_ill_y ** 2) ** 0.5
-    first_term = jnp.conjugate(make_pupil(params, (-u_ill_x, -u_ill_y))) * make_green_func(params, (-u_ill_x, -u_ill_y), z) * jnp.exp(-1j * u_ill_z * z) * make_pupil(params, (-u_ill_x, -u_ill_y)) # maybe first pupil is not correct
-    second_term = make_pupil(params, (-u_ill_x, -u_ill_y)) * jnp.conjugate(make_green_func(params, (u_ill_x, u_ill_y), z)) * jnp.exp(1j * u_ill_z * z) * jnp.transpose(jnp.conjugate(make_pupil(params, (u_ill_x, u_ill_y))))
+    u_ill_z = (params.k**2 - u_ill_x**2 - u_ill_y**2) ** 0.5
+    first_term = (
+        jnp.conjugate(make_pupil(params, (-u_ill_x, -u_ill_y)))
+        * make_green_func(params, (-u_ill_x, -u_ill_y), z)
+        * jnp.exp(-1j * u_ill_z * z)
+        * make_pupil(params, (-u_ill_x, -u_ill_y))
+    )  # maybe first pupil is not correct
+    second_term = (
+        make_pupil(params, (-u_ill_x, -u_ill_y))
+        * jnp.conjugate(make_green_func(params, (u_ill_x, u_ill_y), z))
+        * jnp.exp(1j * u_ill_z * z)
+        * jnp.transpose(jnp.conjugate(make_pupil(params, (u_ill_x, u_ill_y))))
+    )
 
     return 1j * params.k**2 / 2 * incident_intensity * (first_term - second_term)
 
 
-def transfer_func_im(params: IDTParameters, u_illumination: tuple[float, float], z: float, incident_intensity: float) -> Array:
+def transfer_func_im(
+    params: IDTParameters, u_illumination: tuple[float, float], z: float, incident_intensity: float
+) -> Array:
     u_ill_x, u_ill_y = u_illumination
-    u_ill_z = (params.k ** 2 - u_ill_x ** 2 - u_ill_y ** 2) ** 0.5
-    first_term = jnp.conjugate(make_pupil(params, (-u_ill_x, -u_ill_y))) * make_green_func(params, (-u_ill_x, -u_ill_y), z) * jnp.exp(-1j * u_ill_z * z) * make_pupil(params, (-u_ill_x, -u_ill_y))
-    second_term = make_pupil(params, (-u_ill_x, -u_ill_y)) * jnp.conjugate(make_green_func(params, (u_ill_x, u_ill_y), z)) * jnp.exp(1j * u_ill_z * z) * jnp.transpose(jnp.conjugate(make_pupil(params, (u_ill_x, u_ill_y))))
+    u_ill_z = (params.k**2 - u_ill_x**2 - u_ill_y**2) ** 0.5
+    first_term = (
+        jnp.conjugate(make_pupil(params, (-u_ill_x, -u_ill_y)))
+        * make_green_func(params, (-u_ill_x, -u_ill_y), z)
+        * jnp.exp(-1j * u_ill_z * z)
+        * make_pupil(params, (-u_ill_x, -u_ill_y))
+    )
+    second_term = (
+        make_pupil(params, (-u_ill_x, -u_ill_y))
+        * jnp.conjugate(make_green_func(params, (u_ill_x, u_ill_y), z))
+        * jnp.exp(1j * u_ill_z * z)
+        * jnp.transpose(jnp.conjugate(make_pupil(params, (u_ill_x, u_ill_y))))
+    )
 
-    return -params.k**2 / 2 * incident_intensity * (first_term + second_term)
+    return -(params.k**2) / 2 * incident_intensity * (first_term + second_term)
 
-# build_transfer_functions():
-#L: number of images, M: number of slices, Nx, Ny: image size
-delta_ε_Re = []
-delta_ε_Im = []
-
-def reconstruct_spectrum(g_list: Sequence[Array], H_list: Sequence[Array]) -> Array:
-    """
-    Reconstructs the 3D scattering spectrum Δε from g_list and H_list
-
-    Parameters
-    ----------
-    g_list : list of 2D arrays (Nx, Ny)
-        Measured intensity differences per angle (spatial domain)
-    H_list : list of 3D arrays (Nx, Ny, Nz)
-        Transfer functions for each angle (frequency domain)
-
-    Returns
-    -------
-    delta_eps_k : 3D array (Nx, Ny, Nz)
-        Estimated scattering potential in Fourier space
-    """
-    assert len(g_list) == len(H_list)
-    l_angles = len(g_list)
-
-    #get shape
-    Nx, Ny = g_list[0].shape
-    Nz = H_list[0].shape[2]
-
-    for m in range(M):  # for each depth slice
-
-        for l in range(L):  # for each illumination angle
-            H_Re_conj = jnp.conj(H_Re_lm)
-            H_Im_conj = jnp.conj(H_Im_lm)
-
-        # Regularization terms
-        alpha = 1e-3
-        beta = 1e-3
-        #axial direction regulation term is 4 * na / wavelength_m
-        #axial elongation in Fourier is up to (2 - 2 * (1 - na **2) ** (1/2)) / wavelength_m
-
-
-def transfer_functions(kx, ky, kz, illum_angles, k) -> list[jnp.ndarray]
-    """Generate a list of 3D transfer functions H_l(kx, ky, kz)
-    for each illumination angle.
-
-    Parameters
-    ----------
-    kx, ky, kz : 3D arrays
-        Meshgrids of Fourier space coordinates
-    illumination_vectors : list of tuples (kx, ky)
-        Incident angle vectors in k-space
-    k : `float`
-        Wavenumber = 2 * math.pi / wavelength_m
-
-    Returns
-    -------
-    H_list : list of 3D arrays
-        Transfer function for each illumination angle
-    """
-    H_list = []
-    for (kx, ky) in illum_angles:
-        #scattered wavevector z-component
-        kz = jnp.sqrt(k ** 2 - kx ** 2 - ky** 2)
-        H_l = (1 / (2 * kz)) * jnp.exp(-1j * kz)
-        H_l = k ** 2 / (2 * kz) * make_pupil
-        H_list.append(H_l)
-    return H_list
-
-H_Re = jnp.zeros((L, M, Nx, Ny), dtype=complex)
-H_Im = jnp.zeros_like(H_Re)
-
-for l, tran_freq in enumerate(illum_angles):
-    for m , z in enumerate(z_vals) for each slice z:
-        H_Re[l, m] = compute H_Re(u, z | ui) using Eq. (5);
-        H_Im[l, m] = compute H_Im(u, z | ui) using Eq. (6);
-        normalize Hs by dividing by Ii
-        store TFs
-
-arr = jnp.Array([])
-arr_conj = arr.conjugate()
-arr_conj = jnp.conj(arr)
-H_Re_conj = H_Re.conjugate()
-H_Im_conj = H_Im.conjugate()
-
-
-#deconvolve_slice (H_Re, H_Im, g_tilde, alpha, beta)
-for each slice m:
-    A = sum(|H_Re| ** 2 + α) * sum(|H_Im| ** 2 + β) - ((sum(H_Re * H_Im_conj))*(sum(H_Re_conj*H_Im)))
-    Δε_Re[m] = jnp.fft.ifft2 ( (1/A) * [sum(H_Re_conj *  g_tilde) - (sum(H_Re_conj * H_Im) * (sum(H_Im_conj * g_tilde)))] )
-    Δε_Im[m] = jnp.fft.ifft2 ( (1/A) * [sum(H_Im_conj * g_tilde) - (sum(H_Re * H_Im_conj) * (sum(H_Re_conj * g_tilde)))] )
-#loop over all m slices
-
-
-Δε_Re_3D = jnp.stack(Δε_Re[m] for all m, axis=-1)
-Δε_Im_3D = jnp.stack(Δε_Im[m] for all m, axis=-1)
-
-n_sol = 1.33
-n = jnp.sqrt(n_sol ** 2 + Δε_Re_3D(x, y, z))
-#n(x, y, z) = sqrt(ε₀ + Δε_Re_3D(x, y, z))  relation between refractive index and permittivity contrast
-
-#generate_pupil(params) and apply_apodization()
 
 """
 Output

@@ -201,7 +201,7 @@ g_tilde_list = fourier_transform(g_list)
 ##################################################
 
 
-def make_green_func(params: IDTParameters, u_shift: tuple[float, float]) -> Array:
+def make_green_func(params: IDTParameters, u_shift: tuple[float, float], z: float) -> Array:
     """Generates the Green's function for a given illumination angle.
 
     Parameters
@@ -210,6 +210,8 @@ def make_green_func(params: IDTParameters, u_shift: tuple[float, float]) -> Arra
         The parameters for the IDT model.
     u_shift : tuple[float, float]
         The illumination angle in the x and y directions.
+    z : float
+        The axial position in the z direction.
 
     Returns
     -------
@@ -228,17 +230,29 @@ def make_green_func(params: IDTParameters, u_shift: tuple[float, float]) -> Arra
     uz = jnp.sqrt(uz_squared)
     uz = uz * mask  # Set imaginary parts to zero where uz_squared < 0
 
-    return jnp.exp(-1j * uz) / uz
+    return jnp.exp(-1j * uz * z) / uz
 
 
-def make_pupil(params: IDTParameters, )
+def make_pupil(params: IDTParameters, u_shift: tuple[float, float]) -> Array:
+    return make_disk(u_shift, params.aperturesize_px / 2, 2 * params.aperturesize_px + 1)
 
 
-def transfer_func_re(params: IDTParameters, incident_intensity: float) -> Array:
-    tf_re = jnp.zeros((2 * params.aperturesize_px + 1, 2 * params.aperturesize_px + 1))
+def transfer_func_re(params: IDTParameters, u_illumination: tuple[float, float], z: float, incident_intensity: float) -> Array:
+    u_ill_x, u_ill_y = u_illumination
+    u_ill_z = (params.k ** 2 - u_ill_x ** 2 - u_ill_y ** 2) ** 0.5
+    first_term = jnp.conjugate(make_pupil(params, (-u_ill_x, -u_ill_y))) * make_green_func(params, (-u_ill_x, -u_ill_y), z) * jnp.exp(-1j * u_ill_z * z) * make_pupil(params, (-u_ill_x, -u_ill_y)) # maybe first pupil is not correct
+    second_term = make_pupil(params, (-u_ill_x, -u_ill_y)) * jnp.conjugate(make_green_func(params, (u_ill_x, u_ill_y), z)) * jnp.exp(1j * u_ill_z * z) * jnp.transpose(jnp.conjugate(make_pupil(params, (u_ill_x, u_ill_y))))
 
-    return tf_re
+    return 1j * params.k**2 / 2 * incident_intensity * (first_term - second_term)
 
+
+def transfer_func_im(params: IDTParameters, u_illumination: tuple[float, float], z: float, incident_intensity: float) -> Array:
+    u_ill_x, u_ill_y = u_illumination
+    u_ill_z = (params.k ** 2 - u_ill_x ** 2 - u_ill_y ** 2) ** 0.5
+    first_term = jnp.conjugate(make_pupil(params, (-u_ill_x, -u_ill_y))) * make_green_func(params, (-u_ill_x, -u_ill_y), z) * jnp.exp(-1j * u_ill_z * z) * make_pupil(params, (-u_ill_x, -u_ill_y))
+    second_term = make_pupil(params, (-u_ill_x, -u_ill_y)) * jnp.conjugate(make_green_func(params, (u_ill_x, u_ill_y), z)) * jnp.exp(1j * u_ill_z * z) * jnp.transpose(jnp.conjugate(make_pupil(params, (u_ill_x, u_ill_y))))
+
+    return -params.k**2 / 2 * incident_intensity * (first_term + second_term)
 
 # build_transfer_functions():
 #L: number of images, M: number of slices, Nx, Ny: image size

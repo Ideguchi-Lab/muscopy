@@ -92,6 +92,16 @@ class IDTParameters:
     L: int
     M: int
 
+    @property
+    def aperturesize_px(self) -> int:
+        return 2 * round(self.na / self.wavelength_m / self.freq_per_px) + 1
+
+    @property
+    def freq_per_px(self) -> float:
+        """Frequency per pixel in Fourier space."""
+        return 1 / (self.px_size_m * self.Nx)
+
+
 #ValueError Nx=Ny must be true
 #load images
 
@@ -189,6 +199,46 @@ g_tilde_list = fourier_transform(g_list)
 ##################################################
 # Step 4: Build Transfer Functions
 ##################################################
+
+
+def make_green_func(params: IDTParameters, u_shift: tuple[float, float]) -> Array:
+    """Generates the Green's function for a given illumination angle.
+
+    Parameters
+    ----------
+    params : IDTParameters
+        The parameters for the IDT model.
+    u_shift : tuple[float, float]
+        The illumination angle in the x and y directions.
+
+    Returns
+    -------
+    Array
+        The Green's function evaluated at the given illumination angle.
+    """
+    xx, yy = jnp.meshgrid(
+        jnp.arange(-params.aperturesize_px, params.aperturesize_px),
+        jnp.arange(-params.aperturesize_px, params.aperturesize_px),
+        indexing='ij'
+    )
+    ux = xx + u_shift[0]
+    uy = yy + u_shift[1]
+    uz_squared = params.k ** 2 - ux ** 2 - uy ** 2
+    mask = uz_squared > 0  # Ensure kz is real
+    uz = jnp.sqrt(uz_squared)
+    uz = uz * mask  # Set imaginary parts to zero where uz_squared < 0
+
+    return jnp.exp(-1j * uz) / uz
+
+
+def make_pupil(params: IDTParameters, )
+
+
+def transfer_func_re(params: IDTParameters, incident_intensity: float) -> Array:
+    tf_re = jnp.zeros((2 * params.aperturesize_px + 1, 2 * params.aperturesize_px + 1))
+
+    return tf_re
+
 
 # build_transfer_functions():
 #L: number of images, M: number of slices, Nx, Ny: image size

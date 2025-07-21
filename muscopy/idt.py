@@ -285,6 +285,78 @@ def transfer_func_im(
     return -(params.k**2) / 2 * incident_intensity * (first_term + second_term)
 
 
+##################################################
+# Step 5: Solve Inverse Problem
+##################################################
+
+
+def compute_permitivity(
+    params: IDTParameters,
+    g_tilde_list: Sequence[Array],
+    u_illumination_list: Sequence[tuple[float, float]],
+    alpha: float = 1e-6,
+    beta: float = 1e-6,
+) -> tuple[Array, Array]:
+    """Compute the permittivity changes Δε_Re and Δε_Im for each slice.
+
+    Parameters
+    ----------
+    params : IDTParameters
+        The parameters for the IDT model.
+    g_tilde_list : list of [Nx, Ny] arrays
+        Fourier Transforms of the intensity differences per angle.
+    u_illumination_list : list of tuples
+        The illumination angles for each image.
+    alpha : float, optional
+        Regularization parameter for the real part of the permittivity, by default 1e-6
+    beta : float, optional
+        Regularization parameter for the imaginary part of the permittivity, by default 1e-6
+
+    Returns
+    -------
+    tuple[Array, Array]
+        The computed permittivity changes Δε_Re and Δε_Im for each slice.
+    """
+    h_normalized_re = jnp.stack(
+        [transfer_func_re(params, u_illumination, z, params.LED_i) for u_illumination in u_illumination_list], axis=-1
+    )
+    h_normalized_im = jnp.stack(
+        [transfer_func_im(params, u_illumination, z, params.LED_i) for u_illumination in u_illumination_list], axis=-1
+    )
+
+    g_tilde = jnp.stack(g_tilde_list, axis=-1)
+
+    sum_h_normalized_re = jnp.sum(jnp.abs(h_normalized_re) ** 2, axis=-1)
+    sum_h_normalized_im = jnp.sum(jnp.abs(h_normalized_im) ** 2, axis=-1)
+
+    eps_re_first_term = (sum_h_normalized_im + beta) * jnp.sum(jnp.conjugate(h_normalized_re) * g_tilde, axis=-1)
+    eps_re_second_term = jnp.sum(jnp.conjugate(h_normalized_re) * h_normalized_im, axis=-1) * jnp.sum(
+        jnp.conjugate(h_normalized_im) * g_tilde, axis=-1
+    )
+
+    eps_im_first_term = (sum_h_normalized_re + alpha) * jnp.sum(jnp.conjugate(h_normalized_im) * g_tilde, axis=-1)
+    eps_im_second_term = jnp.sum(jnp.conjugate(h_normalized_im) * h_normalized_re, axis=-1) * jnp.sum(
+        jnp.conjugate(h_normalized_re) * g_tilde, axis=-1
+    )
+
+    scale_factor = (h_normalized_re + alpha) * (h_normalized_im + beta) - jnp.sum(
+        jnp.conjugate(h_normalized_re) * h_normalized_im, axis=-1
+    ) * jnp.sum(jnp.conjugate(h_normalized_im) * h_normalized_re, axis=-1)
+
+    eps_re = (eps_re_first_term - eps_re_second_term) / scale_factor
+    eps_im = (eps_im_first_term - eps_im_second_term) / scale_factor
+
+    return eps_re, eps_im
+
+
+##################################################
+# Step 6: Convert Permittivity to Refractive Index
+##################################################
+
+
+def convert_to_refractive_index(eps_re: Array, eps_im: Array, n_sol: float) -> tuple[Array, Array]: ...
+
+
 """
 Output
 ------

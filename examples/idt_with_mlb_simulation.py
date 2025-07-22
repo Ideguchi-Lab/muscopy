@@ -199,7 +199,13 @@ def _setup_parameters() -> tuple[IDTParameters, MLBParameters, ArrayPrecision]:
     # ODT parameters
     print("Setting ODT parameters...")
     idt_params = IDTParameters(
-        # TODO: EDIT
+        na=0.6,
+        wavelength_m=532e-9,  # 532 nm
+        img_size_px=512,
+        px_size_m=6.5e-6,  # 6.5 μm pixel size
+        n_sol=1.33,
+        na_illumination=0.6,
+        num_z_slices=256,
     )
 
     # MLB simulation parameters

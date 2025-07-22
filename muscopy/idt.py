@@ -94,6 +94,7 @@ class IDTParameters:
     η: float = (k**2 - abs(ui) ** 2) ** (1 / 2)
     L: int
     M: int
+    
 
     @property
     def aperturesize_px(self) -> int:
@@ -107,7 +108,9 @@ class IDTParameters:
 
 # ValueError Nx=Ny must be true
 # load images
-
+    if Nx != Ny:
+        msg = "img must have square dimensions (Nx = Ny)"
+        raise ValueError(msg) 
 
 # convert all I_m to float32 and normalize each image
 # Pupil function - P(u)
@@ -348,20 +351,42 @@ def compute_permitivity(
 
     return eps_re, eps_im
 
+eps_re, eps_im  = compute_permitivity()
 
 ##################################################
 # Step 6: Convert Permittivity to Refractive Index
 ##################################################
 
 
-def convert_to_refractive_index(eps_re: Array, eps_im: Array, n_sol: float) -> tuple[Array, Array]: ...
+def convert_to_refractive_index(eps_re: Array, eps_im: Array, n_sol: float) -> tuple[Array, Array]:
+    """Convert the difference in permittivity to difference in refractive index.
+    
+    Parameters
+    ----------
+    eps_re : `Array`
+        Real part of perimittivity 
+    eps_im : `Array`
+        Imaginary part of permittivity
+    n_col : `float`
+        Refractive index of the solution
+
+    Returns
+    -------
+    n_complex : tuple[Array, Array]
+        Real and Imaginary components of the refractive index difference
+
+    """
+    
+    eps_complex = eps_re + 1j * eps_im
+
+    n_complex = jnp.sqrt(eps_complex)
+    n_complex = n_complex * n_sol
+
+    return jnp.real(n_complex), jnp.imag(n_complex)
+
+n_real, n_imag = convert_to_refractive_index(eps_re, eps_im, n_sol)
+
+print(n_real)
+print(n_imag)
 
 
-"""
-Output
-------
-
-Δε_Re_3D: phase
-Δε_Im_3D: absorption
-n(x,y, z): refractive index map
-"""

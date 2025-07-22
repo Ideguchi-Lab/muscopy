@@ -202,7 +202,7 @@ def _setup_parameters() -> tuple[IDTParameters, MLBParameters, ArrayPrecision]:
         na=0.6,
         wavelength_m=532e-9,  # 532 nm
         img_size_px=512,
-        px_size_m=6.5e-6,  # 6.5 μm pixel size
+        px_size_m=3.45e-6 * 3 / 180,
         n_sol=1.33,
         na_illumination=0.6,
         num_z_slices=256,

@@ -196,7 +196,7 @@ def _setup_parameters() -> tuple[IDTParameters, MLBParameters, ArrayPrecision]:
     # Use 32-bit precision to avoid JAX complex128 warnings (complex64 is sufficient)
     precision = ArrayPrecision(int_length=16, float_length=32)
 
-    # ODT parameters
+    # IDT parameters
     print("Setting ODT parameters...")
     idt_params = IDTParameters(
         na=0.6,

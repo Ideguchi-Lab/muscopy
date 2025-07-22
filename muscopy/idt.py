@@ -2,17 +2,14 @@
 
 import dataclasses
 import math
-from typing import TYPE_CHECKING, Sequence
+from typing import Sequence
 import jax.numpy as jnp
 from jax import Array
-from tqdm import tqdm
 from __future__ import annotations
 
 
-from muscopy.dh import MuParameters, make_disk
+from muscopy.dh import make_disk
 from muscopy.odt import ODTParameters
-from muscopy.cfg import OffsetRegions, ArrayPrecision
-from muscopy.qpi_utils import unwrap_phase
 from muscopy.dir_parser import numpy_parser
 
 """

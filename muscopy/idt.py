@@ -1,14 +1,5 @@
 """Intensity Diffraction Tomography (IDT) module."""
 
-#Download packages like
-
-"""import dataclasses
-from typing import TYPE_CHECKING
-
-import jax.numpy as jnp
-from jax import Array
-from tqdm import tqdm
-and Muscopy"""
 import dataclasses
 import math
 from typing import TYPE_CHECKING, Sequence
@@ -21,6 +12,7 @@ from __future__ import annotations
 from muscopy.dh import MuParameters, make_disk
 from muscopy.cfg import OffsetRegions, ArrayPrecision
 from muscopy.qpi_utils import unwrap_phase
+from muscopy.dir_parser import numpy_parser
 
 """
 Outline
@@ -40,12 +32,14 @@ Step 4: Build Transfer Functions, depends on slice depth (z) and the angel of il
 Step 5: Solve inverse problem
 	Δε_Re[m] = ifft( weighted_sum_over_l( H_Re_conj * g̃ ) / (|H_Re|² + α) )
 	Δε_Im[m] = same thing but with H_Im and β
-Slice by slice reconstruct 
-	Δε_Re[x, y, z] 
+Slice by slice reconstruct
+	Δε_Re[x, y, z]
 	Δε_Im[x, y, z]
 Step 6: Convert permittivity to refractive index
 
 """
+
+
 @dataclasses.dataclass
 class IDTParameters:
     """
@@ -60,11 +54,11 @@ class IDTParameters:
     Nx : `int`
         Size of the image in pixels. We assume square image and = Ny
     Ny : `int`
-        Size of the image in pixelss. 
+        Size of the image in pixelss.
     px_size_m : `float`
          Pixel size in meters
     n_sol : `float`
-        Refractive index of the solution   
+        Refractive index of the solution
     na_illumination : `float`
         Maximum illumination numerical aperture
     I_list : `tuple`
@@ -84,6 +78,7 @@ class IDTParameters:
     M : `int`
         number of slices
     """
+
     na: float
     wavelength_m: float
     Nx: int
@@ -94,27 +89,68 @@ class IDTParameters:
     I_list: tuple
     illum_angles: tuple
     LED_i: float
-    k: 2 * math.pi / wavelength_m
+    k: float = 2 * math.pi / wavelength_m
     ui: int
-    η: (k ** 2 - |ui| ** 2) ** (1/2)
+    η: float = (k**2 - abs(ui) ** 2) ** (1 / 2)
     L: int
-    M: int 
+    M: int
 
-#ValueError Nx=Ny must be true
-#load images
-"""
-Load intensity images for m = 1 to m
-    Load I_m (Nx,Ny under lth illumination)
-"""
-#generate I_list: [I_1, I_2, ...I_m]
-for I in I_list:
-    Ii = estimate_background(I)
-   
+    @property
+    def aperturesize_px(self) -> int:
+        return 2 * round(self.na / self.wavelength_m / self.freq_per_px) + 1
 
-def g_list(I_list: Sequence[jnp.ndarray], Ii:jnp.ndarray, normalize: bool = True) -> list[jnp.ndarray]
+    @property
+    def freq_per_px(self) -> float:
+        """Frequency per pixel in Fourier space."""
+        return 1 / (self.px_size_m * self.Nx)
+
+
+# ValueError Nx=Ny must be true
+# load images
+
+
+# convert all I_m to float32 and normalize each image
+# Pupil function - P(u)
+def make_pupil(Nx, Ny, NA, wavelength_m, px_size_m) -> Array:
     """
-    Computes list of intensity constrasts g_l for each illumination angle.
-    
+    Defines P(u) the pupil in equations.
+    Represents the slightly shifted window each LED angle gives shifted into Fourier space.
+    """
+    kx = jnp.fft.fftfreq(Nx, Ny, d=px_size_m)
+    ky = jnp.fft.fftfreq(Nx, Ny, d=px_size_m)
+    KX, KY = jnp.meshgrid(kx, ky, indexing="ij")
+    freq_radius = jnp.sqrt(KX**2 + KY**2)
+    freq_per_px = 1 / (px_size_m * Nx)
+
+    cutoff = NA / wavelength_m / freq_per_px
+    P = (freq_radius <= cutoff).astype(jnp.float32)
+    return P
+    # offaixs shift of pupil is detmerined by ui
+
+    # a pair of shifted pupils shiftig to opposite directions are super-imposed...
+    # in the TFs (twin-image holography) illustrated by computed phase and absorption TFs
+
+
+##################################################
+# Step 1: Collect Intensity Images
+##################################################
+
+# which can be generated from Multi-layer Born simulator or experiments
+data_path = "path_to_data"
+bg_path = "path_to_background"
+
+data_images_path = numpy_parser(data_path)
+I_list = [jnp.load(image_path) for image_path in data_images_path]
+Ii = jnp.load(bg_path)
+
+##################################################
+# Step 2: Subtract and Normalize
+###################################################
+
+
+def compute_g_list(I_list: Sequence[Array], Ii: jnp.ndarray, normalize: bool = True) -> list[Array]:
+    """Compute list of intensity constrasts g_l for each illumination angle.
+
     Parameters
     ----------
     I_list : list of [Nx, Ny] arrays of Intensity images
@@ -122,161 +158,204 @@ def g_list(I_list: Sequence[jnp.ndarray], Ii:jnp.ndarray, normalize: bool = True
     Ii : background intensity image for subtraction
     normalize : bool
         whether or not to normalize
-        
+
     Returns
     -------
     g_list : list of [Nx, Ny] arrays
         Intensity different or contrast for each angle.
     """
-    g_list[]
+    g_list = []
     for I_m in I_list:
         if normalize:
-            g = (I - Ii) / Ii
+            g = (I_m - Ii) / Ii
             g_list.append(g)
     return g_list
 
-#convert all I_m to float32 and normalize each image
-#Pupil function - P(u)
-def make_pupil(Nx, Ny, NA, wavelength_m, px_size_m):
+
+g_list = compute_g_list(I_list, Ii, normalize=True)
+
+##################################################
+# Step 3: Fourier Transform each image
+##################################################
+
+
+def fourier_transform(g_list: Sequence[Array]) -> list[Array]:
     """
-    Defines P(u) the pupil in equations.
-    Represents the slightly shifted window each LED angle gives shifted into Fourier space.
-    """
-    kx = jnp.fft.fftfreq(Nx, Ny, d=px_size_m)
-    ky = jnp.fft.fftfreq(Nx, Ny, d=px_size_m)
-    KX, KY = jnp.meshgrid(kx, ky, indexing='ij')
-    freq_radius = jnp.sqrt(KX**2 + KY**2)
-    freq_per_px = 1 / (px_size_m * Nx)
-
-    cutoff = NA / wavelength_m / freq_per_px
-    P = (freq_radius <= cutoff).astype(jnp.float32)
-    return P
-    #offaixs shift of pupil is detmerined by ui
-
-    #a pair of shifted pupils shiftig to opposite directions are super-imposed...
-    #in the TFs (twin-image holography) illustrated by computed phase and absorption TFs
-
-
-
-def Ii(LED_i, P):
-    """
-    defines the incident intensity
-    """
-    return(LED_i * (| make_pupil() | ** 2))
-
-
-
-def I(Ii, Iis, Isi):
-    """
-    The intensity interference information betweent the scattered and unscattered
-     fields
-    """
-    return(Ii + Iis + Isi)
-
-# build_transfer_functions():
-#L: number of images, M: number of slices, Nx, Ny: image size
-Δε_Re = []
-Δε_Im = []
-
-def g_tilde_l(g_l):
-    return jnp.fft.fft2(g_l, norm"ortho")
-
-def reconstruct_spectrum(g_list, H_list):
-    """
-    Reconstructs the 3D scattering spectrum Δε from g_list and H_list 
+    Compute the Fourier Transform of each g_l in g_list.
 
     Parameters
     ----------
-    g_list : list of 2D arrays (Nx, Ny)
-        Measured intensity differences per angle (spatial domain)
-    H_list : list of 3D arrays (Nx, Ny, Nz)
-        Transfer functions for each angle (frequency domain)
+    g_list : list of [Nx, Ny] arrays
+        Intensity differences per angle (spatial domain)
 
     Returns
     -------
-    delta_eps_k : 3D array (Nx, Ny, Nz)
-        Estimated scattering potential in Fourier space
+    g_tilde_list : list of [Nx, Ny] arrays
+        Fourier Transforms of g_l (frequency domain)
     """
-for m in range(M):  # for each depth slice
+    g_tilde_list = []
+    for g_l in g_list:
+        g_tilde = jnp.fft.fft2(g_l, norm="ortho")  # FFT with orthonormal normalization
+        g_tilde_list.append(g_tilde)
+    return g_tilde_list
 
-for l in range(L):  # for each illumination angle
-    H_Re_conj = jnp.conj(H_Re_lm)
-    H_Im_conj = jnp.conj(H_Im_lm)
 
-    # Regularization terms 
-    alpha = 1e-3
-    beta = 1e-3
-    #axial direction regulation term is 4 * na / wavelength_m
-    #axial elongation in Fourier is up to (2 - 2 * (1 - na **2) ** (1/2)) / wavelength_m
+g_tilde_list = fourier_transform(g_list)
 
-assert len(g_list) == len(H_list)
-l_angles = len(g_list)
+##################################################
+# Step 4: Build Transfer Functions
+##################################################
 
-#get shape
-Nx, Ny = g_list[0].shape
-Nz = H_list[0].shape[2]
 
-def transfer_functions(kx, ky, kz, illum_angles, k) -> list[jnp.ndarray]
-    """
-       Generate a list of 3D transfer functions H_l(kx, ky, kz)
-    for each illumination angle.
+def make_green_func(params: IDTParameters, u_shift: tuple[float, float], z: float) -> Array:
+    """Generate the Green's function for a given illumination angle.
 
     Parameters
     ----------
-    kx, ky, kz : 3D arrays
-        Meshgrids of Fourier space coordinates
-    illumination_vectors : list of tuples (kx, ky)
-        Incident angle vectors in k-space
-    k : `float`
-        Wavenumber = 2 * math.pi / wavelength_m
+    params : IDTParameters
+        The parameters for the IDT model.
+    u_shift : tuple[float, float]
+        The illumination angle in the x and y directions.
+    z : float
+        The axial position in the z direction.
 
     Returns
     -------
-    H_list : list of 3D arrays
-        Transfer function for each illumination angle
+    Array
+        The Green's function evaluated at the given illumination angle.
     """
-    H_list = []
-    for (kx, ky) in illum_angles:
-        #scattered wavevector z-component
-        kz = jnp.sqrt (k ** 2 - kx ** 2 - ky** 2)
-        H_l = (1 / (2 * kz)) * jnp.exp(-1j * kz)
-        H_l = k ** 2 / (2 * kz) * make_pupil
-        H_list.append(H_l)
-    return H_list
+    xx, yy = jnp.meshgrid(
+        jnp.arange(-params.aperturesize_px, params.aperturesize_px),
+        jnp.arange(-params.aperturesize_px, params.aperturesize_px),
+        indexing="ij",
+    )
+    ux = xx + u_shift[0]
+    uy = yy + u_shift[1]
+    uz_squared = params.k**2 - ux**2 - uy**2
+    mask = uz_squared > 0  # Ensure kz is real
+    uz = jnp.sqrt(uz_squared)
+    uz = uz * mask  # Set imaginary parts to zero where uz_squared < 0
 
-H_Re = jnp.zeros((L, M, Nx, Ny), dtype=complex)
-H_Im = jnp.zeros_like(H_Re)
-
-for l, tran_freq in enumerate(illum_angles):
-    for m , z in enumerate(z_vals) for each slice z:
-        H_Re[l, m] = compute H_Re(u, z | ui) using Eq. (5);
-        H_Im[l, m] = compute H_Im(u, z | ui) using Eq. (6);
-        normalize Hs by dividing by Ii
-        store TFs
-
-arr = jnp.Array([])
-arr_conj = arr.conjugate()
-arr_conj = jnp.conj(arr)
-H_Re_conj = H_Re.conjugate()
-H_Im_conj = H_Im.conjugate()
+    return jnp.exp(-1j * uz * z) / uz
 
 
-#deconvolve_slice (H_Re, H_Im, g_tilde, alpha, beta)
-for each slice m:
-    A = sum(|H_Re| ** 2 + α) * sum(|H_Im| ** 2 + β) - ((sum(H_Re * H_Im_conj))*(sum(H_Re_conj*H_Im)))
-    Δε_Re[m] = jnp.fft.ifft2 ( (1/A) * [sum(H_Re_conj *  g_tilde) - (sum(H_Re_conj * H_Im) * (sum(H_Im_conj * g_tilde)))] )
-    Δε_Im[m] = jnp.fft.ifft2 ( (1/A) * [sum(H_Im_conj * g_tilde) - (sum(H_Re * H_Im_conj) * (sum(H_Re_conj * g_tilde)))] )
-#loop over all m slices
+def make_pupil_func(params: IDTParameters, u_shift: tuple[float, float]) -> Array:
+    return make_disk(u_shift, params.aperturesize_px / 2, 2 * params.aperturesize_px + 1)
 
 
-Δε_Re_3D = jnp.stack(Δε_Re[m] for all m, axis=-1)
-Δε_Im_3D = jnp.stack(Δε_Im[m] for all m, axis=-1)
+def transfer_func_re(
+    params: IDTParameters, u_illumination: tuple[float, float], z: float, incident_intensity: float
+) -> Array:
+    u_ill_x, u_ill_y = u_illumination
+    u_ill_z = (params.k**2 - u_ill_x**2 - u_ill_y**2) ** 0.5
+    first_term = (
+        jnp.conjugate(make_pupil_func(params, (-u_ill_x, -u_ill_y)))
+        * make_green_func(params, (-u_ill_x, -u_ill_y), z)
+        * jnp.exp(-1j * u_ill_z * z)
+        * make_pupil_func(params, (-u_ill_x, -u_ill_y))
+    )  # maybe first pupil is not correct
+    second_term = (
+        make_pupil_func(params, (-u_ill_x, -u_ill_y))
+        * jnp.conjugate(make_green_func(params, (u_ill_x, u_ill_y), z))
+        * jnp.exp(1j * u_ill_z * z)
+        * jnp.transpose(jnp.conjugate(make_pupil_func(params, (u_ill_x, u_ill_y))))
+    )
 
-n_sol = 1.33
-n = jnp.sqrt(n_sol ** 2 + Δε_Re_3D(x, y, z))
-#n(x, y, z) = sqrt(ε₀ + Δε_Re_3D(x, y, z))  relation between refractive index and permittivity contrast
+    return 1j * params.k**2 / 2 * incident_intensity * (first_term - second_term)
 
-#generate_pupil(params) and apply_apodization()
+
+def transfer_func_im(
+    params: IDTParameters, u_illumination: tuple[float, float], z: float, incident_intensity: float
+) -> Array:
+    u_ill_x, u_ill_y = u_illumination
+    u_ill_z = (params.k**2 - u_ill_x**2 - u_ill_y**2) ** 0.5
+    first_term = (
+        jnp.conjugate(make_pupil_func(params, (-u_ill_x, -u_ill_y)))
+        * make_green_func(params, (-u_ill_x, -u_ill_y), z)
+        * jnp.exp(-1j * u_ill_z * z)
+        * make_pupil_func(params, (-u_ill_x, -u_ill_y))
+    )
+    second_term = (
+        make_pupil_func(params, (-u_ill_x, -u_ill_y))
+        * jnp.conjugate(make_green_func(params, (u_ill_x, u_ill_y), z))
+        * jnp.exp(1j * u_ill_z * z)
+        * jnp.transpose(jnp.conjugate(make_pupil_func(params, (u_ill_x, u_ill_y))))
+    )
+
+    return -(params.k**2) / 2 * incident_intensity * (first_term + second_term)
+
+
+##################################################
+# Step 5: Solve Inverse Problem
+##################################################
+
+
+def compute_permitivity(
+    params: IDTParameters,
+    g_tilde_list: Sequence[Array],
+    u_illumination_list: Sequence[tuple[float, float]],
+    alpha: float = 1e-6,
+    beta: float = 1e-6,
+) -> tuple[Array, Array]:
+    """Compute the permittivity changes Δε_Re and Δε_Im for each slice.
+
+    Parameters
+    ----------
+    params : IDTParameters
+        The parameters for the IDT model.
+    g_tilde_list : list of [Nx, Ny] arrays
+        Fourier Transforms of the intensity differences per angle.
+    u_illumination_list : list of tuples
+        The illumination angles for each image.
+    alpha : float, optional
+        Regularization parameter for the real part of the permittivity, by default 1e-6
+    beta : float, optional
+        Regularization parameter for the imaginary part of the permittivity, by default 1e-6
+
+    Returns
+    -------
+    tuple[Array, Array]
+        The computed permittivity changes Δε_Re and Δε_Im for each slice.
+    """
+    h_normalized_re = jnp.stack(
+        [transfer_func_re(params, u_illumination, z, params.LED_i) for u_illumination in u_illumination_list], axis=-1
+    )
+    h_normalized_im = jnp.stack(
+        [transfer_func_im(params, u_illumination, z, params.LED_i) for u_illumination in u_illumination_list], axis=-1
+    )
+
+    g_tilde = jnp.stack(g_tilde_list, axis=-1)
+
+    sum_h_normalized_re = jnp.sum(jnp.abs(h_normalized_re) ** 2, axis=-1)
+    sum_h_normalized_im = jnp.sum(jnp.abs(h_normalized_im) ** 2, axis=-1)
+
+    eps_re_first_term = (sum_h_normalized_im + beta) * jnp.sum(jnp.conjugate(h_normalized_re) * g_tilde, axis=-1)
+    eps_re_second_term = jnp.sum(jnp.conjugate(h_normalized_re) * h_normalized_im, axis=-1) * jnp.sum(
+        jnp.conjugate(h_normalized_im) * g_tilde, axis=-1
+    )
+
+    eps_im_first_term = (sum_h_normalized_re + alpha) * jnp.sum(jnp.conjugate(h_normalized_im) * g_tilde, axis=-1)
+    eps_im_second_term = jnp.sum(jnp.conjugate(h_normalized_im) * h_normalized_re, axis=-1) * jnp.sum(
+        jnp.conjugate(h_normalized_re) * g_tilde, axis=-1
+    )
+
+    scale_factor = (h_normalized_re + alpha) * (h_normalized_im + beta) - jnp.sum(
+        jnp.conjugate(h_normalized_re) * h_normalized_im, axis=-1
+    ) * jnp.sum(jnp.conjugate(h_normalized_im) * h_normalized_re, axis=-1)
+
+    eps_re = (eps_re_first_term - eps_re_second_term) / scale_factor
+    eps_im = (eps_im_first_term - eps_im_second_term) / scale_factor
+
+    return eps_re, eps_im
+
+
+##################################################
+# Step 6: Convert Permittivity to Refractive Index
+##################################################
+
+
+def convert_to_refractive_index(eps_re: Array, eps_im: Array, n_sol: float) -> tuple[Array, Array]: ...
+
 
 """
 Output

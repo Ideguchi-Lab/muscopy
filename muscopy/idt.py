@@ -10,6 +10,7 @@ from __future__ import annotations
 
 
 from muscopy.dh import MuParameters, make_disk
+from muscopy.odt import ODTParameters
 from muscopy.cfg import OffsetRegions, ArrayPrecision
 from muscopy.qpi_utils import unwrap_phase
 from muscopy.dir_parser import numpy_parser
@@ -41,76 +42,11 @@ Step 6: Convert permittivity to refractive index
 
 
 @dataclasses.dataclass
-class IDTParameters:
-    """
-    Intensity Diffraction Tomography (IDT) Parameters:
+class IDTParameters(ODTParameters):
+    """IDT Parameters."""
 
-    Attributes
-    ----------
-    na : `float`
-        Numerical aperture of the objective lens
-    wavelength_m : `float`
-        Wavelength of the light in meters
-    Nx : `int`
-        Size of the image in pixels. We assume square image and = Ny
-    Ny : `int`
-        Size of the image in pixelss.
-    px_size_m : `float`
-         Pixel size in meters
-    n_sol : `float`
-        Refractive index of the solution
-    na_illumination : `float`
-        Maximum illumination numerical aperture
-    I_list : `tuple`
-        Difference intensity images
-    illum_angles : `tuple`
-        The different angles of the intensity image
-    LED_i : `float`
-        Intensity of the ith LED (formally S_i)
-    k : `int`
-        Wavenumber 2 * math.pi / wavelength_m
-    ui : `int`
-        transverse frequency
-    η : `int`
-        axial spatial frequency
-    L : `int`
-        number of illumination angles
-    M : `int`
-        number of slices
-    """
+    num_z_slices: int
 
-    na: float
-    wavelength_m: float
-    Nx: int
-    Ny: int
-    px_size_m: float
-    n_sol: float
-    na_illumination: float
-    I_list: tuple
-    illum_angles: tuple
-    LED_i: float
-    k: float = 2 * math.pi / wavelength_m
-    ui: int
-    η: float = (k**2 - abs(ui) ** 2) ** (1 / 2)
-    L: int
-    M: int
-    
-
-    @property
-    def aperturesize_px(self) -> int:
-        return 2 * round(self.na / self.wavelength_m / self.freq_per_px) + 1
-
-    @property
-    def freq_per_px(self) -> float:
-        """Frequency per pixel in Fourier space."""
-        return 1 / (self.px_size_m * self.Nx)
-
-
-# ValueError Nx=Ny must be true
-# load images
-    if Nx != Ny:
-        msg = "img must have square dimensions (Nx = Ny)"
-        raise ValueError(msg) 
 
 # convert all I_m to float32 and normalize each image
 # Pupil function - P(u)
@@ -151,7 +87,7 @@ Ii = jnp.load(bg_path)
 ###################################################
 
 
-def compute_g_list(I_list: Sequence[Array], Ii: jnp.ndarray, normalize: bool = True) -> list[Array]:
+def compute_g_list(I_list: Sequence[Array], Ii: Array, normalize: bool = True) -> list[Array]:
     """Compute list of intensity constrasts g_l for each illumination angle.
 
     Parameters
@@ -234,10 +170,10 @@ def make_green_func(params: IDTParameters, u_shift: tuple[float, float], z: floa
     )
     ux = xx + u_shift[0]
     uy = yy + u_shift[1]
-    uz_squared = params.k**2 - ux**2 - uy**2
+    uz_squared = params.k_per_px**2 - ux**2 - uy**2
     mask = uz_squared > 0  # Ensure kz is real
     uz = jnp.sqrt(uz_squared)
-    uz = uz * mask  # Set imaginary parts to zero where uz_squared < 0
+    uz = uz * mask  # Set imaginary parts to zero where uz_squared < 0  # noqa: PLR6104
 
     return jnp.exp(-1j * uz * z) / uz
 
@@ -250,7 +186,7 @@ def transfer_func_re(
     params: IDTParameters, u_illumination: tuple[float, float], z: float, incident_intensity: float
 ) -> Array:
     u_ill_x, u_ill_y = u_illumination
-    u_ill_z = (params.k**2 - u_ill_x**2 - u_ill_y**2) ** 0.5
+    u_ill_z = (params.k_per_px**2 - u_ill_x**2 - u_ill_y**2) ** 0.5
     first_term = (
         jnp.conjugate(make_pupil_func(params, (-u_ill_x, -u_ill_y)))
         * make_green_func(params, (-u_ill_x, -u_ill_y), z)
@@ -264,14 +200,14 @@ def transfer_func_re(
         * jnp.transpose(jnp.conjugate(make_pupil_func(params, (u_ill_x, u_ill_y))))
     )
 
-    return 1j * params.k**2 / 2 * incident_intensity * (first_term - second_term)
+    return 1j * params.k_per_px**2 / 2 * incident_intensity * (first_term - second_term)
 
 
 def transfer_func_im(
     params: IDTParameters, u_illumination: tuple[float, float], z: float, incident_intensity: float
 ) -> Array:
     u_ill_x, u_ill_y = u_illumination
-    u_ill_z = (params.k**2 - u_ill_x**2 - u_ill_y**2) ** 0.5
+    u_ill_z = (params.k_per_px**2 - u_ill_x**2 - u_ill_y**2) ** 0.5
     first_term = (
         jnp.conjugate(make_pupil_func(params, (-u_ill_x, -u_ill_y)))
         * make_green_func(params, (-u_ill_x, -u_ill_y), z)
@@ -285,7 +221,7 @@ def transfer_func_im(
         * jnp.transpose(jnp.conjugate(make_pupil_func(params, (u_ill_x, u_ill_y))))
     )
 
-    return -(params.k**2) / 2 * incident_intensity * (first_term + second_term)
+    return -(params.k_per_px**2) / 2 * incident_intensity * (first_term + second_term)
 
 
 ##################################################
@@ -297,6 +233,8 @@ def compute_permitivity(
     params: IDTParameters,
     g_tilde_list: Sequence[Array],
     u_illumination_list: Sequence[tuple[float, float]],
+    led_illumination_intensities: Sequence[Array],
+    z: float = 0.0,
     alpha: float = 1e-6,
     beta: float = 1e-6,
 ) -> tuple[Array, Array]:
@@ -310,6 +248,10 @@ def compute_permitivity(
         Fourier Transforms of the intensity differences per angle.
     u_illumination_list : list of tuples
         The illumination angles for each image.
+    led_illumination_intensities : list of [Nx, Ny] arrays
+        The incident intensities for each illumination angle.
+    z : float, optional
+        The axial position in the z direction, by default 0.0
     alpha : float, optional
         Regularization parameter for the real part of the permittivity, by default 1e-6
     beta : float, optional
@@ -321,10 +263,18 @@ def compute_permitivity(
         The computed permittivity changes Δε_Re and Δε_Im for each slice.
     """
     h_normalized_re = jnp.stack(
-        [transfer_func_re(params, u_illumination, z, params.LED_i) for u_illumination in u_illumination_list], axis=-1
+        [
+            transfer_func_re(params, u_illumination_list[i], z, led_illumination_intensities[i])
+            for i in range(len(u_illumination_list))
+        ],
+        axis=-1,
     )
     h_normalized_im = jnp.stack(
-        [transfer_func_im(params, u_illumination, z, params.LED_i) for u_illumination in u_illumination_list], axis=-1
+        [
+            transfer_func_im(params, u_illumination_list[i], z, led_illumination_intensities[i])
+            for i in range(len(u_illumination_list))
+        ],
+        axis=-1,
     )
 
     g_tilde = jnp.stack(g_tilde_list, axis=-1)
@@ -351,7 +301,8 @@ def compute_permitivity(
 
     return eps_re, eps_im
 
-eps_re, eps_im  = compute_permitivity()
+
+eps_re, eps_im = compute_permitivity()
 
 ##################################################
 # Step 6: Convert Permittivity to Refractive Index
@@ -360,11 +311,11 @@ eps_re, eps_im  = compute_permitivity()
 
 def convert_to_refractive_index(eps_re: Array, eps_im: Array, n_sol: float) -> tuple[Array, Array]:
     """Convert the difference in permittivity to difference in refractive index.
-    
+
     Parameters
     ----------
     eps_re : `Array`
-        Real part of perimittivity 
+        Real part of perimittivity
     eps_im : `Array`
         Imaginary part of permittivity
     n_col : `float`
@@ -376,7 +327,6 @@ def convert_to_refractive_index(eps_re: Array, eps_im: Array, n_sol: float) -> t
         Real and Imaginary components of the refractive index difference
 
     """
-    
     eps_complex = eps_re + 1j * eps_im
 
     n_complex = jnp.sqrt(eps_complex)
@@ -384,9 +334,8 @@ def convert_to_refractive_index(eps_re: Array, eps_im: Array, n_sol: float) -> t
 
     return jnp.real(n_complex), jnp.imag(n_complex)
 
+
 n_real, n_imag = convert_to_refractive_index(eps_re, eps_im, n_sol)
 
 print(n_real)
 print(n_imag)
-
-

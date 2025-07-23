@@ -1,14 +1,14 @@
 """Intensity Diffraction Tomography (IDT) module."""
 
 import dataclasses
-import math
-from typing import TYPE_CHECKING, Sequence
+from typing import Sequence
 import jax.numpy as jnp
 from jax import Array
-from tqdm import tqdm
 from __future__ import annotations
 
 
+from muscopy.dh import make_disk
+from muscopy.odt import ODTParameters
 from muscopy.dh import MuParameters, make_disk
 from muscopy.odt import ODTParameters
 from muscopy.cfg import OffsetRegions, ArrayPrecision
@@ -48,28 +48,6 @@ class IDTParameters(ODTParameters):
     num_z_slices: int
 
 
-# convert all I_m to float32 and normalize each image
-# Pupil function - P(u)
-def make_pupil(Nx, Ny, NA, wavelength_m, px_size_m) -> Array:
-    """
-    Defines P(u) the pupil in equations.
-    Represents the slightly shifted window each LED angle gives shifted into Fourier space.
-    """
-    kx = jnp.fft.fftfreq(Nx, Ny, d=px_size_m)
-    ky = jnp.fft.fftfreq(Nx, Ny, d=px_size_m)
-    KX, KY = jnp.meshgrid(kx, ky, indexing="ij")
-    freq_radius = jnp.sqrt(KX**2 + KY**2)
-    freq_per_px = 1 / (px_size_m * Nx)
-
-    cutoff = NA / wavelength_m / freq_per_px
-    P = (freq_radius <= cutoff).astype(jnp.float32)
-    return P
-    # offaixs shift of pupil is detmerined by ui
-
-    # a pair of shifted pupils shiftig to opposite directions are super-imposed...
-    # in the TFs (twin-image holography) illustrated by computed phase and absorption TFs
-
-
 ##################################################
 # Step 1: Collect Intensity Images
 ##################################################
@@ -87,7 +65,8 @@ Ii = jnp.load(bg_path)
 ###################################################
 
 
-def compute_g_list(I_list: Sequence[Array], Ii: Array, normalize: bool = True) -> list[Array]:
+def compute_g_list(I_list: Sequence[Array], I_reference: Sequence[Array], normalize: bool = True) -> list[Array]:
+
     """Compute list of intensity constrasts g_l for each illumination angle.
 
     Parameters
@@ -104,14 +83,12 @@ def compute_g_list(I_list: Sequence[Array], Ii: Array, normalize: bool = True) -
         Intensity different or contrast for each angle.
     """
     g_list = []
-    for I_m in I_list:
+    for I_m, I_ref in zip(I_list, I_reference):
         if normalize:
-            g = (I_m - Ii) / Ii
+            g = (I_m - I_ref) / I_ref
             g_list.append(g)
     return g_list
 
-
-g_list = compute_g_list(I_list, Ii, normalize=True)
 
 ##################################################
 # Step 3: Fourier Transform each image
@@ -138,8 +115,6 @@ def fourier_transform(g_list: Sequence[Array]) -> list[Array]:
         g_tilde_list.append(g_tilde)
     return g_tilde_list
 
-
-g_tilde_list = fourier_transform(g_list)
 
 ##################################################
 # Step 4: Build Transfer Functions
@@ -301,23 +276,18 @@ def compute_permitivity(
 
     return eps_re, eps_im
 
-
-eps_re, eps_im = compute_permitivity()
-
 ##################################################
 # Step 6: Convert Permittivity to Refractive Index
 ##################################################
 
 
-def convert_to_refractive_index(eps_re: Array, eps_im: Array, n_sol: float) -> tuple[Array, Array]:
+def convert_to_refractive_index(eps_3d: Array, n_sol: float) -> tuple[Array, Array]:
     """Convert the difference in permittivity to difference in refractive index.
 
     Parameters
     ----------
-    eps_re : `Array`
-        Real part of perimittivity
-    eps_im : `Array`
-        Imaginary part of permittivity
+    eps_3d : `Array`
+        3D array of permittivity values
     n_col : `float`
         Refractive index of the solution
 
@@ -327,15 +297,86 @@ def convert_to_refractive_index(eps_re: Array, eps_im: Array, n_sol: float) -> t
         Real and Imaginary components of the refractive index difference
 
     """
-    eps_complex = eps_re + 1j * eps_im
-
-    n_complex = jnp.sqrt(eps_complex)
-    n_complex = n_complex * n_sol
-
-    return jnp.real(n_complex), jnp.imag(n_complex)
+    n_complex = jnp.sqrt(eps_3d)
+    return n_complex * n_sol
 
 
-n_real, n_imag = convert_to_refractive_index(eps_re, eps_im, n_sol)
+##################################################
+# Main IDT computation function
+##################################################
 
-print(n_real)
-print(n_imag)
+
+def compute_idt(
+    params: IDTParameters,
+    intensity_images: Sequence[Array],
+    ref_intensity_images: Sequence[Array],
+    u_illumination_list: Sequence[tuple[int, int]],
+) -> Array:
+    """Compute the refractive index from intensity images using IDT.
+
+    Parameters
+    ----------
+    params : IDTParameters
+        The parameters for the IDT model.
+    intensity_images : Sequence[Array]
+        The intensity images to process.
+    ref_intensity_images : Sequence[Array]
+        The reference intensity images for comparison.
+    u_illumination_list : Sequence[tuple[int, int]]
+        The illumination angles for each LED.
+
+    Returns
+    -------
+    Array
+        The computed refractive index.
+
+    Raises
+    ------
+    ValueError
+        If the input arrays have incompatible shapes.
+    ValueError
+        If the illumination angles are not valid.
+    """
+    if len(intensity_images) != len(ref_intensity_images):
+        msg = "Intensity images and reference intensity images must have the same length."
+        raise ValueError(msg)
+    if len(intensity_images) != len(u_illumination_list):
+        msg = "Intensity images and illumination angles must have the same length."
+        raise ValueError(msg)
+
+    # STEP 1: intensity images (input)
+
+    # STEP 2: compute g_l
+
+    g_l = compute_g_list(intensity_images, ref_intensity_images, normalize=True)
+
+    # STEP 3: Fourier Transform each image
+
+    g_tilde_list = fourier_transform(g_l)
+
+    # STEP 4: Build Transfer Functions
+
+    # done in the separate functions
+
+    # STEP 5: Solve inverse problem
+
+    alpha = 1e-6  # Regularization parameter for real part
+    beta = 1e-6  # Regularization parameter for imaginary part
+
+    eps_3d = jnp.zeros((params.img_size_px, params.img_size_px, params.num_z_slices))
+
+    for z in range(params.num_z_slices):
+        eps_re, eps_im = compute_permitivity(
+            params,
+            g_tilde_list,
+            u_illumination_list,
+            [1.0] * len(u_illumination_list),  # Assuming uniform intensity for simplicity
+            z=z,
+            alpha=alpha,
+            beta=beta,
+        )
+        eps_3d[:, :, z] = eps_re + 1j * eps_im
+
+    # STEP 6: Convert permittivity to refractive index
+
+    return convert_to_refractive_index(eps_3d, params.n_sol)

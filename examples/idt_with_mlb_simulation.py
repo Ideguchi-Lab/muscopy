@@ -41,6 +41,7 @@ class IntensityImageSetGenerator:
 
         # Store illumination angles
         self.angles: np.ndarray[typing.Any, np.dtype[np.floating[typing.Any]]] | None = None
+        self.u_illumination_list: list[tuple[float, float]] | None = None
 
     def set_illumination_angles(self, num_angles: int, angle_offset: float = 0) -> None:
         """Set illumination angles for tomographic acquisition."""
@@ -98,6 +99,8 @@ class IntensityImageSetGenerator:
                 * self.idt_params.k_per_px
                 * np.sin(angle)
             )
+
+            self.u_illumination_list.append((kx_ill / self.idt_params.k_per_px, ky_ill / self.idt_params.k_per_px))
 
             # Generate oblique illumination wave
             input_field_fft = get_oblique_wave_fft(
@@ -223,26 +226,30 @@ def _setup_parameters() -> tuple[IDTParameters, MLBParameters, ArrayPrecision]:
     return idt_params, mlb_params, precision
 
 
-def _generate_intensity_images(  # noqa: PLR0913, PLR0917
+def _generate_intensity_images(
     idt_params: IDTParameters,
     mlb_params: MLBParameters,
     scattering_potential: Array,
     precision: ArrayPrecision,
     num_angles: int = 60,
-) -> tuple[list[Array], list[Array]]:
+) -> tuple[tuple[list[Array], list[Array]], list[tuple[float, float]]]:
     r"""Generate hologram sets.
 
     Returns
     -------
-    tuple[list[Array], list[Array]]
-        Target holograms and reference holograms
+    tuple[tuple[list[Array], list[Array]], list[tuple[float, float]]]
+        Target holograms, reference holograms, and illumination angles
     """
     print("Setting up hologram generator...")
-    hol_gen = IntensityImageSetGenerator(idt_params, mlb_params, precision)
-    hol_gen.set_illumination_angles(num_angles)  # Fewer angles for faster computation
-    hol_gen.set_scattering_potential(scattering_potential)
+    intensity_image_gen = IntensityImageSetGenerator(idt_params, mlb_params, precision)
+    intensity_image_gen.set_illumination_angles(num_angles)  # Fewer angles for faster computation
+    intensity_image_gen.set_scattering_potential(scattering_potential)
 
-    return hol_gen.generate_hologram_set()
+    intensity_images = intensity_image_gen.generate_intensity_image_set()
+
+    u_illumination_list = intensity_image_gen.u_illumination_list
+
+    return intensity_images, u_illumination_list
 
 
 def _visualize_results(
@@ -341,12 +348,11 @@ def main() -> None:
     print(f"Memory usage: {scattering_potential.nbytes / 1024**2:.1f} MB")
 
     # Generate holograms
-    target_intensity_images, ref_intensity_images = _generate_intensity_images(
+    (target_intensity_images, ref_intensity_images), u_illumination_list = _generate_intensity_images(
         idt_params, mlb_params, scattering_potential, precision, num_angles
     )
 
-    refractive_index = compute_idt(  # TODO: EDIT
-    )
+    refractive_index = compute_idt(idt_params, target_intensity_images, ref_intensity_images, u_illumination_list)
 
     # Convert to real refractive index
     n_reconstructed = jnp.real(refractive_index) - idt_params.n_sol

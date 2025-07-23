@@ -363,7 +363,7 @@ def main() -> None:
         idt_params, mlb_params, scattering_potential, precision, num_angles
     )
 
-    n_re, n_im = compute_idt(idt_params, target_intensity_images, ref_intensity_images, u_illumination_list)
+    n_re, _ = compute_idt(idt_params, target_intensity_images, ref_intensity_images, u_illumination_list)
 
     # Convert to real refractive index
     n_reconstructed = n_re - idt_params.n_sol

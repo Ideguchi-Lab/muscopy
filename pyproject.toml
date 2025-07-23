@@ -62,6 +62,8 @@ ignore = [
   "FBT",     # boolean-trap
   "FIX",     # fixme
   "PLR0904", # too-many-public-methods
+  "PLR0913", # too-many-arguments
+  "PLR0917", # too-many-positional-arguments
 ]
 
 [tool.ruff.lint.pydocstyle]
@@ -99,3 +101,8 @@ files = ["muscopy", "tests", "examples"]
 
 [tool.pyright]
 include = ["muscopy", "tests", "examples"]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.12.4",
+]

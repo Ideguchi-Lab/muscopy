@@ -1,3 +1,9 @@
+"""IDT with MLB simulation example.
+
+This example demonstrates how to use Intensity Diffraction Tomography (IDT)
+with Multi-layer Born (MLB) simulation for microscopy analysis.
+"""
+
 # pyright: reportPossiblyUnboundVariable=false, reportInvalidTypeForm=false
 
 import typing

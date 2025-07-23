@@ -262,7 +262,7 @@ def _setup_parameters() -> tuple[ODTParameters, MLBParameters, ArrayPrecision]:
     return odt_params, mlb_params, precision
 
 
-def _generate_holograms(  # noqa: PLR0913, PLR0917
+def _generate_holograms(
     odt_params: ODTParameters,
     mlb_params: MLBParameters,
     scattering_potential: Array,

@@ -1,19 +1,19 @@
 """Intensity Diffraction Tomography (IDT) module."""
 
-import dataclasses
-from typing import Sequence
-import jax.numpy as jnp
-from jax import Array
 from __future__ import annotations
 
+import dataclasses
+from typing import TYPE_CHECKING
+
+import jax.numpy as jnp
+from jax import Array
 
 from muscopy.dh import make_disk
-from muscopy.odt import ODTParameters
-from muscopy.dh import MuParameters, make_disk
-from muscopy.odt import ODTParameters
-from muscopy.cfg import OffsetRegions, ArrayPrecision
-from muscopy.qpi_utils import unwrap_phase
 from muscopy.dir_parser import numpy_parser
+from muscopy.odt import ODTParameters
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 """
 Outline
@@ -31,7 +31,7 @@ Step 4: Build Transfer Functions, depends on slice depth (z) and the angel of il
 	H_Re[l, m, x, y] #phase
 	H_Im[l, m, x, y] #absorption
 Step 5: Solve inverse problem
-	Δε_Re[m] = ifft( weighted_sum_over_l( H_Re_conj * g̃ ) / (|H_Re|² + α) )
+	Δε_Re[m] = ifft( weighted_sum_over_l( H_Re_conj * g̃ ) / (|H_Re|² + alpha) )
 	Δε_Im[m] = same thing but with H_Im and β
 Slice by slice reconstruct
 	Δε_Re[x, y, z]
@@ -65,14 +65,14 @@ Ii = jnp.load(bg_path)
 ###################################################
 
 
-def compute_g_list(I_list: Sequence[Array], I_reference: Sequence[Array], normalize: bool = True) -> list[Array]:
+def compute_g_list(i_list: Sequence[Array], i_reference: Sequence[Array], normalize: bool = True) -> list[Array]:
     """Compute list of intensity constrasts g_l for each illumination angle.
 
     Parameters
     ----------
-    I_list : list of [Nx, Ny] arrays of Intensity images
+    i_list : list of [Nx, Ny] arrays of Intensity images
         under different angles
-    Ii : background intensity image for subtraction
+    i_reference : background intensity image for subtraction
     normalize : bool
         whether or not to normalize
 
@@ -82,9 +82,9 @@ def compute_g_list(I_list: Sequence[Array], I_reference: Sequence[Array], normal
         Intensity different or contrast for each angle.
     """
     g_list = []
-    for I_m, I_ref in zip(I_list, I_reference):
+    for i_m, i_ref in zip(i_list, i_reference, strict=False):
         if normalize:
-            g = (I_m - I_ref) / I_ref
+            g = (i_m - i_ref) / i_ref
             g_list.append(g)
     return g_list
 
@@ -153,12 +153,49 @@ def make_green_func(params: IDTParameters, u_shift: tuple[float, float], z: floa
 
 
 def make_pupil_func(params: IDTParameters, u_shift: tuple[float, float]) -> Array:
+    """Create pupil function for IDT reconstruction.
+
+    Parameters
+    ----------
+    params : IDTParameters
+        IDT parameters containing aperture size information
+    u_shift : tuple[float, float]
+        Shift in frequency domain
+
+    Returns
+    -------
+    Array
+        Pupil function as a disk-shaped mask
+    """
     return make_disk(u_shift, params.aperturesize_px / 2, 2 * params.aperturesize_px + 1)
 
 
 def transfer_func_re(
     params: IDTParameters, u_illumination: tuple[float, float], z: float, incident_intensity: float
 ) -> Array:
+    """Compute real part of transfer function for IDT.
+
+    Parameters
+    ----------
+    params : IDTParameters
+        IDT parameters
+    u_illumination : tuple[float, float]
+        Illumination angle in frequency domain
+    z : float
+        Depth position
+    incident_intensity : float
+        Incident intensity
+
+    Returns
+    -------
+    Array
+        Real part of transfer function
+
+    Raises
+    ------
+    ValueError
+        If illumination angle results in invalid z-component
+    """
     u_ill_x, u_ill_y = u_illumination
     u_ill_z_squared = params.k_per_px**2 - u_ill_x**2 - u_ill_y**2
     if u_ill_z_squared < 0:
@@ -182,6 +219,24 @@ def transfer_func_re(
 def transfer_func_im(
     params: IDTParameters, u_illumination: tuple[float, float], z: float, incident_intensity: float
 ) -> Array:
+    """Compute imaginary part of transfer function for IDT.
+
+    Parameters
+    ----------
+    params : IDTParameters
+        IDT parameters
+    u_illumination : tuple[float, float]
+        Illumination angle in frequency domain
+    z : float
+        Depth position
+    incident_intensity : float
+        Incident intensity
+
+    Returns
+    -------
+    Array
+        Imaginary part of transfer function
+    """
     u_ill_x, u_ill_y = u_illumination
     u_ill_z = (params.k_per_px**2 - u_ill_x**2 - u_ill_y**2) ** 0.5
     first_term = (

@@ -221,7 +221,7 @@ def print_all_parameters(param: MuParameters, *, show_properties: bool = False) 
 
 
 def make_disk(
-    center: tuple[int, int],
+    center: tuple[float, float],
     radius: float,
     array_shape: int | tuple[int, int],
     *,
@@ -231,7 +231,7 @@ def make_disk(
 
     Parameters
     ----------
-    center : `tuple`\[`int`, `int`\]
+    center : `tuple`\[`float`, `float`\]
         The center position of the disk mask
     radius : `float`
         The radius of the disk mask

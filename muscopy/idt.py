@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 class IDTParameters(ODTParameters):
     """IDT Parameters."""
 
-    num_z_slices: int
+    num_z_slices: int = 10
 
 
 def compute_g_list(i_list: Sequence[Array], i_reference: Sequence[Array], normalize: bool = True) -> list[Array]:
@@ -114,7 +114,8 @@ def make_pupil_func(params: IDTParameters, u_shift: tuple[float, float]) -> Arra
     Array
         Pupil function as a disk-shaped mask
     """
-    return make_disk(u_shift, params.aperturesize_px / 2, 2 * params.aperturesize_px + 1)
+    u_shift_int = (int(u_shift[0]), int(u_shift[1]))
+    return make_disk(u_shift_int, params.aperturesize_px / 2, 2 * params.aperturesize_px + 1)
 
 
 def transfer_func_re(
@@ -237,14 +238,14 @@ def compute_permitivity(
     """
     h_normalized_re = jnp.stack(
         [
-            transfer_func_re(params, u_illumination_list[i], z, led_illumination_intensities[i])
+            transfer_func_re(params, u_illumination_list[i], z, float(led_illumination_intensities[i]))
             for i in range(len(u_illumination_list))
         ],
         axis=-1,
     )
     h_normalized_im = jnp.stack(
         [
-            transfer_func_im(params, u_illumination_list[i], z, led_illumination_intensities[i])
+            transfer_func_im(params, u_illumination_list[i], z, float(led_illumination_intensities[i]))
             for i in range(len(u_illumination_list))
         ],
         axis=-1,
@@ -275,24 +276,29 @@ def compute_permitivity(
     return eps_re, eps_im
 
 
-def convert_to_refractive_index(eps_3d: Array, n_sol: float) -> tuple[Array, Array]:
+def convert_to_refractive_index(eps_re: Array, eps_im: Array, n_sol: float) -> tuple[Array, Array]:
     """Convert the difference in permittivity to difference in refractive index.
 
     Parameters
     ----------
-    eps_3d : `Array`
-        3D array of permittivity values
-    n_col : `float`
+    eps_re : Array
+        Real part of permittivity values
+    eps_im : Array
+        Imaginary part of permittivity values
+    n_sol : float
         Refractive index of the solution
 
     Returns
     -------
-    n_complex : tuple[Array, Array]
+    tuple[Array, Array]
         Real and Imaginary components of the refractive index difference
 
     """
-    n_complex = jnp.sqrt(eps_3d)
-    return n_complex * n_sol
+    eps_complex = eps_re + 1j * eps_im
+    n_complex = jnp.sqrt(1 + eps_complex)
+    n_re = jnp.real(n_complex) * n_sol
+    n_im = jnp.imag(n_complex) * n_sol
+    return n_re, n_im
 
 
 ##################################################
@@ -304,8 +310,8 @@ def compute_idt(
     params: IDTParameters,
     intensity_images: Sequence[Array],
     ref_intensity_images: Sequence[Array],
-    u_illumination_list: Sequence[tuple[int, int]],
-) -> Array:
+    u_illumination_list: Sequence[tuple[float, float]],
+) -> tuple[Array, Array]:
     """Compute the refractive index from intensity images using IDT.
 
     Outline
@@ -338,13 +344,13 @@ def compute_idt(
         The intensity images to process.
     ref_intensity_images : Sequence[Array]
         The reference intensity images for comparison.
-    u_illumination_list : Sequence[tuple[int, int]]
+    u_illumination_list : Sequence[tuple[float, float]]
         The illumination angles for each LED.
 
     Returns
     -------
-    Array
-        The computed refractive index.
+    tuple[Array, Array]
+        Real and imaginary parts of the computed refractive index.
 
     Raises
     ------
@@ -379,20 +385,22 @@ def compute_idt(
     alpha = 1e-6  # Regularization parameter for real part
     beta = 1e-6  # Regularization parameter for imaginary part
 
-    eps_3d = jnp.zeros((params.img_size_px, params.img_size_px, params.num_z_slices))
+    eps_re_3d = jnp.zeros((params.img_size_px, params.img_size_px, params.num_z_slices))
+    eps_im_3d = jnp.zeros((params.img_size_px, params.img_size_px, params.num_z_slices))
 
     for z in range(params.num_z_slices):
         eps_re, eps_im = compute_permitivity(
             params,
             g_tilde_list,
             u_illumination_list,
-            [1.0] * len(u_illumination_list),  # Assuming uniform intensity for simplicity
+            [jnp.array(1.0) for _ in range(len(u_illumination_list))],  # Assuming uniform intensity for simplicity
             z=z,
             alpha=alpha,
             beta=beta,
         )
-        eps_3d[:, :, z] = eps_re + 1j * eps_im
+        eps_re_3d = eps_re_3d.at[:, :, z].set(eps_re)
+        eps_im_3d = eps_im_3d.at[:, :, z].set(eps_im)
 
     # STEP 6: Convert permittivity to refractive index
 
-    return convert_to_refractive_index(eps_3d, params.n_sol)
+    return convert_to_refractive_index(eps_re_3d, eps_im_3d, params.n_sol)

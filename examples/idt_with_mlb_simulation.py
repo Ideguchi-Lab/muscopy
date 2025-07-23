@@ -88,6 +88,9 @@ class IntensityImageSetGenerator:
         reference_intensity_images = []
         intensity_image_shape = (self.idt_params.img_size_px, self.idt_params.img_size_px)
 
+        if self.u_illumination_list is None:
+            self.u_illumination_list = []
+
         print("Generating intensity images...")
         for angle in tqdm(self.angles):
             # Calculate illumination wave vector components
@@ -254,6 +257,8 @@ def _generate_intensity_images(
     intensity_images = intensity_image_gen.generate_intensity_image_set()
 
     u_illumination_list = intensity_image_gen.u_illumination_list
+    if u_illumination_list is None:
+        u_illumination_list = []
 
     return intensity_images, u_illumination_list
 
@@ -358,10 +363,10 @@ def main() -> None:
         idt_params, mlb_params, scattering_potential, precision, num_angles
     )
 
-    refractive_index = compute_idt(idt_params, target_intensity_images, ref_intensity_images, u_illumination_list)
+    n_re, n_im = compute_idt(idt_params, target_intensity_images, ref_intensity_images, u_illumination_list)
 
     # Convert to real refractive index
-    n_reconstructed = jnp.real(refractive_index) - idt_params.n_sol
+    n_reconstructed = n_re - idt_params.n_sol
 
     # Visualization
     _visualize_results(n_reconstructed, target_intensity_images, delta_n)

@@ -104,5 +104,6 @@ include = ["muscopy", "tests", "examples"]
 
 [dependency-groups]
 dev = [
+    "mypy>=1.17.0",
     "ruff>=0.12.4",
 ]

@@ -66,7 +66,6 @@ Ii = jnp.load(bg_path)
 
 
 def compute_g_list(I_list: Sequence[Array], I_reference: Sequence[Array], normalize: bool = True) -> list[Array]:
-
     """Compute list of intensity constrasts g_l for each illumination angle.
 
     Parameters
@@ -161,16 +160,18 @@ def transfer_func_re(
     params: IDTParameters, u_illumination: tuple[float, float], z: float, incident_intensity: float
 ) -> Array:
     u_ill_x, u_ill_y = u_illumination
+    u_ill_z_squared = params.k_per_px**2 - u_ill_x**2 - u_ill_y**2
+    if u_ill_z_squared < 0:
+        msg = f"Invalid illumination angle {u_illumination}: u_ill_z_squared must be non-negative."
+        raise ValueError(msg)
     u_ill_z = (params.k_per_px**2 - u_ill_x**2 - u_ill_y**2) ** 0.5
     first_term = (
-        jnp.conjugate(make_pupil_func(params, (-u_ill_x, -u_ill_y)))
-        * make_green_func(params, (-u_ill_x, -u_ill_y), z)
+        make_green_func(params, (-u_ill_x, -u_ill_y), z)
         * jnp.exp(-1j * u_ill_z * z)
         * make_pupil_func(params, (-u_ill_x, -u_ill_y))
     )  # maybe first pupil is not correct
     second_term = (
-        make_pupil_func(params, (-u_ill_x, -u_ill_y))
-        * jnp.conjugate(make_green_func(params, (u_ill_x, u_ill_y), z))
+        jnp.conjugate(make_green_func(params, (u_ill_x, u_ill_y), z))
         * jnp.exp(1j * u_ill_z * z)
         * jnp.transpose(jnp.conjugate(make_pupil_func(params, (u_ill_x, u_ill_y))))
     )
@@ -275,6 +276,7 @@ def compute_permitivity(
     eps_im = (eps_im_first_term - eps_im_second_term) / scale_factor
 
     return eps_re, eps_im
+
 
 ##################################################
 # Step 6: Convert Permittivity to Refractive Index

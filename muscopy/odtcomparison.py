@@ -17,7 +17,7 @@ from muscopy.dh import get_spectrum, print_all_parameters
 from muscopy.odt import ODTConfig, ODTParameters, odt
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__),'..')) )
 from examples.odt_with_mlb_simulation import generate_sphere_potential, MLBParameters
-from examples.odt_with_mlb_simulation import main, n_reconstructed
+from examples.odt_with_mlb_simulation import main, n_reconstructed 
 
 
 #Define axes

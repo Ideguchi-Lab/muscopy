@@ -9,6 +9,10 @@ from __future__ import annotations
 
 from muscopy.dh import make_disk
 from muscopy.odt import ODTParameters
+from muscopy.dh import MuParameters, make_disk
+from muscopy.odt import ODTParameters
+from muscopy.cfg import OffsetRegions, ArrayPrecision
+from muscopy.qpi_utils import unwrap_phase
 from muscopy.dir_parser import numpy_parser
 
 """
@@ -62,6 +66,7 @@ Ii = jnp.load(bg_path)
 
 
 def compute_g_list(I_list: Sequence[Array], I_reference: Sequence[Array], normalize: bool = True) -> list[Array]:
+
     """Compute list of intensity constrasts g_l for each illumination angle.
 
     Parameters
@@ -270,7 +275,6 @@ def compute_permitivity(
     eps_im = (eps_im_first_term - eps_im_second_term) / scale_factor
 
     return eps_re, eps_im
-
 
 ##################################################
 # Step 6: Convert Permittivity to Refractive Index

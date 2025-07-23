@@ -553,6 +553,12 @@ def main() -> None:  # noqa: PLR0914
     # Visualize synthetic spectra profiles
     visualize_synthetic_spectra_profiles(synthetic_spectra)
 
+    #for access in odtcomparison.py
+    return(n_reconstructed)
+
+n_recon = main()
+
+
 
 if __name__ == "__main__":
     main()

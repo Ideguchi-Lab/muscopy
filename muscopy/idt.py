@@ -9,7 +9,6 @@ import jax.numpy as jnp
 from jax import Array
 
 from muscopy.dh import make_disk
-from muscopy.dir_parser import numpy_parser
 from muscopy.odt import ODTParameters
 
 if TYPE_CHECKING:

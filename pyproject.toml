@@ -101,9 +101,19 @@ files = ["muscopy", "tests", "examples"]
 
 [tool.pyright]
 include = ["muscopy", "tests", "examples"]
+reportMissingImports = "warning"
+reportMissingModuleSource = "warning"
+ignore = [
+    "examples/idt_with_mlb_simulation.py",
+    "examples/odt_with_mlb_simulation.py"
+]
 
 [dependency-groups]
 dev = [
+    "matplotlib>=3.10.3",
     "mypy>=1.17.0",
+    "pyright>=1.1.403",
+    "pytest>=8.4.1",
     "ruff>=0.12.4",
+    "scikit-image>=0.25.2",
 ]

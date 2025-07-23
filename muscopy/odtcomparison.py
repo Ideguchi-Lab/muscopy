@@ -48,7 +48,7 @@ def compute_error(n_values, r_values) -> float:
     gt_image = generate_sphere_potential(mlb_params, r_values, n_values).astype(float)
     recon_volume = n_recon.astype(float)
     
-    if gt_image.shape != recon_volume.shape
+    if gt_image.shape != recon_volume.shape:
         raise ValueError(f"Shape mismatch: gt_image has shape {gt_image.shape}, and recon_volume has shape {recon_volume.shape}")
     error = abs(gt_image - recon_volume)**2
     return error
@@ -60,9 +60,14 @@ print("error_grid:", error_grid)
 
 #Plot
 plt.figure(figsize=(20,20))
-plt.contourf(n_values, r_values, error_grid)
+plt.imshow(error_grid,
+           extent=[n_values.min(), n_values.max(), r_values.min(), r_values.max()],
+           origin='lower',
+           aspect='auto',
+           cmap='viridis')
 plt.xlabel('Refractive Index')
 plt.ylabel('Sphere Radius (um)')
 plt.colorbar(label='Error (|GT - ODT|^2)')
+plt.title('Error Heatmap')
 plt.tight_layout()
 plt.show()

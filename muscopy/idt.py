@@ -15,54 +15,12 @@ from muscopy.odt import ODTParameters
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-"""
-Outline
--------
-Step 1: Collect intensity images under different angles
-	I_list = [I_1, I_2, …]
-	illum_angles = [u_1, u_2,…]
-Step 2: Subtract background and normalize
-	g_l = (I_l - I_background) / I_background
-	g_list = [g_1, g_2, …]
-Step 3: Fourier Transform each image
-	g_tilde_l = fft2(g_l)
-	g_tilde_list = [g_tilde_1, …]
-Step 4: Build Transfer Functions, depends on slice depth (z) and the angel of illumination
-	H_Re[l, m, x, y] #phase
-	H_Im[l, m, x, y] #absorption
-Step 5: Solve inverse problem
-	Δε_Re[m] = ifft( weighted_sum_over_l( H_Re_conj * g̃ ) / (|H_Re|² + alpha) )
-	Δε_Im[m] = same thing but with H_Im and β
-Slice by slice reconstruct
-	Δε_Re[x, y, z]
-	Δε_Im[x, y, z]
-Step 6: Convert permittivity to refractive index
-
-"""
-
 
 @dataclasses.dataclass
 class IDTParameters(ODTParameters):
     """IDT Parameters."""
 
     num_z_slices: int
-
-
-##################################################
-# Step 1: Collect Intensity Images
-##################################################
-
-# which can be generated from Multi-layer Born simulator or experiments
-data_path = "path_to_data"
-bg_path = "path_to_background"
-
-data_images_path = numpy_parser(data_path)
-I_list = [jnp.load(image_path) for image_path in data_images_path]
-Ii = jnp.load(bg_path)
-
-##################################################
-# Step 2: Subtract and Normalize
-###################################################
 
 
 def compute_g_list(i_list: Sequence[Array], i_reference: Sequence[Array], normalize: bool = True) -> list[Array]:
@@ -89,11 +47,6 @@ def compute_g_list(i_list: Sequence[Array], i_reference: Sequence[Array], normal
     return g_list
 
 
-##################################################
-# Step 3: Fourier Transform each image
-##################################################
-
-
 def fourier_transform(g_list: Sequence[Array]) -> list[Array]:
     """
     Compute the Fourier Transform of each g_l in g_list.
@@ -113,11 +66,6 @@ def fourier_transform(g_list: Sequence[Array]) -> list[Array]:
         g_tilde = jnp.fft.fft2(g_l, norm="ortho")  # FFT with orthonormal normalization
         g_tilde_list.append(g_tilde)
     return g_tilde_list
-
-
-##################################################
-# Step 4: Build Transfer Functions
-##################################################
 
 
 def make_green_func(params: IDTParameters, u_shift: tuple[float, float], z: float) -> Array:
@@ -255,11 +203,6 @@ def transfer_func_im(
     return -(params.k_per_px**2) / 2 * incident_intensity * (first_term + second_term)
 
 
-##################################################
-# Step 5: Solve Inverse Problem
-##################################################
-
-
 def compute_permitivity(
     params: IDTParameters,
     g_tilde_list: Sequence[Array],
@@ -333,11 +276,6 @@ def compute_permitivity(
     return eps_re, eps_im
 
 
-##################################################
-# Step 6: Convert Permittivity to Refractive Index
-##################################################
-
-
 def convert_to_refractive_index(eps_3d: Array, n_sol: float) -> tuple[Array, Array]:
     """Convert the difference in permittivity to difference in refractive index.
 
@@ -370,6 +308,28 @@ def compute_idt(
     u_illumination_list: Sequence[tuple[int, int]],
 ) -> Array:
     """Compute the refractive index from intensity images using IDT.
+
+    Outline
+    -------
+    Step 1: Collect intensity images under different angles
+            I_list = [I_1, I_2, …]
+            illum_angles = [u_1, u_2,…]
+    Step 2: Subtract background and normalize
+            g_l = (I_l - I_background) / I_background
+            g_list = [g_1, g_2, …]
+    Step 3: Fourier Transform each image
+            g_tilde_l = fft2(g_l)
+            g_tilde_list = [g_tilde_1, …]
+    Step 4: Build Transfer Functions, depends on slice depth (z) and the angel of illumination
+            H_Re[l, m, x, y] #phase
+            H_Im[l, m, x, y] #absorption
+    Step 5: Solve inverse problem
+            Δε_Re[m] = ifft( weighted_sum_over_l( H_Re_conj * g̃ ) / (|H_Re|² + alpha) )
+            Δε_Im[m] = same thing but with H_Im and β
+    Slice by slice reconstruct
+            Δε_Re[x, y, z]
+            Δε_Im[x, y, z]
+    Step 6: Convert permittivity to refractive index
 
     Parameters
     ----------

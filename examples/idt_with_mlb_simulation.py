@@ -379,7 +379,7 @@ def _visualize_results(
 def main() -> None:
     """Demonstrate IDT with MLB simulation."""
     # Clear JAX compilation cache at the start to prevent memory accumulation
-    jax.clear_caches()
+    jax.clear_caches()  # type: ignore[no-untyped-call]
 
     # Setup parameters
     idt_params, mlb_params, precision = _setup_parameters()
@@ -403,7 +403,7 @@ def main() -> None:
 
     # Clear any cached data before IDT computation
     print("Clearing JAX cache before IDT computation...")
-    jax.clear_caches()
+    jax.clear_caches()  # type: ignore[no-untyped-call]
     gc.collect()
 
     print("Starting IDT computation...")
@@ -417,7 +417,7 @@ def main() -> None:
     except Exception as e:
         print(f"IDT computation failed with error: {e}")
         print("Attempting to clear memory and continue with reduced parameters...")
-        jax.clear_caches()
+        jax.clear_caches()  # type: ignore[no-untyped-call]
         gc.collect()
         raise
 
@@ -428,7 +428,7 @@ def main() -> None:
     _visualize_results(n_reconstructed, target_intensity_images, delta_n)
 
     # Clear JAX compilation cache at the end to prevent memory accumulation
-    jax.clear_caches()
+    jax.clear_caches()  # type: ignore[no-untyped-call]
 
     # Force garbage collection to clean up any remaining large arrays
     gc.collect()

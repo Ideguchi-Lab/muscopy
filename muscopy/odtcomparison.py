@@ -49,8 +49,8 @@ def compute_error(n: float, r: float) -> float:
     for n, r in nr_pairs:
         mlb_params = MLBParameters(1.0, 1.33, 20, [123, 62], 123, 20, 20 )
         gt_image = generate_sphere_potential(mlb_params, r, n).astype(float)
-
         recon_volume = n_recon.astype(float)
+
     
         if gt_image.shape != recon_volume.shape:
             raise ValueError(f"Shape mismatch: gt_image has shape {gt_image.shape}, and recon_volume has shape {recon_volume.shape}")

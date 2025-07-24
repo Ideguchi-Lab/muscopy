@@ -521,6 +521,7 @@ def main() -> None:  # noqa: PLR0914
     radius_um = 2.0
     delta_n = 0.02
     
+    
     scattering_potential = generate_sphere_potential(mlb_params, radius_um, delta_n, precision=precision)
 
     print(f"Sample size: {scattering_potential.shape}")

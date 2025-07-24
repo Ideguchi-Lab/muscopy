@@ -6,8 +6,10 @@ with Multi-layer Born (MLB) simulation for microscopy analysis.
 
 # pyright: reportPossiblyUnboundVariable=false, reportInvalidTypeForm=false
 
+import gc
 import typing
 
+import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
@@ -48,6 +50,15 @@ class IntensityImageSetGenerator:
         # Store illumination angles
         self.angles: np.ndarray[typing.Any, np.dtype[np.floating[typing.Any]]] | None = None
         self.u_illumination_list: list[tuple[float, float]] | None = None
+
+    def cleanup(self) -> None:
+        """Clean up resources and clear cached data."""
+        # Clear any cached data in the MLB forward simulator and hologram generator
+        self.angles = None
+        self.u_illumination_list = None
+
+        # Force garbage collection to clean up large arrays
+        gc.collect()
 
     def set_illumination_angles(self, num_angles: int, angle_offset: float = 0) -> None:
         """Set illumination angles for tomographic acquisition."""
@@ -133,8 +144,7 @@ class IntensityImageSetGenerator:
             )
 
             # Normalize hologram to [0, 1] range for better numerical stability
-            hologram = hologram / 65535.0
-
+            hologram /= 65535.0
 
             target_intensity_images.append(hologram)
 
@@ -149,10 +159,13 @@ class IntensityImageSetGenerator:
             )
 
             # Normalize reference hologram to [0, 1] range for better numerical stability
-            ref_hologram = ref_hologram / 65535.0
-
+            ref_hologram /= 65535.0
 
             reference_intensity_images.append(ref_hologram)
+
+        # Clean up temporary variables to free memory
+        del hologram, ref_hologram
+        gc.collect()
 
         return target_intensity_images, reference_intensity_images
 
@@ -271,6 +284,9 @@ def _generate_intensity_images(
     if u_illumination_list is None:
         u_illumination_list = []
 
+    # Clean up the generator to free memory
+    intensity_image_gen.cleanup()
+
     return intensity_images, u_illumination_list
 
 
@@ -344,6 +360,7 @@ def _visualize_results(
     plt.tight_layout()
     plt.savefig("odt_mlb_simulation_results.png", dpi=150, bbox_inches="tight")
     plt.show()
+    plt.close()  # Close the figure to free memory
 
     # Print summary
     print("\nReconstruction Summary:")
@@ -356,6 +373,9 @@ def _visualize_results(
 
 def main() -> None:
     """Demonstrate IDT with MLB simulation."""
+    # Clear JAX compilation cache at the start to prevent memory accumulation
+    jax.clear_caches()
+
     # Setup parameters
     idt_params, mlb_params, precision = _setup_parameters()
     num_angles = 20  # Number of illumination angles for tomographic acquisition
@@ -381,6 +401,12 @@ def main() -> None:
 
     # Visualization
     _visualize_results(n_reconstructed, target_intensity_images, delta_n)
+
+    # Clear JAX compilation cache at the end to prevent memory accumulation
+    jax.clear_caches()
+
+    # Force garbage collection to clean up any remaining large arrays
+    gc.collect()
 
     # visualize_synthetic_spectra_profiles()
 

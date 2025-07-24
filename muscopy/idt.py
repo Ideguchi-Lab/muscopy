@@ -85,8 +85,8 @@ def make_green_func(params: IDTParameters, u_shift: tuple[float, float], z: floa
         The Green's function evaluated at the given illumination angle.
     """
     xx, yy = jnp.meshgrid(
-        jnp.arange(-params.aperturesize_px, params.aperturesize_px),
-        jnp.arange(-params.aperturesize_px, params.aperturesize_px),
+        jnp.arange(-params.aperturesize_px, params.aperturesize_px + 1),
+        jnp.arange(-params.aperturesize_px, params.aperturesize_px + 1),
         indexing="ij",
     )
     ux = xx + u_shift[0]
@@ -266,7 +266,7 @@ def compute_permitivity(
         jnp.conjugate(h_normalized_re) * g_tilde, axis=-1
     )
 
-    scale_factor = (h_normalized_re + alpha) * (h_normalized_im + beta) - jnp.sum(
+    scale_factor = jnp.sum((h_normalized_re + alpha) * (h_normalized_im + beta), axis=-1) - jnp.sum(
         jnp.conjugate(h_normalized_re) * h_normalized_im, axis=-1
     ) * jnp.sum(jnp.conjugate(h_normalized_im) * h_normalized_re, axis=-1)
 
@@ -385,8 +385,9 @@ def compute_idt(
     alpha = 1e-6  # Regularization parameter for real part
     beta = 1e-6  # Regularization parameter for imaginary part
 
-    eps_re_3d = jnp.zeros((params.img_size_px, params.img_size_px, params.num_z_slices))
-    eps_im_3d = jnp.zeros((params.img_size_px, params.img_size_px, params.num_z_slices))
+    aperture_size = 2 * params.aperturesize_px + 1
+    eps_re_3d = jnp.zeros((aperture_size, aperture_size, params.num_z_slices))
+    eps_im_3d = jnp.zeros((aperture_size, aperture_size, params.num_z_slices))
 
     for z in range(params.num_z_slices):
         eps_re, eps_im = compute_permitivity(

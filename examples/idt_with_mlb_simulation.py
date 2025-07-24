@@ -86,7 +86,8 @@ class IntensityImageSetGenerator:
 
         target_intensity_images = []
         reference_intensity_images = []
-        intensity_image_shape = (self.idt_params.img_size_px, self.idt_params.img_size_px)
+        # Use aperture size for consistency with IDT calculations
+        intensity_image_shape = (2 * self.idt_params.aperturesize_px + 1, 2 * self.idt_params.aperturesize_px + 1)
 
         if self.u_illumination_list is None:
             self.u_illumination_list = []
@@ -125,7 +126,7 @@ class IntensityImageSetGenerator:
             # Generate hologram using muscopy_mlbsim.HologramGenerator
             self.hologram_generator.set_target_field(output_field)
             hologram = self.hologram_generator.generate_hologram(
-                intensity_image_shape=intensity_image_shape,
+                hologram_shape=intensity_image_shape,
                 reference_amplitude=0,
                 bit_depth=16,
                 output_dtype="float32",  # Keep as float for processing
@@ -136,7 +137,7 @@ class IntensityImageSetGenerator:
             ref_field = jnp.fft.ifft2(jnp.fft.ifftshift(input_field_fft))
             self.hologram_generator.set_target_field(ref_field)
             ref_hologram = self.hologram_generator.generate_hologram(
-                intensity_image_shape=intensity_image_shape,
+                hologram_shape=intensity_image_shape,
                 reference_amplitude=0,
                 bit_depth=16,
                 output_dtype="float32",

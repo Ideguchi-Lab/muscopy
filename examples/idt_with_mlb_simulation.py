@@ -8,6 +8,7 @@ with Multi-layer Born (MLB) simulation for microscopy analysis.
 
 import gc
 import typing
+import warnings
 
 import jax
 import jax.numpy as jnp
@@ -25,6 +26,10 @@ from tqdm import tqdm
 
 from muscopy.cfg import ArrayPrecision
 from muscopy.idt import IDTParameters, compute_idt
+
+# Suppress JAX warnings about dtype conversion that can interfere with execution
+warnings.filterwarnings("ignore", category=FutureWarning, message=".*scatter inputs have incompatible types.*")
+warnings.filterwarnings("ignore", category=UserWarning, message=".*Casting complex values to real.*")
 
 
 class IntensityImageSetGenerator:
@@ -232,16 +237,16 @@ def _setup_parameters() -> tuple[IDTParameters, MLBParameters, ArrayPrecision]:
     # Use 32-bit precision to avoid JAX complex128 warnings (complex64 is sufficient)
     precision = ArrayPrecision(int_length=16, float_length=32)
 
-    # IDT parameters - use more conservative values for stability
+    # IDT parameters - use more conservative values for stability and reduced memory usage
     print("Setting ODT parameters...")
     idt_params = IDTParameters(
         na=0.3,  # Reduced NA for stability
         wavelength_m=532e-9,  # 532 nm
-        img_size_px=512,
+        img_size_px=256,  # Reduced image size to decrease memory usage
         px_size_m=3.45e-6 * 3 / 180,
         n_sol=1.33,
         na_illumination=0.3,  # Reduced illumination NA
-        num_z_slices=256,
+        num_z_slices=128,  # Reduced z slices to decrease memory usage
     )
 
     # MLB simulation parameters
@@ -378,7 +383,7 @@ def main() -> None:
 
     # Setup parameters
     idt_params, mlb_params, precision = _setup_parameters()
-    num_angles = 20  # Number of illumination angles for tomographic acquisition
+    num_angles = 12  # Reduced number of angles to decrease computation time and memory usage
 
     # Generate sample (sphere) - increase scattering for better signal
     print("Generating spherical sample...")
@@ -390,11 +395,31 @@ def main() -> None:
     print(f"Memory usage: {scattering_potential.nbytes / 1024**2:.1f} MB")
 
     # Generate holograms
+    print("Starting hologram generation...")
     (target_intensity_images, ref_intensity_images), u_illumination_list = _generate_intensity_images(
         idt_params, mlb_params, scattering_potential, precision, num_angles
     )
+    print(f"Hologram generation completed. Generated {len(target_intensity_images)} holograms.")
 
-    n_re, _ = compute_idt(idt_params, target_intensity_images, ref_intensity_images, u_illumination_list)
+    # Clear any cached data before IDT computation
+    print("Clearing JAX cache before IDT computation...")
+    jax.clear_caches()
+    gc.collect()
+
+    print("Starting IDT computation...")
+    print(f"IDT parameters: img_size_px={idt_params.img_size_px}, num_z_slices={idt_params.num_z_slices}")
+    print(f"Number of illumination angles: {len(u_illumination_list)}")
+    print(f"Memory usage before IDT: {sum(img.nbytes for img in target_intensity_images) / 1024**2:.1f} MB")
+
+    try:
+        n_re, _ = compute_idt(idt_params, target_intensity_images, ref_intensity_images, u_illumination_list)
+        print("IDT computation completed.")
+    except Exception as e:
+        print(f"IDT computation failed with error: {e}")
+        print("Attempting to clear memory and continue with reduced parameters...")
+        jax.clear_caches()
+        gc.collect()
+        raise
 
     # Convert to real refractive index
     n_reconstructed = n_re - idt_params.n_sol

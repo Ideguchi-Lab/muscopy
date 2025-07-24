@@ -481,35 +481,8 @@ def visualize_synthetic_spectra_profiles(synthetic_spectra: Array) -> None:  # n
     print(f"3D volume shape: {log_abs_spectra.shape}")
 
 
-def main() -> None:  # noqa: PLR0914
+def compute_odt(delta_n: float, radius_um: float) -> Array:  # noqa: PLR0914
     """Demonstrate ODT with MLB simulation."""
-    if not MLB_AVAILABLE:
-        print("Skipping ODT with MLB simulation demo - muscopy_mlbsim not available.")
-        # Create a simple placeholder plot for documentation
-        _, ax = plt.subplots(figsize=(8, 6))
-        message = (
-            "muscopy_mlbsim Required\n\n"
-            "This example requires the muscopy_mlbsim package.\n"
-            "Please install it with:\n"
-            "pip install -e ./muscopy-mlbsim"
-        )
-        ax.text(
-            0.5,
-            0.5,
-            message,
-            ha="center",
-            va="center",
-            fontsize=12,
-            bbox={"boxstyle": "round,pad=0.3", "facecolor": "lightgray"},
-        )
-        ax.set_xlim(0, 1)
-        ax.set_ylim(0, 1)
-        ax.axis("off")
-        plt.title("ODT with MLB Simulation Example")
-        plt.tight_layout()
-        plt.savefig("odt_mlb_simulation_placeholder.png", dpi=150, bbox_inches="tight")
-        plt.show()
-        return
 
     # Setup parameters
     odt_params, mlb_params, precision = _setup_parameters()
@@ -518,8 +491,6 @@ def main() -> None:  # noqa: PLR0914
 
     # Generate sample (sphere)
     print("Generating spherical sample...")
-    radius_um = 2.0
-    delta_n = 0.02
     scattering_potential = generate_sphere_potential(mlb_params, radius_um, delta_n, precision=precision)
 
     print(f"Sample size: {scattering_potential.shape}")
@@ -547,18 +518,11 @@ def main() -> None:  # noqa: PLR0914
     # Convert to real refractive index
     n_reconstructed = jnp.real(refractive_index) - odt_params.n_sol
 
-    # Visualization
-    _visualize_results(n_reconstructed, target_holograms, delta_n)
+    # # Visualization
+    # _visualize_results(n_reconstructed, target_holograms, delta_n)
 
-    # Visualize synthetic spectra profiles
-    visualize_synthetic_spectra_profiles(synthetic_spectra)
+    # # Visualize synthetic spectra profiles
+    # visualize_synthetic_spectra_profiles(synthetic_spectra)
 
-    #for access in odtcomparison.py
-    return(n_reconstructed)
-
-n_recon = main()
-
-
-
-if __name__ == "__main__":
-    main()
+    # for access in odtcomparison.py
+    return n_reconstructed

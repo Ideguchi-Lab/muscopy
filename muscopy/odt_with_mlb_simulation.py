@@ -481,7 +481,7 @@ def visualize_synthetic_spectra_profiles(synthetic_spectra: Array) -> None:  # n
     print(f"3D volume shape: {log_abs_spectra.shape}")
 
 
-def compute_odt() -> Array:  # noqa: PLR0914
+def compute_odt(delta_n: float, radius_um: float) -> Array:  # noqa: PLR0914
     """Demonstrate ODT with MLB simulation."""
 
     # Setup parameters
@@ -491,8 +491,6 @@ def compute_odt() -> Array:  # noqa: PLR0914
 
     # Generate sample (sphere)
     print("Generating spherical sample...")
-    radius_um = 2.0
-    delta_n = 0.02
     scattering_potential = generate_sphere_potential(mlb_params, radius_um, delta_n, precision=precision)
 
     print(f"Sample size: {scattering_potential.shape}")

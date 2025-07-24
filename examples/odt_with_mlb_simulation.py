@@ -481,7 +481,7 @@ def visualize_synthetic_spectra_profiles(synthetic_spectra: Array) -> None:  # n
     print(f"3D volume shape: {log_abs_spectra.shape}")
 
 
-def compute_odt() -> Array:  # noqa: PLR0914
+def main() -> None:  # noqa: PLR0914
     """Demonstrate ODT with MLB simulation."""
     if not MLB_AVAILABLE:
         print("Skipping ODT with MLB simulation demo - muscopy_mlbsim not available.")
@@ -553,5 +553,12 @@ def compute_odt() -> Array:  # noqa: PLR0914
     # Visualize synthetic spectra profiles
     visualize_synthetic_spectra_profiles(synthetic_spectra)
 
-    # for access in odtcomparison.py
-    return n_reconstructed
+    #for access in odtcomparison.py
+    return(n_reconstructed)
+
+n_recon = main()
+
+
+
+if __name__ == "__main__":
+    main()

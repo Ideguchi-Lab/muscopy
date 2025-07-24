@@ -483,33 +483,6 @@ def visualize_synthetic_spectra_profiles(synthetic_spectra: Array) -> None:  # n
 
 def compute_odt() -> Array:  # noqa: PLR0914
     """Demonstrate ODT with MLB simulation."""
-    if not MLB_AVAILABLE:
-        print("Skipping ODT with MLB simulation demo - muscopy_mlbsim not available.")
-        # Create a simple placeholder plot for documentation
-        _, ax = plt.subplots(figsize=(8, 6))
-        message = (
-            "muscopy_mlbsim Required\n\n"
-            "This example requires the muscopy_mlbsim package.\n"
-            "Please install it with:\n"
-            "pip install -e ./muscopy-mlbsim"
-        )
-        ax.text(
-            0.5,
-            0.5,
-            message,
-            ha="center",
-            va="center",
-            fontsize=12,
-            bbox={"boxstyle": "round,pad=0.3", "facecolor": "lightgray"},
-        )
-        ax.set_xlim(0, 1)
-        ax.set_ylim(0, 1)
-        ax.axis("off")
-        plt.title("ODT with MLB Simulation Example")
-        plt.tight_layout()
-        plt.savefig("odt_mlb_simulation_placeholder.png", dpi=150, bbox_inches="tight")
-        plt.show()
-        return
 
     # Setup parameters
     odt_params, mlb_params, precision = _setup_parameters()

@@ -55,7 +55,9 @@ def compute_error(n_values, r_values, n_recon) -> float:
     return error
 
 
-n_recon = compute_odt()  # NOTE: isn't it necessary to pass n and r to compute_odt?
+n = 0.02
+r_um = 2
+n_recon = compute_odt(n, r_um)
 
 error_grid = jnp.array([[compute_error(n, r, n_recon) for n in n_values] for r in r_values])
 

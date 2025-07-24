@@ -557,13 +557,7 @@ def main() -> None:  # noqa: PLR0914
 
     #for access in odtcomparison.py
     return(n_reconstructed)
-
-<<<<<<< Updated upstream
-n_recon = main( )
-=======
 n_recon = main()
-
->>>>>>> Stashed changes
 
 
 

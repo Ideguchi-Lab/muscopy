@@ -520,6 +520,7 @@ def main() -> None:  # noqa: PLR0914
     print("Generating spherical sample...")
     radius_um = 2.0
     delta_n = 0.02
+    
     scattering_potential = generate_sphere_potential(mlb_params, radius_um, delta_n, precision=precision)
 
     print(f"Sample size: {scattering_potential.shape}")
@@ -551,12 +552,18 @@ def main() -> None:  # noqa: PLR0914
     _visualize_results(n_reconstructed, target_holograms, delta_n)
 
     # Visualize synthetic spectra profiles
+    refractive_index, synthetic_spectra = odt(cp_spectrums, ref_cp_spectrums, odt_params, odt_config)
     visualize_synthetic_spectra_profiles(synthetic_spectra)
 
     #for access in odtcomparison.py
     return(n_reconstructed)
 
+<<<<<<< Updated upstream
 n_recon = main( )
+=======
+n_recon = main()
+
+>>>>>>> Stashed changes
 
 
 

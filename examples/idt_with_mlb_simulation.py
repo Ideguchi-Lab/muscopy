@@ -131,6 +131,11 @@ class IntensityImageSetGenerator:
                 bit_depth=16,
                 output_dtype="float32",  # Keep as float for processing
             )
+
+            # Normalize hologram to [0, 1] range for better numerical stability
+            hologram = hologram / 65535.0
+
+
             target_intensity_images.append(hologram)
 
             # Generate reference hologram (no scattering)
@@ -142,6 +147,11 @@ class IntensityImageSetGenerator:
                 bit_depth=16,
                 output_dtype="float32",
             )
+
+            # Normalize reference hologram to [0, 1] range for better numerical stability
+            ref_hologram = ref_hologram / 65535.0
+
+
             reference_intensity_images.append(ref_hologram)
 
         return target_intensity_images, reference_intensity_images
@@ -209,15 +219,15 @@ def _setup_parameters() -> tuple[IDTParameters, MLBParameters, ArrayPrecision]:
     # Use 32-bit precision to avoid JAX complex128 warnings (complex64 is sufficient)
     precision = ArrayPrecision(int_length=16, float_length=32)
 
-    # IDT parameters
+    # IDT parameters - use more conservative values for stability
     print("Setting ODT parameters...")
     idt_params = IDTParameters(
-        na=0.6,
+        na=0.3,  # Reduced NA for stability
         wavelength_m=532e-9,  # 532 nm
         img_size_px=512,
         px_size_m=3.45e-6 * 3 / 180,
         n_sol=1.33,
-        na_illumination=0.6,
+        na_illumination=0.3,  # Reduced illumination NA
         num_z_slices=256,
     )
 
@@ -350,10 +360,10 @@ def main() -> None:
     idt_params, mlb_params, precision = _setup_parameters()
     num_angles = 20  # Number of illumination angles for tomographic acquisition
 
-    # Generate sample (sphere)
+    # Generate sample (sphere) - increase scattering for better signal
     print("Generating spherical sample...")
-    radius_um = 2.0
-    delta_n = 0.02
+    radius_um = 3.0  # Larger sphere
+    delta_n = 0.1  # Much stronger scattering
     scattering_potential = generate_sphere_potential(mlb_params, radius_um, delta_n, precision=precision)
 
     print(f"Sample size: {scattering_potential.shape}")

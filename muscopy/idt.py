@@ -39,9 +39,13 @@ def compute_g_list(i_list: Sequence[Array], i_reference: Sequence[Array], normal
         Intensity different or contrast for each angle.
     """
     g_list = []
-    for i_m, i_ref in zip(i_list, i_reference, strict=False):
+    for idx, (i_m, i_ref) in enumerate(zip(i_list, i_reference, strict=False)):
         if normalize:
-            g = (i_m - i_ref) / i_ref
+            # Avoid division by zero in normalization
+            i_ref_safe = jnp.where(jnp.abs(i_ref) < 1e-12, 1e-12, i_ref)
+            g = (i_m - i_ref) / i_ref_safe
+
+
             g_list.append(g)
     return g_list
 
@@ -96,7 +100,10 @@ def make_green_func(params: IDTParameters, u_shift: tuple[float, float], z: floa
     uz = jnp.sqrt(uz_squared)
     uz = uz * mask  # Set imaginary parts to zero where uz_squared < 0  # noqa: PLR6104
 
-    return jnp.exp(-1j * uz * z) / uz
+    # Avoid division by zero
+    uz_safe = jnp.where(jnp.abs(uz) < 1e-12, 1e-12, uz)
+
+    return jnp.exp(-1j * uz_safe * z) / uz_safe
 
 
 def make_pupil_func(params: IDTParameters, u_shift: tuple[float, float]) -> Array:
@@ -256,6 +263,7 @@ def compute_permitivity(
     sum_h_normalized_re = jnp.sum(jnp.abs(h_normalized_re) ** 2, axis=-1)
     sum_h_normalized_im = jnp.sum(jnp.abs(h_normalized_im) ** 2, axis=-1)
 
+
     eps_re_first_term = (sum_h_normalized_im + beta) * jnp.sum(jnp.conjugate(h_normalized_re) * g_tilde, axis=-1)
     eps_re_second_term = jnp.sum(jnp.conjugate(h_normalized_re) * h_normalized_im, axis=-1) * jnp.sum(
         jnp.conjugate(h_normalized_im) * g_tilde, axis=-1
@@ -266,12 +274,17 @@ def compute_permitivity(
         jnp.conjugate(h_normalized_re) * g_tilde, axis=-1
     )
 
-    scale_factor = jnp.sum((h_normalized_re + alpha) * (h_normalized_im + beta), axis=-1) - jnp.sum(
-        jnp.conjugate(h_normalized_re) * h_normalized_im, axis=-1
-    ) * jnp.sum(jnp.conjugate(h_normalized_im) * h_normalized_re, axis=-1)
+    # Fix scale_factor calculation to be real-valued and numerically stable
+    term1 = (sum_h_normalized_re + alpha) * (sum_h_normalized_im + beta)
+    term2 = jnp.abs(jnp.sum(jnp.conjugate(h_normalized_re) * h_normalized_im, axis=-1)) ** 2
+    scale_factor = term1 - term2
+
+    # Regularize scale_factor to avoid division by zero
+    scale_factor = jnp.where(jnp.abs(scale_factor) < 1e-12, 1e-12, scale_factor)
 
     eps_re = (eps_re_first_term - eps_re_second_term) / scale_factor
     eps_im = (eps_im_first_term - eps_im_second_term) / scale_factor
+
 
     return eps_re, eps_im
 
@@ -382,8 +395,8 @@ def compute_idt(
 
     # STEP 5: Solve inverse problem
 
-    alpha = 1e-6  # Regularization parameter for real part
-    beta = 1e-6  # Regularization parameter for imaginary part
+    alpha = 1e-2  # Increased regularization parameter for real part
+    beta = 1e-2  # Increased regularization parameter for imaginary part
 
     aperture_size = 2 * params.aperturesize_px + 1
     eps_re_3d = jnp.zeros((aperture_size, aperture_size, params.num_z_slices))
@@ -403,5 +416,15 @@ def compute_idt(
         eps_im_3d = eps_im_3d.at[:, :, z].set(eps_im)
 
     # STEP 6: Convert permittivity to refractive index
+    n_re_freq, n_im_freq = convert_to_refractive_index(eps_re_3d, eps_im_3d, params.n_sol)
 
-    return convert_to_refractive_index(eps_re_3d, eps_im_3d, params.n_sol)
+    # STEP 7: Transform from frequency domain to spatial domain
+    # The computed refractive index is in frequency domain, need inverse FFT
+    n_re_spatial = jnp.fft.ifft2(n_re_freq, axes=(0, 1), norm="ortho")
+    n_im_spatial = jnp.fft.ifft2(n_im_freq, axes=(0, 1), norm="ortho")
+
+    # Take real part since result should be real in spatial domain
+    n_re_spatial = jnp.real(n_re_spatial)
+    n_im_spatial = jnp.real(n_im_spatial)
+
+    return n_re_spatial, n_im_spatial

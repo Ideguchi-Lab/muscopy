@@ -547,11 +547,11 @@ def compute_odt() -> Array:  # noqa: PLR0914
     # Convert to real refractive index
     n_reconstructed = jnp.real(refractive_index) - odt_params.n_sol
 
-    # Visualization
-    _visualize_results(n_reconstructed, target_holograms, delta_n)
+    # # Visualization
+    # _visualize_results(n_reconstructed, target_holograms, delta_n)
 
-    # Visualize synthetic spectra profiles
-    visualize_synthetic_spectra_profiles(synthetic_spectra)
+    # # Visualize synthetic spectra profiles
+    # visualize_synthetic_spectra_profiles(synthetic_spectra)
 
     # for access in odtcomparison.py
     return n_reconstructed

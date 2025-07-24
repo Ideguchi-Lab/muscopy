@@ -14,6 +14,9 @@ from muscopy.odt import ODTParameters
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+# Numerical stability constants
+_EPSILON = 1e-12  # Small value to avoid division by zero
+
 
 @dataclasses.dataclass
 class IDTParameters(ODTParameters):
@@ -39,12 +42,11 @@ def compute_g_list(i_list: Sequence[Array], i_reference: Sequence[Array], normal
         Intensity different or contrast for each angle.
     """
     g_list = []
-    for idx, (i_m, i_ref) in enumerate(zip(i_list, i_reference, strict=False)):
+    for i_m, i_ref in zip(i_list, i_reference, strict=False):
         if normalize:
             # Avoid division by zero in normalization
-            i_ref_safe = jnp.where(jnp.abs(i_ref) < 1e-12, 1e-12, i_ref)
+            i_ref_safe = jnp.where(jnp.abs(i_ref) < _EPSILON, _EPSILON, i_ref)
             g = (i_m - i_ref) / i_ref_safe
-
 
             g_list.append(g)
     return g_list
@@ -101,7 +103,7 @@ def make_green_func(params: IDTParameters, u_shift: tuple[float, float], z: floa
     uz = uz * mask  # Set imaginary parts to zero where uz_squared < 0  # noqa: PLR6104
 
     # Avoid division by zero
-    uz_safe = jnp.where(jnp.abs(uz) < 1e-12, 1e-12, uz)
+    uz_safe = jnp.where(jnp.abs(uz) < _EPSILON, _EPSILON, uz)
 
     return jnp.exp(-1j * uz_safe * z) / uz_safe
 
@@ -266,7 +268,6 @@ def compute_permitivity(
     sum_h_normalized_re = jnp.sum(jnp.abs(h_normalized_re) ** 2, axis=-1)
     sum_h_normalized_im = jnp.sum(jnp.abs(h_normalized_im) ** 2, axis=-1)
 
-
     eps_re_first_term = (sum_h_normalized_im + beta) * jnp.sum(jnp.conjugate(h_normalized_re) * g_tilde, axis=-1)
     eps_re_second_term = jnp.sum(jnp.conjugate(h_normalized_re) * h_normalized_im, axis=-1) * jnp.sum(
         jnp.conjugate(h_normalized_im) * g_tilde, axis=-1
@@ -283,11 +284,10 @@ def compute_permitivity(
     scale_factor = term1 - term2
 
     # Regularize scale_factor to avoid division by zero
-    scale_factor = jnp.where(jnp.abs(scale_factor) < 1e-12, 1e-12, scale_factor)
+    scale_factor = jnp.where(jnp.abs(scale_factor) < _EPSILON, _EPSILON, scale_factor)
 
     eps_re = (eps_re_first_term - eps_re_second_term) / scale_factor
     eps_im = (eps_im_first_term - eps_im_second_term) / scale_factor
-
 
     return eps_re, eps_im
 

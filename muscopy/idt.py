@@ -66,7 +66,7 @@ def fourier_transform(g_list: Sequence[Array]) -> list[Array]:
     """
     g_tilde_list = []
     for g_l in g_list:
-        g_tilde = jnp.fft.fft2(g_l, norm="ortho")  # FFT with orthonormal normalization
+        g_tilde = jnp.fft.fftshift(jnp.fft.fft2(g_l, norm="ortho"))  # FFT with fftshift for centered spectrum
         g_tilde_list.append(g_tilde)
     return g_tilde_list
 
@@ -121,8 +121,11 @@ def make_pupil_func(params: IDTParameters, u_shift: tuple[float, float]) -> Arra
     Array
         Pupil function as a disk-shaped mask
     """
-    u_shift_int = (int(u_shift[0]), int(u_shift[1]))
-    return make_disk(u_shift_int, params.aperturesize_px / 2, 2 * params.aperturesize_px + 1)
+    # Convert from fftshift coordinates (-aperturesize_px to +aperturesize_px)
+    # to array indices (0 to 2*aperturesize_px)
+    center_x = int(u_shift[0] + params.aperturesize_px)
+    center_y = int(u_shift[1] + params.aperturesize_px)
+    return make_disk((center_x, center_y), params.aperturesize_px / 2, 2 * params.aperturesize_px + 1)
 
 
 def transfer_func_re(
@@ -419,9 +422,9 @@ def compute_idt(
     n_re_freq, n_im_freq = convert_to_refractive_index(eps_re_3d, eps_im_3d, params.n_sol)
 
     # STEP 7: Transform from frequency domain to spatial domain
-    # The computed refractive index is in frequency domain, need inverse FFT
-    n_re_spatial = jnp.fft.ifft2(n_re_freq, axes=(0, 1), norm="ortho")
-    n_im_spatial = jnp.fft.ifft2(n_im_freq, axes=(0, 1), norm="ortho")
+    # The computed refractive index is in frequency domain, need inverse FFT with ifftshift
+    n_re_spatial = jnp.fft.ifft2(jnp.fft.ifftshift(n_re_freq, axes=(0, 1)), axes=(0, 1), norm="ortho")
+    n_im_spatial = jnp.fft.ifft2(jnp.fft.ifftshift(n_im_freq, axes=(0, 1)), axes=(0, 1), norm="ortho")
 
     # Take real part since result should be real in spatial domain
     n_re_spatial = jnp.real(n_re_spatial)

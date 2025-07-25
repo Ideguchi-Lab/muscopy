@@ -59,6 +59,27 @@ error_grid = jnp.zeros((len(r_values), len(n_values)))
 for i, r in enumerate(r_values):
     for j, n in enumerate(n_values):
         n_recon, gt_potential = compute_odt(n, r)
+
+        # Check for nan/inf values in n_recon
+        n_recon_finite = jnp.isfinite(n_recon)
+        if not jnp.all(n_recon_finite):
+            nan_count = jnp.sum(jnp.isnan(n_recon))
+            inf_count = jnp.sum(jnp.isinf(n_recon))
+            print(f"WARNING: n_recon contains non-finite values at n={n:.3f}, r={r:.3f}")
+            print(f"  - NaN count: {nan_count}")
+            print(f"  - Inf count: {inf_count}")
+            print(f"  - Total elements: {n_recon.size}")
+
+        # Check for nan/inf values in gt_potential
+        gt_potential_finite = jnp.isfinite(gt_potential)
+        if not jnp.all(gt_potential_finite):
+            nan_count = jnp.sum(jnp.isnan(gt_potential))
+            inf_count = jnp.sum(jnp.isinf(gt_potential))
+            print(f"WARNING: gt_potential contains non-finite values at n={n:.3f}, r={r:.3f}")
+            print(f"  - NaN count: {nan_count}")
+            print(f"  - Inf count: {inf_count}")
+            print(f"  - Total elements: {gt_potential.size}")
+
         gt_r_index = calc_refractive_index(gt_potential, odt_params) - odt_params.n_sol
 
         error_grid = error_grid.at[i, j].set(compute_error(n_recon, gt_r_index))

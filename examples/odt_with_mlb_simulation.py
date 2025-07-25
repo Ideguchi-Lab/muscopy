@@ -253,7 +253,7 @@ def _setup_parameters() -> tuple[ODTParameters, MLBParameters, ArrayPrecision]:
         wavelength_m=odt_params.wavelength_m,
         numerical_aperture=odt_params.na,
         n_medium=odt_params.n_sol,
-        xy_shape=(2 * odt_params.aperturesize_px, 2 * odt_params.aperturesize_px),
+        xy_shape=(2 * odt_params.aperturesize_px + 1, 2 * odt_params.aperturesize_px + 1),
         num_layers=odt_params.freq_axial_extent_px,
         dxy_m=odt_params.imgpx_lateral_m_per_px,
         dz_m=odt_params.imgpx_axial_m_per_px,
@@ -481,7 +481,7 @@ def visualize_synthetic_spectra_profiles(synthetic_spectra: Array) -> None:  # n
     print(f"3D volume shape: {log_abs_spectra.shape}")
 
 
-def compute_odt(delta_n: float, radius_um: float) -> Array:  # noqa: PLR0914
+def compute_odt(delta_n: float, radius_um: float) -> tuple[Array, Array]:
     """Demonstrate ODT with MLB simulation."""
 
     # Setup parameters
@@ -525,4 +525,4 @@ def compute_odt(delta_n: float, radius_um: float) -> Array:  # noqa: PLR0914
     #visualize_synthetic_spectra_profiles(synthetic_spectra)
 
     #for access in odtcomparison.py
-    return n_reconstructed
+    return n_reconstructed, scattering_potential

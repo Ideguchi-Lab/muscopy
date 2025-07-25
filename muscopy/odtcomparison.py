@@ -24,13 +24,12 @@ odt_params = ODTParameters(
     na=1.1,
     wavelength_m=532e-9,
     img_size_px=512,
-    px_size_m=3.45e-6 * 3 /180 / 2
-    n_sol=1.33
+    px_size_m=3.45e-6 * 3 /180 / 2,
+    n_sol=1.33,
     na_illumination=1.0
 )
-
 #Compute Error
-def compute_error(n: float, r: float) -> float:
+def compute_error(n_recon: Array, gt_r_index: Array) -> float:
     """Finds the error between the Ground Truth image and ODT Reconstruction
     given an n value and an r value
 
@@ -45,34 +44,30 @@ def compute_error(n: float, r: float) -> float:
     -------
     ODT error
     """
-    n_recon = compute_odt(n, r)
 
-    mlb_params = MLBParameters(r, n, 20, [123, 62], 123, 20, 20)
-    gt_image = generate_sphere_potential(mlb_params, r, n).astype(float)
-    recon_volume = n_recon.astype(float)
-    
-    if gt_image.shape != recon_volume.shape:
-        raise ValueError(f"Shape mismatch: gt_image has shape {gt_image.shape}, and recon_volume has shape {recon_volume.shape}")
+    gt_image = jnp.real(gt_r_index)
+    recon_volume = jnp.real(n_recon)
     
     z_idx = gt_image.shape[2] // 2
-    gt_slice = gt_image[:, :, z_idx]
+    gt_slice = gt_image[z_idx, :, :]
     recon_slice = recon_volume[:, :, z_idx]
     error = jnp.mean(jnp.abs(gt_slice - recon_slice)**2)
-    return (error)
+    return float(error)
 
-def generate_error_map(n_values, r_values):
-    errors = jnp.zeros((len(r_values), len(n_values)))
 
-    for i, r in enumerate(r_values):
-        for j, n in enumerate(n_values):
-            errors = errors.at[i, j].set(compute_error(n, r))
-    return errors
+error_grid = jnp.zeros((len(r_values), len(n_values)))
 
-errors = generate_error_map(n_values, r_values)
+for i, r in enumerate(r_values):
+    for j, n in enumerate(n_values):
+        n_recon, gt_potential = compute_odt(n, r)
+        
+        gt_r_index = calc_refractive_index(gt_potential, odt_params) - odt_params.n_sol
+
+        error_grid = error_grid.at[i, j].set(compute_error(n_recon, gt_r_index))
 
 #Plot
-plt.figure(figsize=(5,5))
-sns.heatmap(errors,
+plt.figure(figsize=(10,10))
+sns.heatmap(error_grid,
            annot=True,
            cmap="viridis", 
            linewidths=0.1,

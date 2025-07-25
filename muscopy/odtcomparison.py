@@ -29,8 +29,8 @@ odt_params = ODTParameters(
     img_size_px=512,
     px_size_m=3.45e-6 * 3 /180 / 2,
     n_sol=1.33,
-    na_illumination=1.0
-)
+    na_illumination=1.0)
+
 #Compute Error
 def compute_error(n_recon: Array, gt_r_index: Array) -> float:
     """Finds the error between the Ground Truth image and ODT Reconstruction

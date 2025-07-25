@@ -14,7 +14,7 @@ from muscopy.odt_with_mlb_simulation import compute_odt
 
 # Define axes
 n_values = jnp.linspace(1.33, 1.5, 5)
-r_values = jnp.linspace(0.5, 10, 5)
+r_values = jnp.linspace(0.5, 3, 5)
 
 n_grid, r_grid = jnp.meshgrid(n_values, r_values, indexing="ij")
 
@@ -59,7 +59,7 @@ error_grid = jnp.zeros((len(r_values), len(n_values)))
 for i, r in enumerate(r_values):
     for j, n in enumerate(n_values):
         n_recon, gt_potential = compute_odt(n, r)
-        gt_r_index = calc_refractive_index(gt_potential, odt_params)
+        gt_r_index = calc_refractive_index(gt_potential, odt_params) - odt_params.n_sol
 
         error_grid = error_grid.at[i, j].set(compute_error(n_recon, gt_r_index))
 

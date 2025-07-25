@@ -85,7 +85,7 @@ def calc_visibility(
     return _get_visibility(dc, ac)
 
 
-def calc_phase_noise(  # noqa: PLR0913, PLR0917
+def calc_phase_noise(
     hologram: Array,
     params: MuParameters,
     offaxis_center: tuple[int, int],

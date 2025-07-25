@@ -74,7 +74,7 @@ def qpi(
     return jnp.angle(cp_fields)
 
 
-def mip_qpi(  # noqa: PLR0913
+def mip_qpi(
     array_on: Array,
     array_off: Array,
     params: MuParameters,

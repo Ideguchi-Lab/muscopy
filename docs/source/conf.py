@@ -33,7 +33,7 @@ extensions = [
 ]
 
 templates_path = ["_templates"]
-exclude_patterns = []
+exclude_patterns: list[str] = []
 autosectionlabel_prefix_document = True
 default_role = "any"
 autodoc_typehints = "description"

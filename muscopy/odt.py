@@ -347,7 +347,7 @@ def odt(
     return refractive_index, synthesized_spectrum
 
 
-def calculate_odt_difference(  # noqa: PLR0913, PLR0917
+def calculate_odt_difference(
     cp_spectrums_1: Sequence[Array],
     ref_cp_spectrums_1: Sequence[Array],
     cp_spectrums_2: Sequence[Array],
@@ -538,7 +538,7 @@ def _shift_dh_spectrum(params: ODTParameters, cp_spectrum: Array, illumination_v
     ].set(cp_spectrum)
 
 
-def _calc_1st_scattering_spectrum(  # noqa: PLR0913, PLR0917
+def _calc_1st_scattering_spectrum(
     cp_field: Array,
     ref_cp_field: Array,
     params: ODTParameters,

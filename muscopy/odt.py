@@ -282,21 +282,9 @@ def calc_refractive_index(scattering_potential: Array, params: ODTParameters) ->
     `Array`
         3D refractive index
     """
-    # Input validation and safety check for inf/nan values
-    safe_potential = jnp.where(
-        jnp.isfinite(scattering_potential),
-        scattering_potential,
-        0.0  # Replace inf/nan with 0
-    )
-
     # Calculate square root argument
-    sqrt_arg = jnp.ones_like(safe_potential) + safe_potential / (params.light_freq_px * params.freq_per_px) ** 2
-
-    # Ensure square root argument is finite for complex numbers
-    sqrt_arg = jnp.where(
-        jnp.isfinite(sqrt_arg),
-        sqrt_arg,
-        1.0 + 0j  # Replace inf/nan with 1 to avoid NaN in sqrt
+    sqrt_arg = (
+        jnp.ones_like(scattering_potential) + scattering_potential / (params.light_freq_px * params.freq_per_px) ** 2
     )
 
     return params.n_sol * jnp.sqrt(sqrt_arg)

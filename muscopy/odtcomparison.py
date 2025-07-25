@@ -5,28 +5,29 @@ and reconstruct it using ODT. We then compare the result to the original to see
 for what sizes and what refractive index ODT is most effective
 """
 
-import typing
 import jax.numpy as jnp
+from jax import Array
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
-import sys
-import os
 
-from muscopy.cfg import ArrayPrecision
-from muscopy.dh import get_spectrum, print_all_parameters
-from muscopy.odt import ODTConfig, ODTParameters, odt
-from tqdm import tqdm
 from muscopy.odt_with_mlb_simulation import generate_sphere_potential, MLBParameters, compute_odt
+from muscopy.odt import calc_refractive_index, ODTParameters
 
 
 #Define axes
 n_values = jnp.linspace(1.33, 1.5, 20)
-r_values = jnp.linspace(0.5, 10, 20)
+r_values = jnp.linspace(0.5, 3, 20)
 
 n_grid, r_grid = jnp.meshgrid(n_values, r_values, indexing='ij')
-
-print_all_parameters
+odt_params = ODTParameters(
+    na=1.1,
+    wavelength_m=532e-9,
+    img_size_px=512,
+    px_size_m=3.45e-6 * 3 /180 / 2
+    n_sol=1.33
+    na_illumination=1.0
+)
 
 #Compute Error
 def compute_error(n: float, r: float) -> float:

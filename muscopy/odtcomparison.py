@@ -70,17 +70,28 @@ def generate_error_map(n_values, r_values):
 errors = generate_error_map(n_values, r_values)
 
 #Plot
-plt.figure(figsize=(20,20))
+plt.figure(figsize=(5,5))
 sns.heatmap(errors,
            annot=True,
            cmap="viridis", 
            linewidths=0.1,
            linecolor="black",
-           cbar_kws={"label":"ODT Error Map"})
+           cbar_kws={"label":"ODT Error Map"},
+           xticklabels=False,
+           yticklabels=False)
+plt.xticks(
+    ticks=range(len(n_values)),
+    labels=[f"{n:.3f}" for n in n_values],
+    rotation=45
+)
+plt.yticks(
+    ticks=range(len(r_values)),
+    labels=[f"{r:.2f}" for r in r_values],
+    rotation=0
+)
            
 plt.xlabel("Refractive Index")
 plt.ylabel("Sphere Radius (um)")
-plt.colorbar(label="Error (|GT - ODT|^2)")
 plt.title("Error Heatmap")
 plt.tight_layout()
 plt.show()

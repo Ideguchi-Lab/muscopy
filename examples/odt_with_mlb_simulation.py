@@ -253,7 +253,7 @@ def _setup_parameters() -> tuple[ODTParameters, MLBParameters, ArrayPrecision]:
         wavelength_m=odt_params.wavelength_m,
         numerical_aperture=odt_params.na,
         n_medium=odt_params.n_sol,
-        xy_shape=(2 * odt_params.aperturesize_px, 2 * odt_params.aperturesize_px),
+        xy_shape=(2 * odt_params.aperturesize_px + 1, 2 * odt_params.aperturesize_px + 1),
         num_layers=odt_params.freq_axial_extent_px,
         dxy_m=odt_params.imgpx_lateral_m_per_px,
         dz_m=odt_params.imgpx_axial_m_per_px,
@@ -520,8 +520,8 @@ def main() -> None:  # noqa: PLR0914
     print("Generating spherical sample...")
     radius_um = 2.0
     delta_n = 0.02
-    
-    
+
+
     scattering_potential = generate_sphere_potential(mlb_params, radius_um, delta_n, precision=precision)
 
     print(f"Sample size: {scattering_potential.shape}")

@@ -13,7 +13,11 @@ import seaborn as sns
 
 from muscopy.odt_with_mlb_simulation import generate_sphere_potential, MLBParameters, compute_odt
 from muscopy.odt import calc_refractive_index, ODTParameters
-
+"""
+NOTE: To run this you have to edit muscopy/odt_with_mlb_simulation.py
+Line 484: change ' -> tuple[Array, Array]' to ' -> Array'
+Line 528: change 'return n_reconstructed, scattering_potential' to 'return n_reconstructed'
+"""
 
 #Define axes
 n_values = jnp.linspace(1.33, 1.5, 20)
@@ -41,15 +45,15 @@ def compute_error(n: float, r: float) -> float:
     n_recon = compute_odt(n, r)
 
     mlb_params = MLBParameters(r, n, 20, [123, 62], 123, 20, 20)
-    gt_image = generate_sphere_potential(mlb_params, r, n).astype(float)
-    recon_volume = n_recon.astype(float)
+    gt_image_t = generate_sphere_potential(mlb_params, r, n).astype(float)
+    recon_volume_t = n_recon.astype(float)
     
-    if gt_image.shape != recon_volume.shape:
-        raise ValueError(f"Shape mismatch: gt_image has shape {gt_image.shape}, and recon_volume has shape {recon_volume.shape}")
+    if gt_image_t.shape != recon_volume_t.shape:
+        raise ValueError(f"Shape mismatch: gt_image_t has shape {gt_image_t.shape}, and recon_volume_t has shape {recon_volume_t.shape}")
     
-    z_idx = gt_image.shape[2] // 2
-    gt_slice = gt_image[:, :, z_idx]
-    recon_slice = recon_volume[:, :, z_idx]
+    z_idx = gt_image_t.shape[2] // 2
+    gt_slice = gt_image_t[:, :, z_idx]
+    recon_slice = recon_volume_t[z_idx, :, :]
     error = jnp.mean(jnp.abs(gt_slice - recon_slice)**2)
     return (error)
 

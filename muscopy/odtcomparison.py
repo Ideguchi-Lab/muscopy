@@ -13,10 +13,13 @@ import seaborn as sns
 
 from muscopy.odt_with_mlb_simulation import generate_sphere_potential, MLBParameters, compute_odt
 from muscopy.odt import calc_refractive_index, ODTParameters
-
-
+"""
+NOTE: To run this you have to edit muscopy/odt_with_mlb_simulation.py
+Line 484: change ' -> Array' to ' -> 'tuple[Array, Array]'
+Line 528: change 'return n_reconstructed' to 'return n_reconstructed, scattering_potential'
+"""
 #Define axes
-n_values = jnp.linspace(1.33, 1.5, 20)
+n_values = jnp.linspace(0.01, 0.17, 20)
 r_values = jnp.linspace(0.5, 3, 20)
 
 n_grid, r_grid = jnp.meshgrid(n_values, r_values, indexing='ij')

@@ -5,30 +5,31 @@ and reconstruct it using ODT. We then compare the result to the original to see
 for what sizes and what refractive index ODT is most effective
 """
 
-import typing
 import jax.numpy as jnp
+from jax import Array
 import matplotlib.pyplot as plt
-import numpy as np
-import sys
-import os
 
-from muscopy.cfg import ArrayPrecision
-from muscopy.dh import get_spectrum, print_all_parameters
-from muscopy.odt import ODTConfig, ODTParameters, odt
-from tqdm import tqdm
-from muscopy.odt_with_mlb_simulation import generate_sphere_potential, MLBParameters, compute_odt
+from muscopy.odt import calc_refractive_index, ODTParameters
+from muscopy.odt_with_mlb_simulation import compute_odt
+
+# Define axes
+n_values = jnp.linspace(1.33, 1.5, 5)
+r_values = jnp.linspace(0.5, 10, 5)
+
+n_grid, r_grid = jnp.meshgrid(n_values, r_values, indexing="ij")
+
+odt_params = ODTParameters(
+    na=1.1,
+    wavelength_m=532e-9,
+    img_size_px=512,  # Smaller for faster computation
+    px_size_m=3.45e-6 * 3 / 180 / 2,
+    n_sol=1.33,
+    na_illumination=1.0,
+)
 
 
-#Define axes
-n_values = jnp.linspace(1.33, 1.5, 20)
-r_values = jnp.linspace(0.5, 10, 20)
-
-n_grid, r_grid = jnp.meshgrid(n_values, r_values, indexing='ij')
-
-print_all_parameters
-
-#Compute Error
-def compute_error(n: float, r: float, n_recon) -> float:
+# Compute Error
+def compute_error(n_recon: Array, gt_r_index: Array) -> float:
     """Finds the error between the Ground Truth image and ODT Reconstruction
     given an n value and an r value
 
@@ -43,35 +44,39 @@ def compute_error(n: float, r: float, n_recon) -> float:
     -------
     ODT error
     """
-    nr_pairs = [(n, r) for n in n_values for r in r_values]
-    for n, r in nr_pairs:
-        mlb_params = MLBParameters(1.0, 1.33, 20, [123, 62], 123, 20, 20)
-        gt_image = generate_sphere_potential(mlb_params, r, n).astype(float)
-        recon_volume = n_recon.astype(float)
-    
-        if gt_image.shape != recon_volume.shape:
-            raise ValueError(f"Shape mismatch: gt_image has shape {gt_image.shape}, and recon_volume has shape {recon_volume.shape}")
-    
-        z_idx = gt_image.shape[2] // 2
-        gt_slice = gt_image[:, :, z_idx]
-        recon_slice = recon_volume[:, :, z_idx]
-        error = jnp.mean(jnp.abs(gt_slice - recon_slice)**2)
+
+    gt_image = jnp.real(gt_r_index)
+    recon_volume = jnp.real(n_recon)
+
+    z_idx = gt_image.shape[2] // 2
+    gt_slice = gt_image[z_idx, :, :]
+    recon_slice = recon_volume[:, :, z_idx]
+    error = jnp.mean(jnp.abs(gt_slice - recon_slice) ** 2)
     return float(error)
 
-error_grid = jnp.array([[compute_error(n, r, compute_odt(n, r)) for n in n_values] for r in r_values])
+
+error_grid = jnp.zeros((len(r_values), len(n_values)))
+for i, r in enumerate(r_values):
+    for j, n in enumerate(n_values):
+        n_recon, gt_potential = compute_odt(n, r)
+        gt_r_index = calc_refractive_index(gt_potential, odt_params)
+
+        error_grid = error_grid.at[i, j].set(compute_error(n_recon, gt_r_index))
 
 print("error_grid.shape:", error_grid.shape)
 print("error_grid:", error_grid)
 
-#Plot
-plt.figure(figsize=(20,20))
-plt.imshow(error_grid,
-           extent=[n_values.min(), n_values.max(), r_values.min(), r_values.max()],
-           origin="lower",
-           aspect="auto",
-           cmap="viridis",
-           vmin=error_grid.min(),
-           vmax=error_grid.max())
+# Plot
+plt.figure(figsize=(20, 20))
+plt.imshow(
+    error_grid,
+    extent=[n_values.min(), n_values.max(), r_values.min(), r_values.max()],
+    origin="lower",
+    aspect="auto",
+    cmap="viridis",
+    vmin=error_grid.min(),
+    vmax=error_grid.max(),
+)
 plt.xlabel("Refractive Index")
 plt.ylabel("Sphere Radius (um)")
 plt.colorbar(label="Error (|GT - ODT|^2)")

@@ -69,9 +69,9 @@ for i, r in enumerate(r_values):
         error_grid = error_grid.at[i, j].set(compute_error(n_recon, gt_r_index))
 
 #Plot
-plt.figure(figsize=(10,10))
-sns.heatmap(error_grid,
-           annot=True,
+plt.figure(figsize=(8,6))
+ax = sns.heatmap(error_grid,
+           annot=False,
            cmap="viridis", 
            linewidths=0.1,
            linecolor="black",
@@ -88,6 +88,7 @@ plt.yticks(
     labels=[f"{r:.2f}" for r in r_values],
     rotation=0
 )
+ax.invert_yaxis()
            
 plt.xlabel("Refractive Index")
 plt.ylabel("Sphere Radius (um)")

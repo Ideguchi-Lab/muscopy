@@ -8,7 +8,8 @@ for what sizes and what refractive index ODT is most effective
 import typing
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
-import numpy as np
+import pandas as pd
+import seaborn as sns
 import sys
 import os
 
@@ -28,7 +29,7 @@ n_grid, r_grid = jnp.meshgrid(n_values, r_values, indexing='ij')
 print_all_parameters
 
 #Compute Error
-def compute_error(n: float, r: float, n_recon) -> float:
+def compute_error(n: float, r: float) -> float:
     """Finds the error between the Ground Truth image and ODT Reconstruction
     given an n value and an r value
 
@@ -43,35 +44,40 @@ def compute_error(n: float, r: float, n_recon) -> float:
     -------
     ODT error
     """
-    nr_pairs = [(n, r) for n in n_values for r in r_values]
-    for n, r in nr_pairs:
-        mlb_params = MLBParameters(1.0, 1.33, 20, [123, 62], 123, 20, 20)
-        gt_image = generate_sphere_potential(mlb_params, r, n).astype(float)
-        recon_volume = n_recon.astype(float)
-    
-        if gt_image.shape != recon_volume.shape:
-            raise ValueError(f"Shape mismatch: gt_image has shape {gt_image.shape}, and recon_volume has shape {recon_volume.shape}")
-    
-        z_idx = gt_image.shape[2] // 2
-        gt_slice = gt_image[:, :, z_idx]
-        recon_slice = recon_volume[:, :, z_idx]
-        error = jnp.mean(jnp.abs(gt_slice - recon_slice)**2)
-    return float(error)
+    n_recon = compute_odt(n, r)
 
-error_grid = jnp.array([[compute_error(n, r, compute_odt(n, r)) for n in n_values] for r in r_values])
+    mlb_params = MLBParameters(r, n, 20, [123, 62], 123, 20, 20)
+    gt_image = generate_sphere_potential(mlb_params, r, n).astype(float)
+    recon_volume = n_recon.astype(float)
+    
+    if gt_image.shape != recon_volume.shape:
+        raise ValueError(f"Shape mismatch: gt_image has shape {gt_image.shape}, and recon_volume has shape {recon_volume.shape}")
+    
+    z_idx = gt_image.shape[2] // 2
+    gt_slice = gt_image[:, :, z_idx]
+    recon_slice = recon_volume[:, :, z_idx]
+    error = jnp.mean(jnp.abs(gt_slice - recon_slice)**2)
+    return (error)
 
-print("error_grid.shape:", error_grid.shape)
-print("error_grid:", error_grid)
+def generate_error_map(n_values, r_values):
+    errors = jnp.zeros((len(r_values), len(n_values)))
+
+    for i, r in enumerate(r_values):
+        for j, n in enumerate(n_values):
+            errors = errors.at[i, j].set(compute_error(n, r))
+    return errors
+
+errors = generate_error_map(n_values, r_values)
 
 #Plot
 plt.figure(figsize=(20,20))
-plt.imshow(error_grid,
-           extent=[n_values.min(), n_values.max(), r_values.min(), r_values.max()],
-           origin="lower",
-           aspect="auto",
-           cmap="viridis",
-           vmin=error_grid.min(),
-           vmax=error_grid.max())
+sns.heatmap(errors,
+           annot=True,
+           cmap="viridis", 
+           linewidths=0.1,
+           linecolor="black",
+           cbar_kws={"label":"ODT Error Map"})
+           
 plt.xlabel("Refractive Index")
 plt.ylabel("Sphere Radius (um)")
 plt.colorbar(label="Error (|GT - ODT|^2)")

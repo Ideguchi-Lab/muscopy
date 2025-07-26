@@ -9,6 +9,7 @@ with Multi-layer Born (MLB) simulation for microscopy analysis.
 import gc
 import typing
 import warnings
+from pathlib import Path
 
 import jax
 import jax.numpy as jnp
@@ -385,29 +386,75 @@ def _generate_intensity_images(
     scattering_potential: Array,
     precision: ArrayPrecision,
     num_angles: int = 60,
+    save_path: str = "intensity_images",
 ) -> tuple[tuple[list[Array], list[Array]], list[tuple[float, float]]]:
     r"""Generate hologram sets.
+
+    Parameters
+    ----------
+    save_path : str, optional
+        Directory to save/load intensity images, by default "intensity_images"
 
     Returns
     -------
     tuple[tuple[list[Array], list[Array]], list[tuple[float, float]]]
         Target holograms, reference holograms, and illumination angles
     """
+    # Create save directory if it doesn't exist
+    save_dir = Path(save_path)
+    save_dir.mkdir(parents=True, exist_ok=True)
+
+    target_images_path = save_dir / "target_intensity_images.npy"
+    ref_images_path = save_dir / "ref_intensity_images.npy"
+    u_illumination_path = save_dir / "u_illumination_list.npy"
+
+    # Check if saved images exist
+    if target_images_path.exists() and ref_images_path.exists() and u_illumination_path.exists():
+        print(f"Loading existing intensity images from {save_path}...")
+
+        # Load saved images
+        target_intensity_images_np = np.load(target_images_path)
+        ref_intensity_images_np = np.load(ref_images_path)
+        u_illumination_list_np = np.load(u_illumination_path)
+        # Convert numpy arrays back to JAX arrays and lists
+        target_intensity_images = [jnp.array(img) for img in target_intensity_images_np]
+        ref_intensity_images = [jnp.array(img) for img in ref_intensity_images_np]
+        u_illumination_list = [(float(u[0]), float(u[1])) for u in u_illumination_list_np]
+
+        print(f"Loaded {len(target_intensity_images)} intensity images from disk.")
+        return (target_intensity_images, ref_intensity_images), u_illumination_list
+
+    # Generate new images if not found
     print("Setting up hologram generator...")
     intensity_image_gen = IntensityImageSetGenerator(idt_params, mlb_params, precision)
     intensity_image_gen.set_illumination_angles(num_angles)  # Fewer angles for faster computation
     intensity_image_gen.set_scattering_potential(scattering_potential)
 
     intensity_images = intensity_image_gen.generate_intensity_image_set()
+    target_intensity_images, ref_intensity_images = intensity_images
 
     u_illumination_list = intensity_image_gen.u_illumination_list
     if u_illumination_list is None:
         u_illumination_list = []
 
+    # Save generated images to disk
+    print(f"Saving intensity images to {save_path}...")
+
+    # Convert JAX arrays to numpy arrays for saving
+    target_intensity_images_np = np.array([np.array(img) for img in target_intensity_images])
+    ref_intensity_images_np = np.array([np.array(img) for img in ref_intensity_images])
+    u_illumination_list_np = np.array(u_illumination_list)
+
+    np.save(target_images_path, target_intensity_images_np)
+    np.save(ref_images_path, ref_intensity_images_np)
+    np.save(u_illumination_path, u_illumination_list_np)
+
+    print(f"Saved {len(target_intensity_images)} intensity images to disk.")
+
     # Clean up the generator to free memory
     intensity_image_gen.cleanup()
 
-    return intensity_images, u_illumination_list
+    return (target_intensity_images, ref_intensity_images), u_illumination_list
 
 
 def _visualize_results(
@@ -509,12 +556,12 @@ def main() -> None:
     print(f"Sample size: {scattering_potential.shape}")
     print(f"Memory usage: {scattering_potential.nbytes / 1024**2:.1f} MB")
 
-    # Generate holograms
+    # Generate holograms (or load from disk if available)
     print("Starting hologram generation...")
     (target_intensity_images, ref_intensity_images), u_illumination_list = _generate_intensity_images(
-        idt_params, mlb_params, scattering_potential, precision, num_angles
+        idt_params, mlb_params, scattering_potential, precision, num_angles, save_path="intensity_images"
     )
-    print(f"Hologram generation completed. Generated {len(target_intensity_images)} holograms.")
+    print(f"Hologram generation completed. Using {len(target_intensity_images)} holograms.")
 
     # Clear any cached data before IDT computation
     print("Clearing JAX cache before IDT computation...")

@@ -12,9 +12,9 @@ import matplotlib.pyplot as plt
 from muscopy.odt import calc_refractive_index, ODTParameters
 from muscopy.odt_with_mlb_simulation import compute_odt
 
-# Define axes
-n_values = jnp.linspace(1.33, 1.5, 5)
-r_values = jnp.linspace(0.5, 3, 5)
+# Define axes - reduced for debugging
+n_values = jnp.linspace(0.01, 0.17, 5)
+r_values = jnp.linspace(0.5, 3, 5)  # Focus on problematic range
 
 n_grid, r_grid = jnp.meshgrid(n_values, r_values, indexing="ij")
 

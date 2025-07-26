@@ -122,7 +122,7 @@ class HologramSetGenerator:
         hologram_shape = (self.odt_params.img_size_px, self.odt_params.img_size_px)
 
         print("Generating holograms...")
-        for angle in tqdm(self.angles):
+        for i, angle in enumerate(tqdm(self.angles)):
             # Calculate illumination wave vector components
             kx_ill = (
                 self.odt_params.light_freq_px
@@ -146,9 +146,21 @@ class HologramSetGenerator:
                 float(ky_ill),
             )
 
+            # Debug: Check input_field_fft
+            if not jnp.all(jnp.isfinite(input_field_fft)):
+                print(f"DEBUG: input_field_fft[{i}] contains non-finite values")
+                print(f"  - NaN count: {jnp.sum(jnp.isnan(input_field_fft))}")
+                print(f"  - Inf count: {jnp.sum(jnp.isinf(input_field_fft))}")
+
             # Set input field and simulate forward scattering
             self.mlb_forward.set_input_field_fft(input_field_fft)
             output_field = self.mlb_forward.get_observation_field()
+
+            # Debug: Check output_field from MLB forward simulation
+            if not jnp.all(jnp.isfinite(output_field)):
+                print(f"DEBUG: output_field[{i}] from MLB contains non-finite values")
+                print(f"  - NaN count: {jnp.sum(jnp.isnan(output_field))}")
+                print(f"  - Inf count: {jnp.sum(jnp.isinf(output_field))}")
 
             # Generate hologram using muscopy_mlbsim.HologramGenerator
             self.hologram_generator.set_target_field(output_field)
@@ -158,10 +170,24 @@ class HologramSetGenerator:
                 bit_depth=16,
                 output_dtype="float32",  # Keep as float for processing
             )
+
+            # Debug: Check generated hologram
+            if not jnp.all(jnp.isfinite(hologram)):
+                print(f"DEBUG: target hologram[{i}] contains non-finite values")
+                print(f"  - NaN count: {jnp.sum(jnp.isnan(hologram))}")
+                print(f"  - Inf count: {jnp.sum(jnp.isinf(hologram))}")
+
             target_holograms.append(hologram)
 
             # Generate reference hologram (no scattering)
             ref_field = jnp.fft.ifft2(jnp.fft.ifftshift(input_field_fft))
+
+            # Debug: Check reference field
+            if not jnp.all(jnp.isfinite(ref_field)):
+                print(f"DEBUG: ref_field[{i}] contains non-finite values")
+                print(f"  - NaN count: {jnp.sum(jnp.isnan(ref_field))}")
+                print(f"  - Inf count: {jnp.sum(jnp.isinf(ref_field))}")
+
             self.hologram_generator.set_target_field(ref_field)
             ref_hologram = self.hologram_generator.generate_hologram(
                 hologram_shape=hologram_shape,
@@ -169,6 +195,13 @@ class HologramSetGenerator:
                 bit_depth=16,
                 output_dtype="float32",
             )
+
+            # Debug: Check generated reference hologram
+            if not jnp.all(jnp.isfinite(ref_hologram)):
+                print(f"DEBUG: reference hologram[{i}] contains non-finite values")
+                print(f"  - NaN count: {jnp.sum(jnp.isnan(ref_hologram))}")
+                print(f"  - Inf count: {jnp.sum(jnp.isinf(ref_hologram))}")
+
             reference_holograms.append(ref_hologram)
 
         return target_holograms, reference_holograms
@@ -302,14 +335,34 @@ def _extract_spectra(
     cp_spectrums = []
     ref_cp_spectrums = []
 
-    for target_hol, ref_hol in zip(target_holograms, ref_holograms, strict=True):
+    for i, (target_hol, ref_hol) in enumerate(zip(target_holograms, ref_holograms, strict=True)):
         # Convert to complex field spectrum
         ft_target = jnp.fft.fftshift(jnp.fft.fft2(target_hol))
         ft_ref = jnp.fft.fftshift(jnp.fft.fft2(ref_hol))
 
+        # Debug: Check FFT results
+        if not jnp.all(jnp.isfinite(ft_target)):
+            print(f"DEBUG: ft_target[{i}] contains non-finite values")
+            print(f"  - NaN count: {jnp.sum(jnp.isnan(ft_target))}")
+            print(f"  - Inf count: {jnp.sum(jnp.isinf(ft_target))}")
+        if not jnp.all(jnp.isfinite(ft_ref)):
+            print(f"DEBUG: ft_ref[{i}] contains non-finite values")
+            print(f"  - NaN count: {jnp.sum(jnp.isnan(ft_ref))}")
+            print(f"  - Inf count: {jnp.sum(jnp.isinf(ft_ref))}")
+
         # Extract complex field using get_spectrum
         cp_spectrum = get_spectrum(ft_target, odt_params, offaxis_center)
         ref_cp_spectrum = get_spectrum(ft_ref, odt_params, offaxis_center)
+
+        # Debug: Check get_spectrum results
+        if not jnp.all(jnp.isfinite(cp_spectrum)):
+            print(f"DEBUG: cp_spectrum[{i}] from get_spectrum contains non-finite values")
+            print(f"  - NaN count: {jnp.sum(jnp.isnan(cp_spectrum))}")
+            print(f"  - Inf count: {jnp.sum(jnp.isinf(cp_spectrum))}")
+        if not jnp.all(jnp.isfinite(ref_cp_spectrum)):
+            print(f"DEBUG: ref_cp_spectrum[{i}] from get_spectrum contains non-finite values")
+            print(f"  - NaN count: {jnp.sum(jnp.isnan(ref_cp_spectrum))}")
+            print(f"  - Inf count: {jnp.sum(jnp.isinf(ref_cp_spectrum))}")
 
         cp_spectrums.append(cp_spectrum)
         ref_cp_spectrums.append(ref_cp_spectrum)
@@ -504,6 +557,17 @@ def compute_odt(delta_n: float, radius_um: float) -> tuple[Array, Array]:  # noq
     # Extract complex field spectra
     cp_spectrums, ref_cp_spectrums = _extract_spectra(target_holograms, ref_holograms, odt_params, offaxis_center)
 
+    # Debug: Check complex spectra for NaN/Inf
+    for i, (cp_spec, ref_spec) in enumerate(zip(cp_spectrums, ref_cp_spectrums)):
+        if not jnp.all(jnp.isfinite(cp_spec)):
+            print(f"DEBUG: cp_spectrum[{i}] contains non-finite values")
+            print(f"  - NaN count: {jnp.sum(jnp.isnan(cp_spec))}")
+            print(f"  - Inf count: {jnp.sum(jnp.isinf(cp_spec))}")
+        if not jnp.all(jnp.isfinite(ref_spec)):
+            print(f"DEBUG: ref_cp_spectrum[{i}] contains non-finite values")
+            print(f"  - NaN count: {jnp.sum(jnp.isnan(ref_spec))}")
+            print(f"  - Inf count: {jnp.sum(jnp.isinf(ref_spec))}")
+
     # ODT reconstruction
     print("Performing ODT reconstruction...")
     odt_config = ODTConfig(
@@ -515,8 +579,29 @@ def compute_odt(delta_n: float, radius_um: float) -> tuple[Array, Array]:  # noq
 
     refractive_index, synthetic_spectra = odt(cp_spectrums, ref_cp_spectrums, odt_params, odt_config)
 
+    # Debug: Check ODT output for NaN/Inf
+    if not jnp.all(jnp.isfinite(refractive_index)):
+        print("DEBUG: ODT refractive_index contains non-finite values")
+        print(f"  - NaN count: {jnp.sum(jnp.isnan(refractive_index))}")
+        print(f"  - Inf count: {jnp.sum(jnp.isinf(refractive_index))}")
+
+    if not jnp.all(jnp.isfinite(synthetic_spectra)):
+        print("DEBUG: ODT synthetic_spectra contains non-finite values")
+        print(f"  - NaN count: {jnp.sum(jnp.isnan(synthetic_spectra))}")
+        print(f"  - Inf count: {jnp.sum(jnp.isinf(synthetic_spectra))}")
+
     # Convert to real refractive index
     n_reconstructed = jnp.real(refractive_index) - odt_params.n_sol
+
+    # Debug: Check final n_reconstructed for NaN/Inf
+    if not jnp.all(jnp.isfinite(n_reconstructed)):
+        print("DEBUG: n_reconstructed contains non-finite values")
+        print(f"  - NaN count: {jnp.sum(jnp.isnan(n_reconstructed))}")
+        print(f"  - Inf count: {jnp.sum(jnp.isinf(n_reconstructed))}")
+        print(f"  - Shape: {n_reconstructed.shape}")
+        print(
+            f"  - Min/Max finite values: {jnp.min(n_reconstructed[jnp.isfinite(n_reconstructed)]):.6f} / {jnp.max(n_reconstructed[jnp.isfinite(n_reconstructed)]):.6f}"
+        )
 
     # # Visualization
     # _visualize_results(n_reconstructed, target_holograms, delta_n)

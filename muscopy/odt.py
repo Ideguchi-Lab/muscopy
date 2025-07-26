@@ -317,7 +317,7 @@ def odt(
     params.verify_parameters()
     # weak scattering approximation
     scattering_spectrums = []
-    for cp_spectrum, ref_cp_spectrum in zip(cp_spectrums, ref_cp_spectrums, strict=False):
+    for i, (cp_spectrum, ref_cp_spectrum) in enumerate(zip(cp_spectrums, ref_cp_spectrums, strict=False)):
         max_x, max_y, _ = _find_max_args(jnp.abs(ref_cp_spectrum))
         illumination_vector = (max_x - params.aperturesize_px // 2, max_y - params.aperturesize_px // 2)
         expanded_cp_spectrum = _shift_dh_spectrum(params, cp_spectrum, illumination_vector).astype(
@@ -326,27 +326,80 @@ def odt(
         expanded_ref_cp_spectrum = _shift_dh_spectrum(params, ref_cp_spectrum, illumination_vector).astype(
             config.precision.complex_precision()
         )
+
+        # Debug: Check expanded spectra
+        if not jnp.all(jnp.isfinite(expanded_cp_spectrum)):
+            print(f"DEBUG: expanded_cp_spectrum[{i}] contains non-finite values")
+        if not jnp.all(jnp.isfinite(expanded_ref_cp_spectrum)):
+            print(f"DEBUG: expanded_ref_cp_spectrum[{i}] contains non-finite values")
+
         cp_field = jnp.fft.ifft2(jnp.fft.ifftshift(expanded_cp_spectrum), norm="ortho")
         ref_cp_field = jnp.fft.ifft2(jnp.fft.ifftshift(expanded_ref_cp_spectrum), norm="ortho")
+
+        # Debug: Check fields after IFFT
+        if not jnp.all(jnp.isfinite(cp_field)):
+            print(f"DEBUG: cp_field[{i}] contains non-finite values")
+        if not jnp.all(jnp.isfinite(ref_cp_field)):
+            print(f"DEBUG: ref_cp_field[{i}] contains non-finite values")
+
         scattering_spectrum_array = _calc_1st_scattering_spectrum(
             cp_field, ref_cp_field, params, config.approx_type, illumination_vector, config.offset_regions
         )
+
+        # Debug: Check scattering spectrum
+        if not jnp.all(jnp.isfinite(scattering_spectrum_array)):
+            print(f"DEBUG: scattering_spectrum_array[{i}] contains non-finite values")
+            print(f"  - NaN count: {jnp.sum(jnp.isnan(scattering_spectrum_array))}")
+            print(f"  - Inf count: {jnp.sum(jnp.isinf(scattering_spectrum_array))}")
+
         scattering_spectrum = ScatteringSpectrum(scattering_spectrum_array, illumination_vector)
         scattering_spectrums.append(scattering_spectrum)
 
     synthesized_spectrum = synthesize_spectrum(scattering_spectrums, params, config, mode="Forward")
 
+    # Debug: Check synthesized_spectrum for NaN/Inf
+    if not jnp.all(jnp.isfinite(synthesized_spectrum)):
+        print("DEBUG: synthesized_spectrum contains non-finite values")
+        print(f"  - NaN count: {jnp.sum(jnp.isnan(synthesized_spectrum))}")
+        print(f"  - Inf count: {jnp.sum(jnp.isinf(synthesized_spectrum))}")
+
     if config.hermite_symmetry:
         synthesized_spectrum = fill_hermite_components(synthesized_spectrum)
 
+        # Debug: Check after hermite components
+        if not jnp.all(jnp.isfinite(synthesized_spectrum)):
+            print("DEBUG: synthesized_spectrum after hermite contains non-finite values")
+            print(f"  - NaN count: {jnp.sum(jnp.isnan(synthesized_spectrum))}")
+            print(f"  - Inf count: {jnp.sum(jnp.isinf(synthesized_spectrum))}")
+
     scattering_potential = jnp.fft.ifftn(jnp.fft.ifftshift(synthesized_spectrum), norm="ortho")
+
+    # Debug: Check after IFFT
+    if not jnp.all(jnp.isfinite(scattering_potential)):
+        print("DEBUG: scattering_potential after IFFT contains non-finite values")
+        print(f"  - NaN count: {jnp.sum(jnp.isnan(scattering_potential))}")
+        print(f"  - Inf count: {jnp.sum(jnp.isinf(scattering_potential))}")
 
     scattering_potential = jnp.fft.fftshift(scattering_potential, axes=(2))
 
     factor = params.spectrum2cpfield_xy**2 * params.spectrum2cpfield_z / (2 * jnp.pi) ** 3
     scattering_potential *= factor
 
+    # Debug: Check after scaling factor
+    if not jnp.all(jnp.isfinite(scattering_potential)):
+        print("DEBUG: scattering_potential after scaling contains non-finite values")
+        print(f"  - NaN count: {jnp.sum(jnp.isnan(scattering_potential))}")
+        print(f"  - Inf count: {jnp.sum(jnp.isinf(scattering_potential))}")
+        print(f"  - Factor value: {factor}")
+
     refractive_index = calc_refractive_index(scattering_potential, params)
+
+    # Debug: Check final refractive_index
+    if not jnp.all(jnp.isfinite(refractive_index)):
+        print("DEBUG: Final refractive_index contains non-finite values")
+        print(f"  - NaN count: {jnp.sum(jnp.isnan(refractive_index))}")
+        print(f"  - Inf count: {jnp.sum(jnp.isinf(refractive_index))}")
+
     return refractive_index, synthesized_spectrum
 
 

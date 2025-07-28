@@ -113,27 +113,19 @@ class IntensityImageSetGenerator:
         for angle in tqdm(self.angles):
             # Calculate illumination wave vector components
             kx_ill = (
-                self.idt_params.light_freq_px
-                * self.idt_params.na_illumination
-                / self.idt_params.n_sol
-                * self.idt_params.k_per_px
-                * np.cos(angle)
+                self.idt_params.light_freq_px * self.idt_params.na_illumination / self.idt_params.n_sol * np.cos(angle)
             )
             ky_ill = (
-                self.idt_params.light_freq_px
-                * self.idt_params.na_illumination
-                / self.idt_params.n_sol
-                * self.idt_params.k_per_px
-                * np.sin(angle)
+                self.idt_params.light_freq_px * self.idt_params.na_illumination / self.idt_params.n_sol * np.sin(angle)
             )
 
-            self.u_illumination_list.append((kx_ill / self.idt_params.k_per_px, ky_ill / self.idt_params.k_per_px))
+            self.u_illumination_list.append((kx_ill, ky_ill))
 
             # Generate oblique illumination wave
             input_field_fft = get_oblique_wave_fft(
                 self.mlb_params,
-                float(kx_ill),
-                float(ky_ill),
+                float(kx_ill * self.idt_params.k_per_px),
+                float(ky_ill * self.idt_params.k_per_px),
             )
 
             # Set input field and simulate forward scattering

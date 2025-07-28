@@ -356,7 +356,7 @@ def _setup_parameters() -> tuple[IDTParameters, MLBParameters, ArrayPrecision]:
     # IDT parameters - use more conservative values for stability and reduced memory usage
     print("Setting ODT parameters...")
     idt_params = IDTParameters(
-        na=0.3,  # Reduced NA for stability
+        na=0.6,  # Reduced NA for stability
         wavelength_m=532e-9,  # 532 nm
         img_size_px=256,  # Reduced image size to decrease memory usage
         px_size_m=3.45e-6 * 3 / 180,

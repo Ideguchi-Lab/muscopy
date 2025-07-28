@@ -179,7 +179,7 @@ def transfer_func_re(
         make_green_func(params, (-u_ill_x, -u_ill_y), z)
         * jnp.exp(-1j * u_ill_z * z)
         * make_pupil_func(params, (-u_ill_x, -u_ill_y))
-    )  # maybe first pupil is not correct
+    )
     second_term = (
         jnp.conjugate(make_green_func(params, (u_ill_x, u_ill_y), z))
         * jnp.exp(1j * u_ill_z * z)

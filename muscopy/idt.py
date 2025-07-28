@@ -42,7 +42,10 @@ def compute_g_list(i_list: Sequence[Array], i_reference: Sequence[Array], normal
         Intensity different or contrast for each angle.
     """
     g_list = []
-    for i_m, i_ref in zip(i_list, i_reference, strict=False):
+    for idx, (i_m, i_ref) in enumerate(zip(i_list, i_reference, strict=False)):
+        print(  # noqa: T201
+            f"[DEBUG] compute_g_list - Image {idx}: i_m range [{jnp.min(i_m):.6f}, {jnp.max(i_m):.6f}], i_ref range [{jnp.min(i_ref):.6f}, {jnp.max(i_ref):.6f}]"  # noqa: E501
+        )
         if normalize:
             # Avoid division by zero in normalization
             i_ref_safe = jnp.where(jnp.abs(i_ref) < _EPSILON, _EPSILON, i_ref)
@@ -51,6 +54,9 @@ def compute_g_list(i_list: Sequence[Array], i_reference: Sequence[Array], normal
             g_list.append(g)
         else:
             g = i_m - i_ref
+            print(  # noqa: T201
+                f"[DEBUG] compute_g_list - Image {idx}: g range [{jnp.min(g):.6f}, {jnp.max(g):.6f}], has NaN: {jnp.any(jnp.isnan(g))}"  # noqa: E501
+            )
             g_list.append(g)
     return g_list
 
@@ -75,13 +81,18 @@ def fourier_transform(params: IDTParameters, g_list: Sequence[Array]) -> list[Ar
     incoherent_limit_mask = make_disk(
         (params.img_size_px // 2, params.img_size_px // 2), params.aperturesize_px, 2 * params.aperturesize_px + 1
     )
-    for g_l in g_list:
+    for idx, g_l in enumerate(g_list):
+        print(f"[DEBUG] fourier_transform - Image {idx}: g_l has NaN before FFT: {jnp.any(jnp.isnan(g_l))}")  # noqa: T201
         g_tilde = jnp.fft.fftshift(jnp.fft.fft2(g_l, norm="ortho"))  # FFT with fftshift for centered spectrum
+        print(f"[DEBUG] fourier_transform - Image {idx}: g_tilde has NaN after FFT: {jnp.any(jnp.isnan(g_tilde))}")  # noqa: T201
         g_tilde_cropped = g_tilde[
             params.img_size_px // 2 - params.aperturesize_px : params.img_size_px // 2 + params.aperturesize_px + 1,
             params.img_size_px // 2 - params.aperturesize_px : params.img_size_px // 2 + params.aperturesize_px + 1,
         ]
         g_tilde_cropped = g_tilde_cropped * incoherent_limit_mask  # noqa: PLR6104
+        print(  # noqa: T201
+            f"[DEBUG] fourier_transform - Image {idx}: g_tilde_cropped has NaN after mask: {jnp.any(jnp.isnan(g_tilde_cropped))}"  # noqa: E501
+        )
         g_tilde_list.append(g_tilde_cropped)
     return g_tilde_list
 
@@ -116,13 +127,21 @@ def make_green_func(params: IDTParameters, u_shift: tuple[float, float], z: floa
         params.aperturesize_px // 2,
         2 * params.aperturesize_px + 1,
     )
+    print(  # noqa: T201
+        f"[DEBUG] make_green_func - u_shift={u_shift}, z={z:.6f}, uz_squared min before mask: {jnp.min(uz_squared):.6f}"
+    )
     uz_squared = uz_squared * mask  # Set imaginary parts to zero where uz_squared < 0  # noqa: PLR6104
     uz = jnp.sqrt(uz_squared)
 
     # Avoid division by zero
     uz_safe = jnp.where(jnp.abs(uz) < _EPSILON, _EPSILON, uz)
 
-    return jnp.exp(-1j * uz_safe * z * params.k_per_px) / uz_safe
+    result = jnp.exp(-1j * uz_safe * z * params.k_per_px) / uz_safe
+    print(  # noqa: T201
+        f"[DEBUG] make_green_func - result has NaN: {jnp.any(jnp.isnan(result))}, result has Inf: {jnp.any(jnp.isinf(result))}"  # noqa: E501
+    )
+
+    return result
 
 
 def make_pupil_func(params: IDTParameters, u_shift: tuple[float, float]) -> Array:
@@ -263,6 +282,7 @@ def compute_permitivity(
     tuple[Array, Array]
         The computed permittivity changes Δε_Re and Δε_Im for each slice.
     """
+    print(f"[DEBUG] compute_permitivity - z={z:.6f}, alpha={alpha}, beta={beta}")  # noqa: T201
     h_normalized_re = jnp.stack(
         [
             transfer_func_re(params, u_illumination_list[i], z, float(led_illumination_intensities[i]))
@@ -278,10 +298,18 @@ def compute_permitivity(
         axis=-1,
     )
 
+    print(  # noqa: T201
+        f"[DEBUG] compute_permitivity - h_re has NaN: {jnp.any(jnp.isnan(h_normalized_re))}, h_im has NaN: {jnp.any(jnp.isnan(h_normalized_im))}"  # noqa: E501
+    )
+
     g_tilde = jnp.stack(g_tilde_list, axis=-1)
 
     sum_h_normalized_re = jnp.sum(jnp.abs(h_normalized_re) ** 2, axis=-1)
     sum_h_normalized_im = jnp.sum(jnp.abs(h_normalized_im) ** 2, axis=-1)
+
+    print(  # noqa: T201
+        f"[DEBUG] compute_permitivity - sum_h_re range: [{jnp.min(sum_h_normalized_re):.6f}, {jnp.max(sum_h_normalized_re):.6f}], sum_h_im range: [{jnp.min(sum_h_normalized_im):.6f}, {jnp.max(sum_h_normalized_im):.6f}]"  # noqa: E501
+    )
 
     eps_re_first_term = (sum_h_normalized_im + beta) * jnp.sum(jnp.conjugate(h_normalized_re) * g_tilde, axis=-1)
     eps_re_second_term = jnp.sum(jnp.conjugate(h_normalized_re) * h_normalized_im, axis=-1) * jnp.sum(
@@ -298,11 +326,19 @@ def compute_permitivity(
     term2 = jnp.abs(jnp.sum(jnp.conjugate(h_normalized_re) * h_normalized_im, axis=-1)) ** 2
     scale_factor = term1 - term2
 
+    print(  # noqa: T201
+        f"[DEBUG] compute_permitivity - scale_factor range before regularization: [{jnp.min(scale_factor):.6f}, {jnp.max(scale_factor):.6f}]"  # noqa: E501
+    )
+
     # Regularize scale_factor to avoid division by zero
     scale_factor = jnp.where(jnp.abs(scale_factor) < _EPSILON, _EPSILON, scale_factor)
 
     eps_re = (eps_re_first_term - eps_re_second_term) / scale_factor
     eps_im = (eps_im_first_term - eps_im_second_term) / scale_factor
+
+    print(  # noqa: T201
+        f"[DEBUG] compute_permitivity - eps_re has NaN: {jnp.any(jnp.isnan(eps_re))}, eps_im has NaN: {jnp.any(jnp.isnan(eps_im))}"  # noqa: E501
+    )
 
     return eps_re, eps_im
 

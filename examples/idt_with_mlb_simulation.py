@@ -31,7 +31,7 @@ from muscopy.idt import IDTParameters, compute_idt, transfer_func_im, transfer_f
 warnings.filterwarnings("ignore", category=FutureWarning, message=".*scatter inputs have incompatible types.*")
 warnings.filterwarnings("ignore", category=UserWarning, message=".*Casting complex values to real.*")
 
-INTENSITY_IMAGE_SIZE = 1024
+INTENSITY_IMAGE_SIZE = 1024  # Increased for better quality
 
 
 class IntensityImageSetGenerator:
@@ -338,15 +338,15 @@ def _setup_parameters() -> tuple[IDTParameters, MLBParameters]:
         ODT parameters and MLB parameters
     """
     # IDT parameters - use more conservative values for stability and reduced memory usage
-    print("Setting ODT parameters...")
+    print("Setting IDT parameters...")
     idt_params = IDTParameters(
-        na=0.6,  # Reduced NA for stability
+        na=0.6,
         wavelength_m=532e-9,  # 532 nm
-        img_size_px=INTENSITY_IMAGE_SIZE,  # Reduced image size to decrease memory usage
+        img_size_px=INTENSITY_IMAGE_SIZE,
         px_size_m=3.45e-6 * 3 / 180,
         n_sol=1.33,
-        na_illumination=0.4,  # Reduced illumination NA
-        num_z_slices=128,  # Reduced z slices to decrease memory usage
+        na_illumination=0.4,
+        num_z_slices=256,  # Increased for better z-resolution
     )
 
     # MLB simulation parameters
@@ -532,9 +532,11 @@ def main() -> None:
 
     # Generate sample (sphere) - increase scattering for better signal
     print("Generating spherical sample...")
-    radius_um = 3.0  # Larger sphere
-    delta_n = 0.1  # Much stronger scattering
+    radius_um = 2.0  # Larger sphere
+    delta_n = 0.05  # Much stronger scattering
     scattering_potential = generate_sphere_potential(mlb_params, radius_um, delta_n)
+
+    # SlicingVisualizer(np.asarray(scattering_potential)).run()
 
     print(f"Sample size: {scattering_potential.shape}")
     print(f"Memory usage: {scattering_potential.nbytes / 1024**2:.1f} MB")

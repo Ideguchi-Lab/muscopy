@@ -99,8 +99,8 @@ def make_green_func(params: IDTParameters, u_shift: tuple[float, float], z: floa
     uy = yy + u_shift[1]
     uz_squared = params.light_freq_px**2 - ux**2 - uy**2
     mask = uz_squared > 0  # Ensure kz is real
+    uz_squared = uz_squared * mask  # Set imaginary parts to zero where uz_squared < 0  # noqa: PLR6104
     uz = jnp.sqrt(uz_squared)
-    uz = uz * mask  # Set imaginary parts to zero where uz_squared < 0  # noqa: PLR6104
 
     # Avoid division by zero
     uz_safe = jnp.where(jnp.abs(uz) < _EPSILON, _EPSILON, uz)

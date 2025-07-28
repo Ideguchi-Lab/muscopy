@@ -182,12 +182,12 @@ def transfer_func_re(
     first_term = (
         make_green_func(params, (-u_ill_x, -u_ill_y), z)
         * jnp.exp(-1j * u_ill_z * z * params.k_per_px)
-        * make_pupil_func(params, (-u_ill_x, -u_ill_y))
+        * make_pupil_func(params, (u_ill_x, u_ill_y))
     )
     second_term = (
         jnp.conjugate(make_green_func(params, (u_ill_x, u_ill_y), z))
         * jnp.exp(1j * u_ill_z * z * params.k_per_px)
-        * jnp.conjugate(make_pupil_func(params, (u_ill_x, u_ill_y)))
+        * jnp.conjugate(make_pupil_func(params, (-u_ill_x, -u_ill_y)))
     )
 
     return 1j * params.k_per_px**2 / 2 * incident_intensity * (first_term - second_term)
@@ -219,12 +219,12 @@ def transfer_func_im(
     first_term = (
         make_green_func(params, (-u_ill_x, -u_ill_y), z)
         * jnp.exp(-1j * u_ill_z * z * params.k_per_px)
-        * make_pupil_func(params, (-u_ill_x, -u_ill_y))
+        * make_pupil_func(params, (u_ill_x, u_ill_y))
     )
     second_term = (
         jnp.conjugate(make_green_func(params, (u_ill_x, u_ill_y), z))
         * jnp.exp(1j * u_ill_z * z * params.k_per_px)
-        * jnp.conjugate(make_pupil_func(params, (u_ill_x, u_ill_y)))
+        * jnp.conjugate(make_pupil_func(params, (-u_ill_x, -u_ill_y)))
     )
 
     return -(params.k_per_px**2) / 2 * incident_intensity * (first_term + second_term)

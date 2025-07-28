@@ -55,12 +55,14 @@ def compute_g_list(i_list: Sequence[Array], i_reference: Sequence[Array], normal
     return g_list
 
 
-def fourier_transform(g_list: Sequence[Array]) -> list[Array]:
+def fourier_transform(params: IDTParameters, g_list: Sequence[Array]) -> list[Array]:
     """
     Compute the Fourier Transform of each g_l in g_list.
 
     Parameters
     ----------
+    params : IDTParameters
+        The parameters for the IDT model.
     g_list : list of [Nx, Ny] arrays
         Intensity differences per angle (spatial domain)
 
@@ -70,9 +72,17 @@ def fourier_transform(g_list: Sequence[Array]) -> list[Array]:
         Fourier Transforms of g_l (frequency domain)
     """
     g_tilde_list = []
+    incoherent_limit_mask = make_disk(
+        (params.img_size_px // 2, params.img_size_px // 2), params.aperturesize_px, 2 * params.aperturesize_px + 1
+    )
     for g_l in g_list:
         g_tilde = jnp.fft.fftshift(jnp.fft.fft2(g_l, norm="ortho"))  # FFT with fftshift for centered spectrum
-        g_tilde_list.append(g_tilde)
+        g_tilde_cropped = g_tilde[
+            params.img_size_px // 2 - params.aperturesize_px : params.img_size_px // 2 + params.aperturesize_px + 1,
+            params.img_size_px // 2 - params.aperturesize_px : params.img_size_px // 2 + params.aperturesize_px + 1,
+        ]
+        g_tilde_cropped = g_tilde_cropped * incoherent_limit_mask  # noqa: PLR6104
+        g_tilde_list.append(g_tilde_cropped)
     return g_tilde_list
 
 
@@ -387,11 +397,11 @@ def compute_idt(
 
     # STEP 2: compute g_l
 
-    g_l = compute_g_list(intensity_images, ref_intensity_images, normalize=True)
+    g_l = compute_g_list(intensity_images, ref_intensity_images, normalize=False)
 
     # STEP 3: Fourier Transform each image
 
-    g_tilde_list = fourier_transform(g_l)
+    g_tilde_list = fourier_transform(params, g_l)
 
     # STEP 4: Build Transfer Functions
 
@@ -406,7 +416,8 @@ def compute_idt(
     eps_re_3d = jnp.zeros((aperture_size, aperture_size, params.num_z_slices))
     eps_im_3d = jnp.zeros((aperture_size, aperture_size, params.num_z_slices))
 
-    for z in range(params.num_z_slices):
+    for idx in range(params.num_z_slices):
+        z = (idx - params.num_z_slices // 2) * params.imgpx_axial_m_per_px
         eps_re, eps_im = compute_permitivity(
             params,
             g_tilde_list,
@@ -416,8 +427,8 @@ def compute_idt(
             alpha=alpha,
             beta=beta,
         )
-        eps_re_3d = eps_re_3d.at[:, :, z].set(eps_re)
-        eps_im_3d = eps_im_3d.at[:, :, z].set(eps_im)
+        eps_re_3d = eps_re_3d.at[:, :, idx].set(eps_re)
+        eps_im_3d = eps_im_3d.at[:, :, idx].set(eps_im)
 
     # STEP 6: Convert permittivity to refractive index
     n_re_freq, n_im_freq = convert_to_refractive_index(eps_re_3d, eps_im_3d, params.n_sol)

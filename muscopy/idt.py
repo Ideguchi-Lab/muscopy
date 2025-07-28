@@ -49,6 +49,9 @@ def compute_g_list(i_list: Sequence[Array], i_reference: Sequence[Array], normal
             g = (i_m - i_ref) / i_ref_safe
 
             g_list.append(g)
+        else:
+            g = i_m - i_ref
+            g_list.append(g)
     return g_list
 
 
@@ -157,11 +160,11 @@ def transfer_func_re(
         If illumination angle results in invalid z-component
     """
     u_ill_x, u_ill_y = u_illumination
-    u_ill_z_squared = params.k_per_px**2 - u_ill_x**2 - u_ill_y**2
+    u_ill_z_squared = params.light_freq_px**2 - u_ill_x**2 - u_ill_y**2
     if u_ill_z_squared < 0:
         msg = f"Invalid illumination angle {u_illumination}: u_ill_z_squared must be non-negative."
         raise ValueError(msg)
-    u_ill_z = (params.k_per_px**2 - u_ill_x**2 - u_ill_y**2) ** 0.5
+    u_ill_z = jnp.sqrt(u_ill_z_squared)
     first_term = (
         make_green_func(params, (-u_ill_x, -u_ill_y), z)
         * jnp.exp(-1j * u_ill_z * z)
@@ -198,7 +201,7 @@ def transfer_func_im(
         Imaginary part of transfer function
     """
     u_ill_x, u_ill_y = u_illumination
-    u_ill_z = (params.k_per_px**2 - u_ill_x**2 - u_ill_y**2) ** 0.5
+    u_ill_z = (params.light_freq_px**2 - u_ill_x**2 - u_ill_y**2) ** 0.5
     first_term = (
         make_green_func(params, (-u_ill_x, -u_ill_y), z)
         * jnp.exp(-1j * u_ill_z * z)

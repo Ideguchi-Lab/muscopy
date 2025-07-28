@@ -111,7 +111,11 @@ def make_green_func(params: IDTParameters, u_shift: tuple[float, float], z: floa
     ux = xx + u_shift[0]
     uy = yy + u_shift[1]
     uz_squared = params.light_freq_px**2 - ux**2 - uy**2
-    mask = uz_squared > 0  # Ensure kz is real
+    mask = make_disk(
+        (-u_shift[0] + params.aperturesize_px, -u_shift[1] + params.aperturesize_px),
+        params.aperturesize_px // 2,
+        2 * params.aperturesize_px + 1,
+    )
     uz_squared = uz_squared * mask  # Set imaginary parts to zero where uz_squared < 0  # noqa: PLR6104
     uz = jnp.sqrt(uz_squared)
 

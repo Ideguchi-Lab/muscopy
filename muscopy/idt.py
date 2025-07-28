@@ -309,9 +309,9 @@ def convert_to_refractive_index(eps_re: Array, eps_im: Array, n_sol: float) -> t
 
     """
     eps_complex = eps_re + 1j * eps_im
-    n_complex = jnp.sqrt(1 + eps_complex)
-    n_re = jnp.real(n_complex) * n_sol
-    n_im = jnp.imag(n_complex) * n_sol
+    n_complex = jnp.sqrt(n_sol**2 + eps_complex)
+    n_re = jnp.real(n_complex) * n_sol - n_sol
+    n_im = jnp.imag(n_complex) * n_sol - n_sol
     return n_re, n_im
 
 

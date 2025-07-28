@@ -25,7 +25,7 @@ from muscopy_mlbsim.mlb import (
 )
 from tqdm import tqdm
 
-from muscopy.idt import IDTParameters, compute_idt, transfer_func_im, transfer_func_re
+from muscopy.idt import IDTParameters, compute_idt
 
 # Suppress JAX warnings about dtype conversion that can interfere with execution
 warnings.filterwarnings("ignore", category=FutureWarning, message=".*scatter inputs have incompatible types.*")
@@ -214,121 +214,6 @@ def generate_sphere_potential(
     return typing.cast("Array", get_scatter_potential(mlb_params, refractive_index))
 
 
-def visualize_transfer_functions(
-    idt_params: IDTParameters,
-    u_illumination_list: list[tuple[float, float]],
-    z_slice: float = 0.0,
-    save_path: str | None = None,
-) -> None:
-    """Visualize transfer functions for debugging IDT implementation.
-
-    Parameters
-    ----------
-    idt_params : IDTParameters
-        IDT parameters for transfer function calculation
-    u_illumination_list : list[tuple[float, float]]
-        List of illumination angles in normalized frequency units
-    z_slice : float, optional
-        Z position for transfer function calculation, by default 0.0
-    save_path : str | None, optional
-        Path to save the visualization, by default None
-    """
-    print(f"Visualizing transfer functions at z={z_slice}...")
-
-    # Select a subset of illumination angles for visualization
-    n_angles_to_show = min(6, len(u_illumination_list))
-    angles_to_show = u_illumination_list[:n_angles_to_show]
-
-    # Create figure with subplots
-    _, axes = plt.subplots(2, n_angles_to_show, figsize=(4 * n_angles_to_show, 8))
-    if n_angles_to_show == 1:
-        axes = axes.reshape(2, 1)
-
-    for i, (u_x, u_y) in enumerate(angles_to_show):
-        # Calculate transfer functions
-        h_re = transfer_func_re(idt_params, (u_x, u_y), z_slice, 1.0)
-        h_im = transfer_func_im(idt_params, (u_x, u_y), z_slice, 1.0)
-
-        # Convert to numpy for plotting
-        h_re_np = np.array(h_re) if hasattr(h_re, "__array__") else h_re
-        h_im_np = np.array(h_im) if hasattr(h_im, "__array__") else h_im
-
-        # Plot real part
-        im_re = axes[0, i].imshow(np.abs(h_re_np), cmap="viridis", aspect="equal")
-        axes[0, i].set_title(f"Real TF |H_re|\nAngle: ({u_x:.3f}, {u_y:.3f})")
-        axes[0, i].set_xlabel("kx [px]")
-        axes[0, i].set_ylabel("ky [px]")
-        plt.colorbar(im_re, ax=axes[0, i])
-
-        # Plot imaginary part
-        im_im = axes[1, i].imshow(np.abs(h_im_np), cmap="plasma", aspect="equal")
-        axes[1, i].set_title(f"Imag TF |H_im|\nAngle: ({u_x:.3f}, {u_y:.3f})")
-        axes[1, i].set_xlabel("kx [px]")
-        axes[1, i].set_ylabel("ky [px]")
-        plt.colorbar(im_im, ax=axes[1, i])
-
-        # Print statistics
-        print(f"Angle ({u_x:.3f}, {u_y:.3f}):")
-        print(f"  H_re: range=[{h_re_np.min():.2e}, {h_re_np.max():.2e}], mean={h_re_np.mean():.2e}")
-        print(f"  H_im: range=[{h_im_np.min():.2e}, {h_im_np.max():.2e}], mean={h_im_np.mean():.2e}")
-
-    plt.tight_layout()
-
-    if save_path:
-        plt.savefig(save_path, dpi=150, bbox_inches="tight")
-        print(f"Transfer function visualization saved to {save_path}")
-
-    plt.show()
-    plt.close()
-
-
-def analyze_transfer_function_properties(
-    idt_params: IDTParameters,
-    u_illumination_list: list[tuple[float, float]],
-    z_values: list[float] | None = None,
-) -> None:
-    """Analyze transfer function properties across different z positions and angles.
-
-    Parameters
-    ----------
-    idt_params : IDTParameters
-        IDT parameters
-    u_illumination_list : list[tuple[float, float]]
-        Illumination angles
-    z_values : list[float] | None, optional
-        Z positions to analyze, by default None (uses a default range)
-    """
-    if z_values is None:
-        z_values = [0.0, idt_params.imgpx_axial_m_per_px * 5, idt_params.imgpx_axial_m_per_px * 10]
-
-    print("Transfer Function Analysis:")
-    print(f"IDT Parameters: NA={idt_params.na}, wavelength={idt_params.wavelength_m * 1e9:.0f}nm")
-    print(f"Number of illumination angles: {len(u_illumination_list)}")
-
-    # Analyze first few angles
-    for i, (u_x, u_y) in enumerate(u_illumination_list[:3]):
-        print(f"\nAngle {i + 1}: u=({u_x:.4f}, {u_y:.4f})")
-        angle_mag = np.sqrt(u_x**2 + u_y**2)
-        print(f"  Angle magnitude: {angle_mag:.4f} (max theoretical: {idt_params.na / idt_params.n_sol:.4f})")
-
-        for z in z_values:
-            h_re = transfer_func_re(idt_params, (u_x, u_y), z, 1.0)
-            h_im = transfer_func_im(idt_params, (u_x, u_y), z, 1.0)
-
-            h_re_np = np.array(h_re) if hasattr(h_re, "__array__") else h_re
-            h_im_np = np.array(h_im) if hasattr(h_im, "__array__") else h_im
-
-            re_max = np.abs(h_re_np).max()
-            im_max = np.abs(h_im_np).max()
-            print(f"  z={z * 1e6:.1f}μm: |H_re|_max={re_max:.2e}, |H_im|_max={im_max:.2e}")
-
-            # Check for NaN or infinite values
-            if np.any(np.isnan(h_re_np)) or np.any(np.isinf(h_re_np)):
-                print("    WARNING: H_re contains NaN or Inf values!")
-            if np.any(np.isnan(h_im_np)) or np.any(np.isinf(h_im_np)):
-                print("    WARNING: H_im contains NaN or Inf values!")
-
-
 def _setup_parameters() -> tuple[IDTParameters, MLBParameters]:
     r"""Set up ODT and MLB simulation parameters.
 
@@ -345,7 +230,7 @@ def _setup_parameters() -> tuple[IDTParameters, MLBParameters]:
         img_size_px=INTENSITY_IMAGE_SIZE,
         px_size_m=3.45e-6 * 3 / 180,
         n_sol=1.33,
-        na_illumination=0.4,
+        na_illumination=0.5,
         num_z_slices=256,  # Increased for better z-resolution
     )
 
@@ -571,23 +456,9 @@ def main() -> None:
     # Convert to real refractive index
     n_reconstructed = n_re - idt_params.n_sol
 
-    # Debug: Analyze transfer functions before visualization
-    print("\n" + "=" * 60)
-    print("TRANSFER FUNCTION DEBUGGING")
-    print("=" * 60)
-
-    analyze_transfer_function_properties(idt_params, u_illumination_list)
-
-    # Visualize transfer functions for the first few z slices
-    z_debug_positions = [0.0, idt_params.imgpx_axial_m_per_px * 5]
-    for z_pos in z_debug_positions:
-        visualize_transfer_functions(
-            idt_params, u_illumination_list, z_slice=z_pos, save_path=f"transfer_functions_z{z_pos * 1e6:.1f}um.png"
-        )
-
-    print("=" * 60)
-    print("END TRANSFER FUNCTION DEBUGGING")
-    print("=" * 60 + "\n")
+    # Debug: Print transfer function status
+    print("\nTransfer functions computed successfully for IDT reconstruction.")
+    print("For detailed transfer function debugging, run debug_transfer_functions.py")
 
     # Visualization
     _visualize_results(n_reconstructed, target_intensity_images, delta_n)

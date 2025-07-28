@@ -13,6 +13,7 @@ import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
+from ilabvis.slice_visualizer import SlicingVisualizer
 from jax import Array
 from muscopy_mlbsim.hologram_generator import HologramGenerator
 from muscopy_mlbsim.mlb import (
@@ -351,6 +352,8 @@ def main() -> None:
 
     # Generate simple sphere
     scattering_potential = create_simple_sphere_potential(mlb_params)
+
+    SlicingVisualizer(np.asarray(scattering_potential)).run()
 
     # Test single image first
     print("\n" + "=" * 50)

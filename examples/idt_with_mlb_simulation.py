@@ -31,6 +31,8 @@ from muscopy.idt import IDTParameters, compute_idt, transfer_func_im, transfer_f
 warnings.filterwarnings("ignore", category=FutureWarning, message=".*scatter inputs have incompatible types.*")
 warnings.filterwarnings("ignore", category=UserWarning, message=".*Casting complex values to real.*")
 
+INTENSITY_IMAGE_SIZE = 1024
+
 
 class IntensityImageSetGenerator:
     """Generate intensity image sets using MLB simulation and muscopy_mlbsim.HologramGenerator."""
@@ -101,7 +103,7 @@ class IntensityImageSetGenerator:
         target_intensity_images = []
         reference_intensity_images = []
         # Use aperture size for consistency with IDT calculations
-        intensity_image_shape = (2 * self.idt_params.aperturesize_px + 1, 2 * self.idt_params.aperturesize_px + 1)
+        intensity_image_shape = (INTENSITY_IMAGE_SIZE, INTENSITY_IMAGE_SIZE)
 
         if self.u_illumination_list is None:
             self.u_illumination_list = []
@@ -340,10 +342,10 @@ def _setup_parameters() -> tuple[IDTParameters, MLBParameters]:
     idt_params = IDTParameters(
         na=0.6,  # Reduced NA for stability
         wavelength_m=532e-9,  # 532 nm
-        img_size_px=256,  # Reduced image size to decrease memory usage
+        img_size_px=INTENSITY_IMAGE_SIZE,  # Reduced image size to decrease memory usage
         px_size_m=3.45e-6 * 3 / 180,
         n_sol=1.33,
-        na_illumination=0.3,  # Reduced illumination NA
+        na_illumination=0.4,  # Reduced illumination NA
         num_z_slices=128,  # Reduced z slices to decrease memory usage
     )
 
@@ -416,7 +418,7 @@ def _generate_intensity_images(
 
     u_illumination_list = intensity_image_gen.u_illumination_list
     if u_illumination_list is None:
-        u_illumination_list = []
+        u_illumination_list: list[tuple[float, float]] = []
 
     # Save generated images to disk
     print(f"Saving intensity images to {save_path}...")

@@ -97,7 +97,7 @@ def make_green_func(params: IDTParameters, u_shift: tuple[float, float], z: floa
     )
     ux = xx + u_shift[0]
     uy = yy + u_shift[1]
-    uz_squared = params.k_per_px**2 - ux**2 - uy**2
+    uz_squared = params.light_freq_px**2 - ux**2 - uy**2
     mask = uz_squared > 0  # Ensure kz is real
     uz = jnp.sqrt(uz_squared)
     uz = uz * mask  # Set imaginary parts to zero where uz_squared < 0  # noqa: PLR6104
@@ -170,7 +170,7 @@ def transfer_func_re(
     second_term = (
         jnp.conjugate(make_green_func(params, (u_ill_x, u_ill_y), z))
         * jnp.exp(1j * u_ill_z * z)
-        * jnp.transpose(jnp.conjugate(make_pupil_func(params, (u_ill_x, u_ill_y))))
+        * jnp.conjugate(make_pupil_func(params, (u_ill_x, u_ill_y)))
     )
 
     return 1j * params.k_per_px**2 / 2 * incident_intensity * (first_term - second_term)
@@ -200,16 +200,14 @@ def transfer_func_im(
     u_ill_x, u_ill_y = u_illumination
     u_ill_z = (params.k_per_px**2 - u_ill_x**2 - u_ill_y**2) ** 0.5
     first_term = (
-        jnp.conjugate(make_pupil_func(params, (-u_ill_x, -u_ill_y)))
-        * make_green_func(params, (-u_ill_x, -u_ill_y), z)
+        make_green_func(params, (-u_ill_x, -u_ill_y), z)
         * jnp.exp(-1j * u_ill_z * z)
         * make_pupil_func(params, (-u_ill_x, -u_ill_y))
     )
     second_term = (
-        make_pupil_func(params, (-u_ill_x, -u_ill_y))
-        * jnp.conjugate(make_green_func(params, (u_ill_x, u_ill_y), z))
+        jnp.conjugate(make_green_func(params, (u_ill_x, u_ill_y), z))
         * jnp.exp(1j * u_ill_z * z)
-        * jnp.transpose(jnp.conjugate(make_pupil_func(params, (u_ill_x, u_ill_y))))
+        * jnp.conjugate(make_pupil_func(params, (u_ill_x, u_ill_y)))
     )
 
     return -(params.k_per_px**2) / 2 * incident_intensity * (first_term + second_term)

@@ -454,7 +454,7 @@ def main() -> None:
         raise
 
     # Convert to real refractive index
-    n_reconstructed = n_re - idt_params.n_sol
+    n_reconstructed = n_re
 
     # Debug: Print transfer function status
     print("\nTransfer functions computed successfully for IDT reconstruction.")

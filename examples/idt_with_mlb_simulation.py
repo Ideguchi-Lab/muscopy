@@ -25,7 +25,6 @@ from muscopy_mlbsim.mlb import (
 )
 from tqdm import tqdm
 
-from muscopy.cfg import ArrayPrecision
 from muscopy.idt import IDTParameters, compute_idt, transfer_func_im, transfer_func_re
 
 # Suppress JAX warnings about dtype conversion that can interfere with execution
@@ -40,11 +39,9 @@ class IntensityImageSetGenerator:
         self,
         idt_params: IDTParameters,
         mlb_params: MLBParameters,
-        precision: ArrayPrecision,
     ) -> None:
         self.idt_params = idt_params
         self.mlb_params = mlb_params
-        self.precision = precision
 
         # Initialize MLB forward simulator and hologram generator
         self.mlb_forward = MLBForward(mlb_params)
@@ -173,7 +170,6 @@ def generate_sphere_potential(
     radius_um: float,
     delta_n: float,
     center_offset: tuple[int, int, int] = (0, 0, 0),
-    precision: ArrayPrecision | None = None,
 ) -> Array:
     """Generate spherical scattering potential.
 
@@ -182,9 +178,6 @@ def generate_sphere_potential(
     Array
         3D scattering potential array
     """
-    if precision is None:
-        precision = ArrayPrecision()
-
     # Convert radius from micrometers to pixels
     radius_px = int(radius_um * 1e-6 / mlb_params.dxy_m)
 
@@ -211,7 +204,7 @@ def generate_sphere_potential(
     refractive_index = jnp.full(
         (mlb_params.num_layers, mlb_params.xy_shape[0], mlb_params.xy_shape[1]),
         n_background,
-        dtype=precision.float_precision(),
+        dtype=jnp.float32,
     )
     refractive_index = jnp.where(sphere_mask, n_sphere, refractive_index)
 
@@ -334,17 +327,14 @@ def analyze_transfer_function_properties(
                 print("    WARNING: H_im contains NaN or Inf values!")
 
 
-def _setup_parameters() -> tuple[IDTParameters, MLBParameters, ArrayPrecision]:
+def _setup_parameters() -> tuple[IDTParameters, MLBParameters]:
     r"""Set up ODT and MLB simulation parameters.
 
     Returns
     -------
-    tuple[IDTParameters, MLBParameters, ArrayPrecision]
-        ODT parameters, MLB parameters, and array precision settings
+    tuple[IDTParameters, MLBParameters]
+        ODT parameters and MLB parameters
     """
-    # Use 32-bit precision to avoid JAX complex128 warnings (complex64 is sufficient)
-    precision = ArrayPrecision(int_length=16, float_length=32)
-
     # IDT parameters - use more conservative values for stability and reduced memory usage
     print("Setting ODT parameters...")
     idt_params = IDTParameters(
@@ -369,14 +359,13 @@ def _setup_parameters() -> tuple[IDTParameters, MLBParameters, ArrayPrecision]:
         dz_m=idt_params.imgpx_axial_m_per_px,
     )
 
-    return idt_params, mlb_params, precision
+    return idt_params, mlb_params
 
 
 def _generate_intensity_images(
     idt_params: IDTParameters,
     mlb_params: MLBParameters,
     scattering_potential: Array,
-    precision: ArrayPrecision,
     num_angles: int = 60,
     save_path: str = "intensity_images",
 ) -> tuple[tuple[list[Array], list[Array]], list[tuple[float, float]]]:
@@ -418,7 +407,7 @@ def _generate_intensity_images(
 
     # Generate new images if not found
     print("Setting up hologram generator...")
-    intensity_image_gen = IntensityImageSetGenerator(idt_params, mlb_params, precision)
+    intensity_image_gen = IntensityImageSetGenerator(idt_params, mlb_params)
     intensity_image_gen.set_illumination_angles(num_angles)  # Fewer angles for faster computation
     intensity_image_gen.set_scattering_potential(scattering_potential)
 
@@ -536,14 +525,14 @@ def main() -> None:
     jax.clear_caches()  # type: ignore[no-untyped-call]
 
     # Setup parameters
-    idt_params, mlb_params, precision = _setup_parameters()
+    idt_params, mlb_params = _setup_parameters()
     num_angles = 12  # Reduced number of angles to decrease computation time and memory usage
 
     # Generate sample (sphere) - increase scattering for better signal
     print("Generating spherical sample...")
     radius_um = 3.0  # Larger sphere
     delta_n = 0.1  # Much stronger scattering
-    scattering_potential = generate_sphere_potential(mlb_params, radius_um, delta_n, precision=precision)
+    scattering_potential = generate_sphere_potential(mlb_params, radius_um, delta_n)
 
     print(f"Sample size: {scattering_potential.shape}")
     print(f"Memory usage: {scattering_potential.nbytes / 1024**2:.1f} MB")
@@ -551,7 +540,7 @@ def main() -> None:
     # Generate holograms (or load from disk if available)
     print("Starting hologram generation...")
     (target_intensity_images, ref_intensity_images), u_illumination_list = _generate_intensity_images(
-        idt_params, mlb_params, scattering_potential, precision, num_angles, save_path="intensity_images"
+        idt_params, mlb_params, scattering_potential, num_angles, save_path="intensity_images"
     )
     print(f"Hologram generation completed. Using {len(target_intensity_images)} holograms.")
 

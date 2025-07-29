@@ -139,3 +139,4 @@ docs/source/sg_execution_times.rst
 # Implementation notes (not tracked)
 implement.md
 uv.lock
+examples/intensity_images/*.npy

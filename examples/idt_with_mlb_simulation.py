@@ -231,7 +231,7 @@ def _setup_parameters() -> tuple[IDTParameters, MLBParameters]:
         px_size_m=3.45e-6 * 3 / 180,
         n_sol=1.33,
         na_illumination=0.5,
-        num_z_slices=256,  # Increased for better z-resolution
+        num_z_slices=128,  # Increased for better z-resolution
     )
 
     # MLB simulation parameters
@@ -325,7 +325,7 @@ def _generate_intensity_images(
     return (target_intensity_images, ref_intensity_images), u_illumination_list
 
 
-def _visualize_results(
+def _visualize_results(  # noqa: PLR0914, PLR0915
     n_reconstructed: Array,
     target_intensity_images: list[Array],
     delta_n: float,
@@ -358,19 +358,22 @@ def _visualize_results(
     plt.colorbar(im1, ax=axes[0, 0])
 
     # Cross-sections of reconstruction
-    im2 = axes[0, 1].imshow(n_reconstructed_np[:, :, center_z], cmap="viridis")
+    # Set vmin=0 and vmax to approximately the expected delta_n
+    vmin = 0
+    vmax = delta_n * 1.2  # Allow 20% above expected value
+    im2 = axes[0, 1].imshow(n_reconstructed_np[:, :, center_z], cmap="viridis", vmin=vmin, vmax=vmax)
     axes[0, 1].set_title("XY Cross-section (Center Z)")
     axes[0, 1].set_xlabel("x [px]")
     axes[0, 1].set_ylabel("y [px]")
     plt.colorbar(im2, ax=axes[0, 1])
 
-    im3 = axes[0, 2].imshow(n_reconstructed_np[:, center_y, :], cmap="viridis")
+    im3 = axes[0, 2].imshow(n_reconstructed_np[:, center_y, :], cmap="viridis", vmin=vmin, vmax=vmax)
     axes[0, 2].set_title("XZ Cross-section (Center Y)")
     axes[0, 2].set_xlabel("z [px]")
     axes[0, 2].set_ylabel("x [px]")
     plt.colorbar(im3, ax=axes[0, 2])
 
-    im4 = axes[1, 0].imshow(n_reconstructed_np[center_x, :, :], cmap="viridis")
+    im4 = axes[1, 0].imshow(n_reconstructed_np[center_x, :, :], cmap="viridis", vmin=vmin, vmax=vmax)
     axes[1, 0].set_title("YZ Cross-section (Center X)")
     axes[1, 0].set_xlabel("z [px]")
     axes[1, 0].set_ylabel("y [px]")
@@ -382,11 +385,12 @@ def _visualize_results(
     axes[1, 1].set_title("Central Profile (Z direction)")
     axes[1, 1].set_xlabel("z [px]")
     axes[1, 1].set_ylabel("Δn")
+    axes[1, 1].set_ylim(0, vmax)  # Set same limits as image plots
     axes[1, 1].grid(True)
 
     # Show max projection
     max_proj = np.max(n_reconstructed_np, axis=2)
-    im6 = axes[1, 2].imshow(max_proj, cmap="viridis")
+    im6 = axes[1, 2].imshow(max_proj, cmap="viridis", vmin=vmin, vmax=vmax)
     axes[1, 2].set_title("Maximum Projection (Z axis)")
     axes[1, 2].set_xlabel("x [px]")
     axes[1, 2].set_ylabel("y [px]")

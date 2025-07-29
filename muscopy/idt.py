@@ -324,7 +324,7 @@ def compute_permitivity(  # noqa: PLR0914
     print(jnp.mean(eps_re_second_term_scaled))  # noqa: T201
     print(jnp.mean(eps_im_first_term_scaled))  # noqa: T201
     print(jnp.mean(eps_im_second_term_scaled))  # noqa: T201
-    print(scale_factor)  # noqa: T201
+    print(jnp.mean(scale_factor))  # noqa: T201
 
     eps_re = (eps_re_first_term_scaled - eps_re_second_term_scaled) / scale_factor
     eps_im = (eps_im_first_term_scaled - eps_im_second_term_scaled) / scale_factor
@@ -463,16 +463,15 @@ def compute_idt(  # noqa: PLR0914
         eps_re_3d = eps_re_3d.at[:, :, idx].set(eps_re)
         eps_im_3d = eps_im_3d.at[:, :, idx].set(eps_im)
 
-    # STEP 6: Convert permittivity to refractive index
-    n_re_freq, n_im_freq = convert_to_refractive_index(eps_re_3d, eps_im_3d, params.n_sol)
+    eps_re_3d_spatial = jnp.fft.ifft2(jnp.fft.ifftshift(eps_re_3d, axes=(0, 1)), axes=(0, 1), norm="ortho")
+    eps_im_3d_spatial = jnp.fft.ifft2(jnp.fft.ifftshift(eps_im_3d, axes=(0, 1)), axes=(0, 1), norm="ortho")
 
-    # STEP 7: Transform from frequency domain to spatial domain
-    # The computed refractive index is in frequency domain, need inverse FFT with ifftshift
-    n_re_spatial = jnp.fft.ifft2(jnp.fft.ifftshift(n_re_freq, axes=(0, 1)), axes=(0, 1), norm="ortho")
-    n_im_spatial = jnp.fft.ifft2(jnp.fft.ifftshift(n_im_freq, axes=(0, 1)), axes=(0, 1), norm="ortho")
+    # STEP 6: Convert permittivity to refractive index
+
+    n_re, n_im = convert_to_refractive_index(eps_re_3d_spatial, eps_im_3d_spatial, params.n_sol)
 
     # Take real part since result should be real in spatial domain
-    n_re_spatial = jnp.real(n_re_spatial)
-    n_im_spatial = jnp.real(n_im_spatial)
+    n_re_spatial = jnp.real(n_re)
+    n_im_spatial = jnp.real(n_im)
 
     return n_re_spatial, n_im_spatial

@@ -289,7 +289,7 @@ def _generate_intensity_images(
 
     u_illumination_list = intensity_image_gen.u_illumination_list
     if u_illumination_list is None:
-        u_illumination_list: list[tuple[float, float]] = []
+        u_illumination_list = []
 
     # Save generated images to disk
     print(f"Saving intensity images to {save_path}...")

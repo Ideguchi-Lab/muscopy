@@ -75,13 +75,14 @@ def fourier_transform(params: IDTParameters, g_list: Sequence[Array]) -> list[Ar
     incoherent_limit_mask = make_disk(
         (params.img_size_px // 2, params.img_size_px // 2), params.aperturesize_px, 2 * params.aperturesize_px + 1
     )
+    ft_scaling_factor = jnp.sqrt((2 * params.aperturesize_px + 1) / params.img_size_px)  # for crop
     for g_l in g_list:
         g_tilde = jnp.fft.fftshift(jnp.fft.fft2(g_l, norm="ortho"))  # FFT with fftshift for centered spectrum
         g_tilde_cropped = g_tilde[
             params.img_size_px // 2 - params.aperturesize_px : params.img_size_px // 2 + params.aperturesize_px + 1,
             params.img_size_px // 2 - params.aperturesize_px : params.img_size_px // 2 + params.aperturesize_px + 1,
         ]
-        g_tilde_cropped = g_tilde_cropped * incoherent_limit_mask  # noqa: PLR6104
+        g_tilde_cropped = g_tilde_cropped * incoherent_limit_mask * ft_scaling_factor
         g_tilde_list.append(g_tilde_cropped)
     return g_tilde_list
 

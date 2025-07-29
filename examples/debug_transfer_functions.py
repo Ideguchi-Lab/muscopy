@@ -158,7 +158,7 @@ def main() -> None:
         img_size_px=1024,
         px_size_m=3.45e-6 * 3 / 180,
         n_sol=1.33,
-        na_illumination=0.5,
+        na_illumination=0.6,
         num_z_slices=256,
     )
 

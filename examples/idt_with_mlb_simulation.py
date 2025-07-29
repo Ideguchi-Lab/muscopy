@@ -15,6 +15,7 @@ import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
+from ilabvis.slice_visualizer import SlicingVisualizer  # noqa: F401
 from jax import Array
 from muscopy_mlbsim.hologram_generator import HologramGenerator
 from muscopy_mlbsim.mlb import (
@@ -231,7 +232,7 @@ def _setup_parameters() -> tuple[IDTParameters, MLBParameters]:
         px_size_m=3.45e-6 * 3 / 180,
         n_sol=1.33,
         na_illumination=0.5,
-        num_z_slices=128,  # Increased for better z-resolution
+        num_z_slices=64,  # Increased for better z-resolution
     )
 
     # MLB simulation parameters
@@ -466,6 +467,8 @@ def main() -> None:
 
     # Visualization
     _visualize_results(n_reconstructed, target_intensity_images, delta_n)
+
+    # SlicingVisualizer(np.asarray(n_reconstructed)).run()
 
     # Clear JAX compilation cache at the end to prevent memory accumulation
     jax.clear_caches()  # type: ignore[no-untyped-call]

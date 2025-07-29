@@ -216,12 +216,12 @@ def generate_sphere_potential(
 
 
 def _setup_parameters() -> tuple[IDTParameters, MLBParameters]:
-    r"""Set up ODT and MLB simulation parameters.
+    r"""Set up IDT and MLB simulation parameters.
 
     Returns
     -------
     tuple[IDTParameters, MLBParameters]
-        ODT parameters and MLB parameters
+        IDT parameters and MLB parameters
     """
     # IDT parameters - use more conservative values for stability and reduced memory usage
     print("Setting IDT parameters...")
@@ -387,7 +387,7 @@ def _visualize_results(  # noqa: PLR0914, PLR0915
     plt.colorbar(im6, ax=axes[1, 2])
 
     plt.tight_layout()
-    plt.savefig("odt_mlb_simulation_results.png", dpi=150, bbox_inches="tight")
+    plt.savefig("idt_mlb_simulation_results.png", dpi=150, bbox_inches="tight")
     plt.show()
     plt.close()  # Close the figure to free memory
 

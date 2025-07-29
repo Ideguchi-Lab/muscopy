@@ -45,8 +45,8 @@ def compute_g_list(i_list: Sequence[Array], i_reference: Sequence[Array], normal
     for i_m, i_ref in zip(i_list, i_reference, strict=False):
         if normalize:
             # Avoid division by zero in normalization
-            i_ref_safe = jnp.where(jnp.abs(i_ref) < _EPSILON, _EPSILON, i_ref)
-            g = (i_m - i_ref) / i_ref_safe
+            i_ref_average = jnp.mean(i_ref)
+            g = (i_m - i_ref_average) / i_ref_average
 
             g_list.append(g)
         else:
@@ -230,7 +230,7 @@ def transfer_func_im(
     return -(params.k_per_px**2) / 2 * incident_intensity * (first_term + second_term)
 
 
-def compute_permitivity(
+def compute_permitivity(  # noqa: PLR0914
     params: IDTParameters,
     g_tilde_list: Sequence[Array],
     u_illumination_list: Sequence[tuple[float, float]],
@@ -416,7 +416,7 @@ def compute_idt(
 
     # STEP 2: compute g_l
 
-    g_l = compute_g_list(intensity_images, ref_intensity_images, normalize=False)
+    g_l = compute_g_list(intensity_images, ref_intensity_images, normalize=True)
 
     # STEP 3: Fourier Transform each image
 

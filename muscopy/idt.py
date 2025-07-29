@@ -190,7 +190,7 @@ def transfer_func_re(
         * jnp.conjugate(make_pupil_func(params, (-u_ill_x, -u_ill_y)))
     )
 
-    return 1j * params.k_per_px**2 / 2 * incident_intensity * (first_term - second_term)
+    return 1j * (params.k_per_px * params.light_freq_px) ** 2 / 2 * incident_intensity * (first_term - second_term)
 
 
 def transfer_func_im(
@@ -227,7 +227,7 @@ def transfer_func_im(
         * jnp.conjugate(make_pupil_func(params, (-u_ill_x, -u_ill_y)))
     )
 
-    return -(params.k_per_px**2) / 2 * incident_intensity * (first_term + second_term)
+    return -((params.light_freq_px * params.k_per_px) ** 2) / 2 * incident_intensity * (first_term + second_term)
 
 
 def compute_permitivity(  # noqa: PLR0914

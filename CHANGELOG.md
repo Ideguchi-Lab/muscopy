@@ -2,9 +2,41 @@
 
 ## Unreleased
 
+### Added
+
+- Intensity Diffraction Tomography (IDT) support [[#56](https://github.com/Ideguchi-Lab/muscopy/issues/56)]
+  - `compute_idt()`: Core IDT reconstruction functionality
+  - `IDTParameters`: Configuration class for IDT parameters
+  - Green's function computation for IDT physics
+  - Transfer function calculation and visualization
+  - Support for conversion to refractive index maps
+  - Integration with MLB simulation for IDT examples
+  - Memory management and debugging tools for IDT computation
+- Enhanced debugging and visualization capabilities
+  - Transfer function visualization debug tool
+  - Slice visualizer option for 3D data inspection
+  - Intensity image save/load functionality
+  - Debug prints for NaN identification in computations
+
 ### Changed
 
 - specify version requirements for documentation dependencies [[#67](https://github.com/Ideguchi-Lab/muscopy/issues/67)]
+- Improved pupil function consistency with Green's function
+- Enhanced memory management to prevent accumulation issues
+- Updated illumination angle algorithms for better accuracy
+- Normalized transfer functions to prevent NaN issues
+- Fixed coordinate transformation in Green's function computations
+
+### Fixed
+
+- IDT reconstruction issues and improved debugging tools [[#92](https://github.com/Ideguchi-Lab/pull/92)]
+- NaN issues in IDT computation by normalizing transfer functions
+- Shape mismatch errors in IDT with MLB simulation
+- Memory accumulation issue in IDT computations
+- Fourier transform pipeline consistency in IDT
+- Missing inverse Fourier transform in IDT reconstruction
+- Incoherent mask handling
+- Scaling factors in transfer function computations
 
 ---
 

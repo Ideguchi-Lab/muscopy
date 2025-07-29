@@ -47,7 +47,6 @@ def compute_g_list(i_list: Sequence[Array], i_reference: Sequence[Array], normal
             # Avoid division by zero in normalization
             i_ref_average = jnp.mean(i_ref)
             g = (i_m - i_ref_average) / i_ref_average
-
             g_list.append(g)
         else:
             g = i_m - i_ref
@@ -73,17 +72,17 @@ def fourier_transform(params: IDTParameters, g_list: Sequence[Array]) -> list[Ar
     """
     g_tilde_list = []
     incoherent_limit_mask = make_disk(
-        (params.img_size_px // 2, params.img_size_px // 2), params.aperturesize_px, 2 * params.aperturesize_px + 1
+        (params.aperturesize_px, params.aperturesize_px), params.aperturesize_px, 2 * params.aperturesize_px + 1
     )
-    ft_scaling_factor = jnp.sqrt((2 * params.aperturesize_px + 1) / params.img_size_px)  # for crop
+    ft_scaling_factor = jnp.sqrt((2 * params.aperturesize_px + 1) / params.img_size_px)
     for g_l in g_list:
         g_tilde = jnp.fft.fftshift(jnp.fft.fft2(g_l, norm="ortho"))  # FFT with fftshift for centered spectrum
         g_tilde_cropped = g_tilde[
             params.img_size_px // 2 - params.aperturesize_px : params.img_size_px // 2 + params.aperturesize_px + 1,
             params.img_size_px // 2 - params.aperturesize_px : params.img_size_px // 2 + params.aperturesize_px + 1,
         ]
-        g_tilde_cropped = g_tilde_cropped * incoherent_limit_mask * ft_scaling_factor**2
-        g_tilde_list.append(g_tilde_cropped)
+        g_tilde_masked = g_tilde_cropped * incoherent_limit_mask * ft_scaling_factor**2
+        g_tilde_list.append(g_tilde_masked)
     return g_tilde_list
 
 
@@ -318,13 +317,6 @@ def compute_permitivity(  # noqa: PLR0914
     eps_im_second_term_scaled = jnp.sum(
         jnp.conjugate(h_normalized_im_scaled) * h_normalized_re_scaled, axis=-1
     ) * jnp.sum(jnp.conjugate(h_normalized_re_scaled) * g_tilde, axis=-1)
-
-    print("debug")  # noqa: T201
-    print(jnp.mean(eps_re_first_term_scaled))  # noqa: T201
-    print(jnp.mean(eps_re_second_term_scaled))  # noqa: T201
-    print(jnp.mean(eps_im_first_term_scaled))  # noqa: T201
-    print(jnp.mean(eps_im_second_term_scaled))  # noqa: T201
-    print(jnp.mean(scale_factor))  # noqa: T201
 
     eps_re = (eps_re_first_term_scaled - eps_re_second_term_scaled) / scale_factor
     eps_im = (eps_im_first_term_scaled - eps_im_second_term_scaled) / scale_factor

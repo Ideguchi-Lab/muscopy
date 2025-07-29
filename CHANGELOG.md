@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+---
+
+## Version 0.6.0 [2025-07-29]
+
 ### Added
 
 - Intensity Diffraction Tomography (IDT) support [[#56](https://github.com/Ideguchi-Lab/muscopy/issues/56)]

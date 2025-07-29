@@ -266,6 +266,7 @@ def compute_permitivity(  # noqa: PLR0914
     h_normalized_re = jnp.stack(
         [
             transfer_func_re(params, u_illumination_list[i], z, led_illumination_intensities[i])
+            / led_illumination_intensities[i]
             for i in range(len(u_illumination_list))
         ],
         axis=-1,
@@ -273,6 +274,7 @@ def compute_permitivity(  # noqa: PLR0914
     h_normalized_im = jnp.stack(
         [
             transfer_func_im(params, u_illumination_list[i], z, led_illumination_intensities[i])
+            / led_illumination_intensities[i]
             for i in range(len(u_illumination_list))
         ],
         axis=-1,
@@ -315,6 +317,13 @@ def compute_permitivity(  # noqa: PLR0914
     eps_im_second_term_scaled = jnp.sum(
         jnp.conjugate(h_normalized_im_scaled) * h_normalized_re_scaled, axis=-1
     ) * jnp.sum(jnp.conjugate(h_normalized_re_scaled) * g_tilde, axis=-1)
+
+    print("debug")  # noqa: T201
+    print(jnp.mean(eps_re_first_term_scaled))  # noqa: T201
+    print(jnp.mean(eps_re_second_term_scaled))  # noqa: T201
+    print(jnp.mean(eps_im_first_term_scaled))  # noqa: T201
+    print(jnp.mean(eps_im_second_term_scaled))  # noqa: T201
+    print(scale_factor)  # noqa: T201
 
     eps_re = (eps_re_first_term_scaled - eps_re_second_term_scaled) / scale_factor
     eps_im = (eps_im_first_term_scaled - eps_im_second_term_scaled) / scale_factor

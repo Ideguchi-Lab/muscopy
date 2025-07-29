@@ -359,6 +359,9 @@ def compute_idt(  # noqa: PLR0914
     intensity_images: Sequence[Array],
     ref_intensity_images: Sequence[Array],
     u_illumination_list: Sequence[tuple[float, float]],
+    *,
+    alpha: float = 1e-2,
+    beta: float = 1e-2,
 ) -> tuple[Array, Array]:
     """Compute the refractive index from intensity images using IDT.
 
@@ -429,9 +432,6 @@ def compute_idt(  # noqa: PLR0914
     # done in the separate functions
 
     # STEP 5: Solve inverse problem
-
-    alpha = 1e-2  # Increased regularization parameter for real part
-    beta = 1e-2  # Increased regularization parameter for imaginary part
 
     aperture_size = 2 * params.aperturesize_px + 1
     eps_re_3d = jnp.zeros((aperture_size, aperture_size, params.num_z_slices))

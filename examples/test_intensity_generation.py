@@ -13,10 +13,10 @@ import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
-from ilabvis.slice_visualizer import SlicingVisualizer
+from ilabvis.slice_visualizer import SlicingVisualizer  # pyright: ignore[reportMissingImports]
 from jax import Array
-from muscopy_mlbsim.hologram_generator import HologramGenerator
-from muscopy_mlbsim.mlb import (
+from muscopy_mlbsim.hologram_generator import HologramGenerator  # pyright: ignore[reportMissingImports]
+from muscopy_mlbsim.mlb import (  # pyright: ignore[reportMissingImports]
     MLBForward,
     MLBParameters,
     get_oblique_wave_fft,
@@ -118,11 +118,14 @@ def create_simple_sphere_potential(
     )
     refractive_index = jnp.where(sphere_mask, n_sphere, refractive_index)
 
-    print(f"Refractive index range: [{refractive_index.min():.4f}, {refractive_index.max():.4f}]")
+    # Type assertion for pyright - use cast for compatibility
+    refractive_index_arr = typing.cast("Array", refractive_index)  # type: ignore[redundant-cast]
+    print(f"Refractive index range: [{refractive_index_arr.min():.4f}, {refractive_index_arr.max():.4f}]")
 
     # Convert to scattering potential
     potential = get_scatter_potential(mlb_params, refractive_index)
-    print(f"Scattering potential range: [{potential.min():.2e}, {potential.max():.2e}]")
+    potential_arr = typing.cast("Array", potential)
+    print(f"Scattering potential range: [{potential_arr.min():.2e}, {potential_arr.max():.2e}]")
 
     return typing.cast("Array", potential)
 
@@ -342,7 +345,7 @@ def main() -> None:
     print("Starting intensity image generation test...")
 
     # Clear JAX cache
-    jax.clear_caches()
+    jax.clear_caches()  # type: ignore[no-untyped-call]
 
     # Setup parameters
     idt_params, mlb_params, _ = setup_test_parameters()
@@ -370,7 +373,7 @@ def main() -> None:
     test_multiple_angles(idt_params, mlb_params, scattering_potential, 6, True)
 
     # Clean up
-    jax.clear_caches()
+    jax.clear_caches()  # type: ignore[no-untyped-call]
     gc.collect()
 
     print("\nIntensity image generation test completed!")

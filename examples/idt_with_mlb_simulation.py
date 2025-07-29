@@ -7,6 +7,7 @@ with Multi-layer Born (MLB) simulation for microscopy analysis.
 # pyright: reportPossiblyUnboundVariable=false, reportInvalidTypeForm=false
 
 import gc
+import shutil
 import typing
 import warnings
 from pathlib import Path
@@ -15,7 +16,6 @@ import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
-from ilabvis.slice_visualizer import SlicingVisualizer  # noqa: F401
 from jax import Array
 from muscopy_mlbsim.hologram_generator import HologramGenerator
 from muscopy_mlbsim.mlb import (
@@ -32,7 +32,7 @@ from muscopy.idt import IDTParameters, compute_idt
 warnings.filterwarnings("ignore", category=FutureWarning, message=".*scatter inputs have incompatible types.*")
 warnings.filterwarnings("ignore", category=UserWarning, message=".*Casting complex values to real.*")
 
-INTENSITY_IMAGE_SIZE = 1024  # Increased for better quality
+INTENSITY_IMAGE_SIZE = 1023  # Increased for better quality
 
 
 class IntensityImageSetGenerator:
@@ -216,12 +216,12 @@ def generate_sphere_potential(
 
 
 def _setup_parameters() -> tuple[IDTParameters, MLBParameters]:
-    r"""Set up ODT and MLB simulation parameters.
+    r"""Set up IDT and MLB simulation parameters.
 
     Returns
     -------
     tuple[IDTParameters, MLBParameters]
-        ODT parameters and MLB parameters
+        IDT parameters and MLB parameters
     """
     # IDT parameters - use more conservative values for stability and reduced memory usage
     print("Setting IDT parameters...")
@@ -269,31 +269,16 @@ def _generate_intensity_images(
     tuple[tuple[list[Array], list[Array]], list[tuple[float, float]]]
         Target holograms, reference holograms, and illumination angles
     """
-    # Create save directory if it doesn't exist
+    # Delete existing saved images if they exist
     save_dir = Path(save_path)
+    if save_dir.exists():
+        print(f"Removing existing intensity images at {save_path}...")
+        shutil.rmtree(save_dir)
+
+    # Create save directory
     save_dir.mkdir(parents=True, exist_ok=True)
 
-    target_images_path = save_dir / "target_intensity_images.npy"
-    ref_images_path = save_dir / "ref_intensity_images.npy"
-    u_illumination_path = save_dir / "u_illumination_list.npy"
-
-    # Check if saved images exist
-    if target_images_path.exists() and ref_images_path.exists() and u_illumination_path.exists():
-        print(f"Loading existing intensity images from {save_path}...")
-
-        # Load saved images
-        target_intensity_images_np = np.load(target_images_path)
-        ref_intensity_images_np = np.load(ref_images_path)
-        u_illumination_list_np = np.load(u_illumination_path)
-        # Convert numpy arrays back to JAX arrays and lists
-        target_intensity_images = [jnp.array(img) for img in target_intensity_images_np]
-        ref_intensity_images = [jnp.array(img) for img in ref_intensity_images_np]
-        u_illumination_list = [(float(u[0]), float(u[1])) for u in u_illumination_list_np]
-
-        print(f"Loaded {len(target_intensity_images)} intensity images from disk.")
-        return (target_intensity_images, ref_intensity_images), u_illumination_list
-
-    # Generate new images if not found
+    # Always generate new images
     print("Setting up hologram generator...")
     intensity_image_gen = IntensityImageSetGenerator(idt_params, mlb_params)
     intensity_image_gen.set_illumination_angles(num_angles)  # Fewer angles for faster computation
@@ -304,7 +289,7 @@ def _generate_intensity_images(
 
     u_illumination_list = intensity_image_gen.u_illumination_list
     if u_illumination_list is None:
-        u_illumination_list: list[tuple[float, float]] = []
+        u_illumination_list = []
 
     # Save generated images to disk
     print(f"Saving intensity images to {save_path}...")
@@ -314,11 +299,15 @@ def _generate_intensity_images(
     ref_intensity_images_np = np.array([np.array(img) for img in ref_intensity_images])
     u_illumination_list_np = np.array(u_illumination_list)
 
+    target_images_path = save_dir / "target_intensity_images.npy"
+    ref_images_path = save_dir / "ref_intensity_images.npy"
+    u_illumination_path = save_dir / "u_illumination_list.npy"
+
     np.save(target_images_path, target_intensity_images_np)
     np.save(ref_images_path, ref_intensity_images_np)
     np.save(u_illumination_path, u_illumination_list_np)
 
-    print(f"Saved {len(target_intensity_images)} intensity images to disk.")
+    print(f"Generated and saved {len(target_intensity_images)} intensity images.")
 
     # Clean up the generator to free memory
     intensity_image_gen.cleanup()
@@ -398,7 +387,7 @@ def _visualize_results(  # noqa: PLR0914, PLR0915
     plt.colorbar(im6, ax=axes[1, 2])
 
     plt.tight_layout()
-    plt.savefig("odt_mlb_simulation_results.png", dpi=150, bbox_inches="tight")
+    plt.savefig("idt_mlb_simulation_results.png", dpi=150, bbox_inches="tight")
     plt.show()
     plt.close()  # Close the figure to free memory
 
@@ -467,8 +456,6 @@ def main() -> None:
 
     # Visualization
     _visualize_results(n_reconstructed, target_intensity_images, delta_n)
-
-    # SlicingVisualizer(np.asarray(n_reconstructed)).run()
 
     # Clear JAX compilation cache at the end to prevent memory accumulation
     jax.clear_caches()  # type: ignore[no-untyped-call]

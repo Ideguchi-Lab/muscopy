@@ -142,8 +142,8 @@ def make_pupil_func(params: IDTParameters, u_shift: tuple[float, float]) -> Arra
     """
     # Convert from fftshift coordinates (-aperturesize_px to +aperturesize_px)
     # to array indices (0 to 2*aperturesize_px)
-    center_x = int(u_shift[0] + params.aperturesize_px)
-    center_y = int(u_shift[1] + params.aperturesize_px)
+    center_x = int(-u_shift[0] + params.aperturesize_px)
+    center_y = int(-u_shift[1] + params.aperturesize_px)
     return make_disk((center_x, center_y), params.aperturesize_px / 2, 2 * params.aperturesize_px + 1)
 
 
@@ -182,12 +182,12 @@ def transfer_func_re(
     first_term = (
         make_green_func(params, (-u_ill_x, -u_ill_y), z)
         * jnp.exp(-1j * u_ill_z * z * params.k_per_px)
-        * make_pupil_func(params, (u_ill_x, u_ill_y))
+        * make_pupil_func(params, (-u_ill_x, -u_ill_y))
     )
     second_term = (
         jnp.conjugate(make_green_func(params, (u_ill_x, u_ill_y), z))
         * jnp.exp(1j * u_ill_z * z * params.k_per_px)
-        * jnp.conjugate(make_pupil_func(params, (-u_ill_x, -u_ill_y)))
+        * jnp.conjugate(make_pupil_func(params, (u_ill_x, u_ill_y)))
     )
 
     return 1j * (params.k_per_px * params.light_freq_px) ** 2 / 2 * incident_intensity * (first_term - second_term)
@@ -219,12 +219,12 @@ def transfer_func_im(
     first_term = (
         make_green_func(params, (-u_ill_x, -u_ill_y), z)
         * jnp.exp(-1j * u_ill_z * z * params.k_per_px)
-        * make_pupil_func(params, (u_ill_x, u_ill_y))
+        * make_pupil_func(params, (-u_ill_x, -u_ill_y))
     )
     second_term = (
         jnp.conjugate(make_green_func(params, (u_ill_x, u_ill_y), z))
         * jnp.exp(1j * u_ill_z * z * params.k_per_px)
-        * jnp.conjugate(make_pupil_func(params, (-u_ill_x, -u_ill_y)))
+        * jnp.conjugate(make_pupil_func(params, (u_ill_x, u_ill_y)))
     )
 
     return -((params.light_freq_px * params.k_per_px) ** 2) / 2 * incident_intensity * (first_term + second_term)

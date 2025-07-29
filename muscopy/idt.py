@@ -234,7 +234,7 @@ def compute_permitivity(  # noqa: PLR0914
     params: IDTParameters,
     g_tilde_list: Sequence[Array],
     u_illumination_list: Sequence[tuple[float, float]],
-    led_illumination_intensities: Sequence[Array],
+    led_illumination_intensities: Sequence[float],
     z: float = 0.0,
     alpha: float = 1e-6,
     beta: float = 1e-6,
@@ -249,7 +249,7 @@ def compute_permitivity(  # noqa: PLR0914
         Fourier Transforms of the intensity differences per angle.
     u_illumination_list : list of tuples
         The illumination angles for each image.
-    led_illumination_intensities : list of [Nx, Ny] arrays
+    led_illumination_intensities : list of float
         The incident intensities for each illumination angle.
     z : float, optional
         The axial position in the z direction, by default 0.0
@@ -265,14 +265,14 @@ def compute_permitivity(  # noqa: PLR0914
     """
     h_normalized_re = jnp.stack(
         [
-            transfer_func_re(params, u_illumination_list[i], z, float(led_illumination_intensities[i]))
+            transfer_func_re(params, u_illumination_list[i], z, led_illumination_intensities[i])
             for i in range(len(u_illumination_list))
         ],
         axis=-1,
     )
     h_normalized_im = jnp.stack(
         [
-            transfer_func_im(params, u_illumination_list[i], z, float(led_illumination_intensities[i]))
+            transfer_func_im(params, u_illumination_list[i], z, led_illumination_intensities[i])
             for i in range(len(u_illumination_list))
         ],
         axis=-1,
@@ -352,7 +352,7 @@ def convert_to_refractive_index(eps_re: Array, eps_im: Array, n_sol: float) -> t
 ##################################################
 
 
-def compute_idt(
+def compute_idt(  # noqa: PLR0914
     params: IDTParameters,
     intensity_images: Sequence[Array],
     ref_intensity_images: Sequence[Array],
@@ -435,13 +435,17 @@ def compute_idt(
     eps_re_3d = jnp.zeros((aperture_size, aperture_size, params.num_z_slices))
     eps_im_3d = jnp.zeros((aperture_size, aperture_size, params.num_z_slices))
 
+    led_illumination_intensities = [
+        float(jnp.mean(ref_image)) for ref_image in ref_intensity_images
+    ]  # Assuming uniform intensity for simplicity
+
     for idx in range(params.num_z_slices):
         z = (idx - params.num_z_slices // 2) * params.imgpx_axial_m_per_px
         eps_re, eps_im = compute_permitivity(
             params,
             g_tilde_list,
             u_illumination_list,
-            [jnp.array(1.0) for _ in range(len(u_illumination_list))],  # Assuming uniform intensity for simplicity
+            led_illumination_intensities,
             z=z,
             alpha=alpha,
             beta=beta,

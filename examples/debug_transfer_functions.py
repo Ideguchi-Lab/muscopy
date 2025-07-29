@@ -51,19 +51,25 @@ def visualize_transfer_functions(  # noqa: PLR0914
 
         # Row 0: First angle (i=0), Row 1: Second angle (i=1)
         row = i
-        # Column 0: |H_re| (Magnitude of real transfer function)
-        im_mag_re = axes[row, 0].imshow(np.abs(h_re_np), cmap="viridis", aspect="equal")
-        axes[row, 0].set_title(f"|H_re|\nAngle: ({u_x:.3f}, {u_y:.3f})", fontsize=11)
+        # Column 0: log|H_re| (Log magnitude of real transfer function)
+        # Add small epsilon to avoid log(0)
+        epsilon = 1e-10
+        log_mag_re = np.log10(np.abs(h_re_np) + epsilon)
+        im_mag_re = axes[row, 0].imshow(log_mag_re, cmap="viridis", aspect="equal")
+        axes[row, 0].set_title(f"log|H_re|\nAngle: ({u_x:.3f}, {u_y:.3f})", fontsize=11)
         axes[row, 0].set_xlabel("kx [px]", fontsize=9)
         axes[row, 0].set_ylabel("ky [px]", fontsize=9)
-        plt.colorbar(im_mag_re, ax=axes[row, 0])
+        cbar = plt.colorbar(im_mag_re, ax=axes[row, 0])
+        cbar.set_label("log10(amplitude)", fontsize=9)
 
-        # Column 1: |H_im| (Magnitude of imaginary transfer function)
-        im_mag_im = axes[row, 1].imshow(np.abs(h_im_np), cmap="plasma", aspect="equal")
-        axes[row, 1].set_title(f"|H_im|\nAngle: ({u_x:.3f}, {u_y:.3f})", fontsize=11)
+        # Column 1: log|H_im| (Log magnitude of imaginary transfer function)
+        log_mag_im = np.log10(np.abs(h_im_np) + epsilon)
+        im_mag_im = axes[row, 1].imshow(log_mag_im, cmap="plasma", aspect="equal")
+        axes[row, 1].set_title(f"log|H_im|\nAngle: ({u_x:.3f}, {u_y:.3f})", fontsize=11)
         axes[row, 1].set_xlabel("kx [px]", fontsize=9)
         axes[row, 1].set_ylabel("ky [px]", fontsize=9)
-        plt.colorbar(im_mag_im, ax=axes[row, 1])
+        cbar = plt.colorbar(im_mag_im, ax=axes[row, 1])
+        cbar.set_label("log10(amplitude)", fontsize=9)
 
         # Column 2: Phase(H_re) (Phase of real transfer function)
         phase_re = np.angle(h_re_np)

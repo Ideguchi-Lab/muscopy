@@ -32,7 +32,7 @@ from muscopy.idt import IDTParameters, compute_idt
 warnings.filterwarnings("ignore", category=FutureWarning, message=".*scatter inputs have incompatible types.*")
 warnings.filterwarnings("ignore", category=UserWarning, message=".*Casting complex values to real.*")
 
-INTENSITY_IMAGE_SIZE = 1024  # Increased for better quality
+INTENSITY_IMAGE_SIZE = 1023  # Increased for better quality
 
 
 class IntensityImageSetGenerator:

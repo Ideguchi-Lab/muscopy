@@ -400,7 +400,7 @@ def _visualize_results(  # noqa: PLR0914, PLR0915
     print(f"Recovery ratio: {n_reconstructed_np.max() / delta_n:.2f}")
 
 
-def main() -> None:
+def compute_idt(delta_n: float, radius_um: float) -> tuple[Array, Array]:
     """Demonstrate IDT with MLB simulation."""
     # Clear JAX compilation cache at the start to prevent memory accumulation
     jax.clear_caches()  # type: ignore[no-untyped-call]
@@ -450,21 +450,19 @@ def main() -> None:
     # Convert to real refractive index
     n_reconstructed = n_re
 
-    # Debug: Print transfer function status
-    print("\nTransfer functions computed successfully for IDT reconstruction.")
-    print("For detailed transfer function debugging, run debug_transfer_functions.py")
+    # # Debug: Print transfer function status
+    #print("\nTransfer functions computed successfully for IDT reconstruction.")
+    #print("For detailed transfer function debugging, run debug_transfer_functions.py")
 
-    # Visualization
-    _visualize_results(n_reconstructed, target_intensity_images, delta_n)
+    # # Visualization
+    #_visualize_results(n_reconstructed, target_intensity_images, delta_n)
 
-    # Clear JAX compilation cache at the end to prevent memory accumulation
-    jax.clear_caches()  # type: ignore[no-untyped-call]
+    # # Clear JAX compilation cache at the end to prevent memory accumulation
+    #jax.clear_caches()  # type: ignore[no-untyped-call]
 
-    # Force garbage collection to clean up any remaining large arrays
-    gc.collect()
+    # # Force garbage collection to clean up any remaining large arrays
+    #gc.collect()
 
-    # visualize_synthetic_spectra_profiles()
+    # # visualize_synthetic_spectra_profiles()
+    return n_reconstructed, scattering_potential
 
-
-if __name__ == "__main__":
-    main()

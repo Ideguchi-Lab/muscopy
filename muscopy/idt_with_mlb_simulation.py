@@ -5,7 +5,7 @@ with Multi-layer Born (MLB) simulation for microscopy analysis.
 """
 
 # pyright: reportPossiblyUnboundVariable=false, reportInvalidTypeForm=false
-
+from __future__ import annotations
 import gc
 import shutil
 import typing

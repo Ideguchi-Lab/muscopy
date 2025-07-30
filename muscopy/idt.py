@@ -1,12 +1,12 @@
 """Intensity Diffraction Tomography (IDT) module."""
-
+from __future__ import annotations
 import dataclasses
 import math
 from typing import TYPE_CHECKING, Sequence
 import jax.numpy as jnp
 from jax import Array
 from tqdm import tqdm
-from __future__ import annotations
+
 
 
 from muscopy.dh import MuParameters, make_disk

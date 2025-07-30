@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 
-from muscopy.odt_with_mlb_simulation import generate_sphere_potential, MLBParameters, compute_odt
+from muscopy.odt_with_mlb_simulation import compute_odt
 from muscopy.odt import calc_refractive_index, ODTParameters
 """
 NOTE: To run this you have to edit muscopy/odt_with_mlb_simulation.py

@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 
-from examples.idt_with_mlb_simulation import compute_idt
+from muscopy.idt_with_mlb_simulation import compute_idt
 from muscopy.idt import IDTParameters
 from muscopy.odt import calc_refractive_index
 

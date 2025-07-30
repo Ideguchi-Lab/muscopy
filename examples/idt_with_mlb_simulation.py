@@ -465,4 +465,3 @@ def compute_idt(delta_n: float, radius_um: float) -> tuple[Array, Array]:
 
     # # visualize_synthetic_spectra_profiles()
     return n_reconstructed, scattering_potential
-

@@ -301,8 +301,8 @@ def get_spectrum(
         The crop radius, by default 5
     print_illumination_angle : `bool`, optional
         Whether to print the illumination angle in NUMPY coordinate, by default False
-        The illumination angle is calculated as [maximum_value_coordinate[0] - shape[0],
-        maximum_value_coordinate[1] - shape[1]]
+        The illumination angle is calculated as [maximum_value_coordinate[0] - shape[0] // 2,
+        maximum_value_coordinate[1] - shape[1] // 2]
 
     Returns
     -------

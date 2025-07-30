@@ -411,8 +411,6 @@ def compute_idt(delta_n: float, radius_um: float) -> tuple[Array, Array]:
 
     # Generate sample (sphere) - increase scattering for better signal
     print("Generating spherical sample...")
-    radius_um = 2.0  # Larger sphere
-    delta_n = 0.05  # Much stronger scattering
     scattering_potential = generate_sphere_potential(mlb_params, radius_um, delta_n)
 
     # SlicingVisualizer(np.asarray(scattering_potential)).run()
@@ -437,15 +435,6 @@ def compute_idt(delta_n: float, radius_um: float) -> tuple[Array, Array]:
     print(f"Number of illumination angles: {len(u_illumination_list)}")
     print(f"Memory usage before IDT: {sum(img.nbytes for img in target_intensity_images) / 1024**2:.1f} MB")
 
-    try:
-        n_re, _ = compute_idt(idt_params, target_intensity_images, ref_intensity_images, u_illumination_list)
-        print("IDT computation completed.")
-    except Exception as e:
-        print(f"IDT computation failed with error: {e}")
-        print("Attempting to clear memory and continue with reduced parameters...")
-        jax.clear_caches()  # type: ignore[no-untyped-call]
-        gc.collect()
-        raise
 
     # Convert to real refractive index
     n_reconstructed = n_re

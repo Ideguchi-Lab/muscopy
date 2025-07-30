@@ -68,6 +68,7 @@ error_grid = jnp.zeros((len(r_values), len(n_values)))
 for i, r in enumerate(r_values):
     for j, n in enumerate(n_values):
         n_recon, gt_potential = compute_idt(n, r)
+
         
         gt_r_index = calc_refractive_index(gt_potential, idt_params) - idt_params.n_sol
 

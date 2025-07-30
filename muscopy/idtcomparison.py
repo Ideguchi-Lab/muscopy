@@ -81,7 +81,7 @@ ax = sns.heatmap(error_grid,
            cmap="viridis", 
            linewidths=0.1,
            linecolor="black",
-           cbar_kws={"label":"ODT Error Map"},
+           cbar_kws={"label":"IDT Error Map"},
            xticklabels=False,
            yticklabels=False)
 plt.xticks(

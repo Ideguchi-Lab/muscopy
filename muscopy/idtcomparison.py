@@ -29,8 +29,7 @@ n_grid, r_grid = jnp.meshgrid(n_values, r_values, indexing='ij')
 idt_params = IDTParameters(
     na=1.1,
     wavelength_m=532e-9,
-    Nx=512,
-    Ny=512,
+    img_size_px=512,
     px_size_m=3.45e-6 * 3 /180 / 2,
     n_sol=1.33,
     na_illumination=1.0

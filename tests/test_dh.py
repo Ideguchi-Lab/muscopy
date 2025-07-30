@@ -123,6 +123,10 @@ def test_get_spectrum() -> None:
     spectrum_crop = get_spectrum(ft_array.copy(), params, offaxis_center, crop_center=True, c_r=5)
     assert spectrum_crop.shape == expected_shape
 
+    # Test print_illumination_angle option
+    spectrum_angle = get_spectrum(ft_array.copy(), params, offaxis_center, print_illumination_angle=True)
+    assert spectrum_angle.shape == expected_shape
+
 
 def test_get_spectrums() -> None:
     params = MuParameters(na=0.1, wavelength_m=500e-9, img_size_px=64, px_size_m=1e-6, n_sol=1.33)

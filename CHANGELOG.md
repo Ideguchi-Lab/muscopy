@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Added
+
+- `print_illumination_angle` option in `get_spectrum()` method [[#94](https://github.com/Ideguchi-Lab/muscopy/issues/94)]
+  - Adds ability to print illumination angle in NUMPY coordinate system
+  - Calculates angle from maximum value coordinate as [max_coord[0] - shape[0]//2, max_coord[1] - shape[1]//2]
+  - Useful for IDT reconstruction where illumination angle tracking is necessary
+
 ---
 
 ## Version 0.6.0 [2025-07-29]

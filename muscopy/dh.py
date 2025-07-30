@@ -282,6 +282,7 @@ def get_spectrum(
     *,
     crop_center: bool = False,
     c_r: int = 5,
+    print_illumination_angle: bool = False,
 ) -> Array:
     r"""Get the spectrum of the hologram array.
 
@@ -298,6 +299,10 @@ def get_spectrum(
         This option is used for MIP-QPI
     c_r : `int`, optional
         The crop radius, by default 5
+    print_illumination_angle : `bool`, optional
+        Whether to print the illumination angle in NUMPY coordinate, by default False
+        The illumination angle is calculated as [maximum_value_coordinate[0] - shape[0] // 2,
+        maximum_value_coordinate[1] - shape[1] // 2]
 
     Returns
     -------
@@ -310,6 +315,14 @@ def get_spectrum(
     if crop_center:
         mask_highpass = make_disk(offaxis_center, c_r, params.img_size_px, highpass=True)
         ft_array *= mask_highpass
+
+    if print_illumination_angle:
+        # Find the maximum value coordinate in the masked spectrum
+        abs_ft_array = jnp.abs(ft_array)
+        max_coords = jnp.unravel_index(jnp.argmax(abs_ft_array), abs_ft_array.shape)
+        shape = abs_ft_array.shape
+        illumination_angle = [int(max_coords[0]) - shape[0] // 2, int(max_coords[1]) - shape[1] // 2]
+        print(f"Illumination angle (NUMPY coordinate): {illumination_angle}")  # noqa: T201
 
     return crop_array(ft_array, offaxis_center, params.aperturesize_px)
 

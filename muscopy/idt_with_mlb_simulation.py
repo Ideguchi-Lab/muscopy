@@ -241,7 +241,7 @@ def _setup_parameters() -> tuple[IDTParameters, MLBParameters]:
         wavelength_m=idt_params.wavelength_m,
         numerical_aperture=idt_params.na,
         n_medium=idt_params.n_sol,
-        xy_shape=(2 * idt_params.aperturesize_px, 2 * idt_params.aperturesize_px),
+        xy_shape=(2 * idt_params.aperturesize_px +1, 2 * idt_params.aperturesize_px +1),
         num_layers=idt_params.freq_axial_extent_px,
         dxy_m=idt_params.imgpx_lateral_m_per_px,
         dz_m=idt_params.imgpx_axial_m_per_px,

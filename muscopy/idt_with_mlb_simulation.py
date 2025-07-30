@@ -400,7 +400,7 @@ def _visualize_results(  # noqa: PLR0914, PLR0915
     print(f"Recovery ratio: {n_reconstructed_np.max() / delta_n:.2f}")
 
 
-def compute_idt(delta_n: float, radius_um: float) -> tuple[Array, Array]:
+def idt_eval(delta_n: float, radius_um: float) -> tuple[Array, Array]:
     """Demonstrate IDT with MLB simulation."""
     # Clear JAX compilation cache at the start to prevent memory accumulation
     jax.clear_caches()  # type: ignore[no-untyped-call]
@@ -435,6 +435,15 @@ def compute_idt(delta_n: float, radius_um: float) -> tuple[Array, Array]:
     print(f"Number of illumination angles: {len(u_illumination_list)}")
     print(f"Memory usage before IDT: {sum(img.nbytes for img in target_intensity_images) / 1024**2:.1f} MB")
 
+    try:
+        n_re, _ = compute_idt(idt_params, target_intensity_images, ref_intensity_images, u_illumination_list)
+        print("IDT computation completed.")
+    except Exception as e:
+        print(f"IDT computation failed with error: {e}")
+        print("Attempting to clear memory and continue with reduced parameters...")
+        jax.clear_caches()  # type: ignore[no-untyped-call]
+        gc.collect()
+        raise
 
     # Convert to real refractive index
     n_reconstructed = n_re

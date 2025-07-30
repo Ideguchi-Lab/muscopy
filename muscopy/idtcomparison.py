@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 
-from examples.idt_with_mlb_simulation import generate_sphere_potential, MLBParameters, compute_idt
+from examples.idt_with_mlb_simulation import compute_idt
 from muscopy.idt import IDTParameters
 from muscopy.odt import calc_refractive_index
 
@@ -29,11 +29,13 @@ n_grid, r_grid = jnp.meshgrid(n_values, r_values, indexing='ij')
 idt_params = IDTParameters(
     na=1.1,
     wavelength_m=532e-9,
-    img_size_px=512,
+    Nx=512,
+    Ny=512,
     px_size_m=3.45e-6 * 3 /180 / 2,
     n_sol=1.33,
-    na_illumination=1.0)
-mlb_params = MLBParameters()
+    na_illumination=1.0
+)
+
 
 #Compute Error
 def compute_error(n_recon: Array, gt_r_index: Array) -> float:

@@ -118,7 +118,8 @@ def create_simple_sphere_potential(
     )
     refractive_index = jnp.where(sphere_mask, n_sphere, refractive_index)
 
-    refractive_index_arr = typing.cast("Array", refractive_index)  # type: ignore[redundant-cast]
+    # Explicit type annotation to resolve type checker differences
+    refractive_index_arr: Array = refractive_index  # type: ignore[assignment]
     print(f"Refractive index range: [{refractive_index_arr.min():.4f}, {refractive_index_arr.max():.4f}]")
 
     # Convert to scattering potential

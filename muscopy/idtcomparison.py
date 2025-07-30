@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 
-from muscopy.idt_with_mlb_simulation import compute_idt
+from muscopy.idt_with_mlb_simulation import idt_eval
 from muscopy.idt import IDTParameters
 from muscopy.odt import calc_refractive_index
 
@@ -67,7 +67,7 @@ error_grid = jnp.zeros((len(r_values), len(n_values)))
 
 for i, r in enumerate(r_values):
     for j, n in enumerate(n_values):
-        n_recon, gt_potential = compute_idt(n, r)
+        n_recon, gt_potential = idt_eval(n, r)
 
         
         gt_r_index = calc_refractive_index(gt_potential, idt_params) - idt_params.n_sol

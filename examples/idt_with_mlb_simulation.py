@@ -400,7 +400,7 @@ def _visualize_results(  # noqa: PLR0914, PLR0915
     print(f"Recovery ratio: {n_reconstructed_np.max() / delta_n:.2f}")
 
 
-def compute_idt(delta_n: float, radius_um: float) -> tuple[Array, Array]:
+def idt_eval(delta_n: float, radius_um: float) -> tuple[Array, Array]:
     """Demonstrate IDT with MLB simulation."""
     # Clear JAX compilation cache at the start to prevent memory accumulation
     jax.clear_caches()  # type: ignore[no-untyped-call]

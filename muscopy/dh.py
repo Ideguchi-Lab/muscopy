@@ -303,6 +303,8 @@ def get_spectrum(
         Whether to print the illumination angle in NUMPY coordinate, by default False
         The illumination angle is calculated as [maximum_value_coordinate[0] - shape[0] // 2,
         maximum_value_coordinate[1] - shape[1] // 2]
+        Also calculates and prints the illumination NA using the formula:
+        illumination_na = |illumination_shift|/(params.aperturesize_px//2) * params.na
 
     Returns
     -------
@@ -321,8 +323,13 @@ def get_spectrum(
         abs_ft_array = jnp.abs(ft_array)
         max_coords = jnp.unravel_index(jnp.argmax(abs_ft_array), abs_ft_array.shape)
         shape = abs_ft_array.shape
-        illumination_angle = [int(max_coords[0]) - shape[0] // 2, int(max_coords[1]) - shape[1] // 2]
-        print(f"Illumination angle (NUMPY coordinate): {illumination_angle}")  # noqa: T201
+        illumination_shift = [int(max_coords[0]) - shape[0] // 2, int(max_coords[1]) - shape[1] // 2]
+        print(f"Illumination angle (NUMPY coordinate): {illumination_shift}")  # noqa: T201
+
+        # Calculate illumination NA
+        illumination_shift_magnitude = jnp.sqrt(illumination_shift[0] ** 2 + illumination_shift[1] ** 2)
+        illumination_na = illumination_shift_magnitude / (params.aperturesize_px // 2) * params.na
+        print(f"Illumination NA: {illumination_na:.4f}")  # noqa: T201
 
     return crop_array(ft_array, offaxis_center, params.aperturesize_px)
 

@@ -301,8 +301,11 @@ def get_spectrum(
         The crop radius, by default 5
     print_illumination_angle : `bool`, optional
         Whether to print the illumination angle in NUMPY coordinate, by default False
-        The illumination angle is calculated as [maximum_value_coordinate[0] - shape[0] // 2,
+        The illumination shift is calculated as [maximum_value_coordinate[0] - shape[0] // 2,
         maximum_value_coordinate[1] - shape[1] // 2]
+        Also calculates and prints theta angle from illumination_shift = [cos(theta), sin(theta)]
+        and the illumination NA using the formula:
+        illumination_na = |illumination_shift|/(params.aperturesize_px//2) * params.na
 
     Returns
     -------
@@ -321,8 +324,18 @@ def get_spectrum(
         abs_ft_array = jnp.abs(ft_array)
         max_coords = jnp.unravel_index(jnp.argmax(abs_ft_array), abs_ft_array.shape)
         shape = abs_ft_array.shape
-        illumination_angle = [int(max_coords[0]) - shape[0] // 2, int(max_coords[1]) - shape[1] // 2]
-        print(f"Illumination angle (NUMPY coordinate): {illumination_angle}")  # noqa: T201
+        illumination_shift = [int(max_coords[0]) - shape[0] // 2, int(max_coords[1]) - shape[1] // 2]
+        print(f"Illumination shift (NUMPY coordinate): {illumination_shift}")  # noqa: T201
+
+        # Calculate theta from illumination_shift = [cos(theta), sin(theta)]
+        theta_rad = jnp.arctan2(illumination_shift[1], illumination_shift[0])
+        theta_deg = jnp.degrees(theta_rad)
+        print(f"Illumination angle theta: {theta_rad:.4f} rad ({theta_deg:.2f} deg)")  # noqa: T201
+
+        # Calculate illumination NA
+        illumination_shift_magnitude = jnp.sqrt(illumination_shift[0] ** 2 + illumination_shift[1] ** 2)
+        illumination_na = illumination_shift_magnitude / (params.aperturesize_px // 2) * params.na
+        print(f"Illumination NA: {illumination_na:.4f}")  # noqa: T201
 
     return crop_array(ft_array, offaxis_center, params.aperturesize_px)
 
@@ -334,6 +347,7 @@ def get_spectrums(
     *,
     crop_center: bool = False,
     c_r: int = 5,
+    print_illumination_angle: bool = False,
 ) -> list[Array]:
     r"""Get the spectrums of the complex fileds.
 
@@ -350,6 +364,13 @@ def get_spectrums(
         This option is used for MIP-QPI
     c_r : `int`, optional
         The crop radius, by default 5
+    print_illumination_angle : `bool`, optional
+        Whether to print the illumination angle in NUMPY coordinate for each spectrum, by default False
+        The illumination shift is calculated as [maximum_value_coordinate[0] - shape[0] // 2,
+        maximum_value_coordinate[1] - shape[1] // 2]
+        Also calculates and prints theta angle from illumination_shift = [cos(theta), sin(theta)]
+        and the illumination NA using the formula:
+        illumination_na = |illumination_shift|/(params.aperturesize_px//2) * params.na
 
     Returns
     -------
@@ -357,8 +378,17 @@ def get_spectrums(
         The spectrums of complex amplitude
     """
     cp_spectrums = []
-    for offaxis_center in offaxis_centers:
-        cp_spectrum = get_spectrum(ft_array, params, offaxis_center, crop_center=crop_center, c_r=c_r)
+    for i, offaxis_center in enumerate(offaxis_centers):
+        if print_illumination_angle:
+            print(f"\n--- Spectrum {i} ---")  # noqa: T201
+        cp_spectrum = get_spectrum(
+            ft_array,
+            params,
+            offaxis_center,
+            crop_center=crop_center,
+            c_r=c_r,
+            print_illumination_angle=print_illumination_angle,
+        )
         cp_spectrums.append(cp_spectrum)
     return cp_spectrums
 

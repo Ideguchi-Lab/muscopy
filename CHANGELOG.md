@@ -8,6 +8,16 @@
   - Adds ability to print illumination angle in NUMPY coordinate system
   - Calculates angle from maximum value coordinate as [max_coord[0] - shape[0]//2, max_coord[1] - shape[1]//2]
   - Useful for IDT reconstruction where illumination angle tracking is necessary
+- Illumination NA calculation in `get_spectrum()` method [[#96](https://github.com/Ideguchi-Lab/muscopy/issues/96)]
+  - Calculates and prints illumination NA when `print_illumination_angle` is True
+  - Uses formula: illumination_na = |illumination_shift|/(params.aperturesize_px//2) * params.na
+  - Provides quantitative measure of illumination numerical aperture
+  - Also calculates and prints theta angle from illumination_shift = [cos(theta), sin(theta)]
+  - Displays theta in both radians and degrees for convenient analysis
+- Extended `print_illumination_angle` option to `get_spectrums()` method [[#96](https://github.com/Ideguchi-Lab/muscopy/issues/96)]
+  - Adds same illumination angle analysis capability for multiple spectra processing
+  - Displays spectrum index for each calculation when enabled
+  - Provides consistent functionality across single and multiple spectrum workflows
 
 ---
 

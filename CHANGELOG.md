@@ -14,6 +14,10 @@
   - Provides quantitative measure of illumination numerical aperture
   - Also calculates and prints theta angle from illumination_shift = [cos(theta), sin(theta)]
   - Displays theta in both radians and degrees for convenient analysis
+- Extended `print_illumination_angle` option to `get_spectrums()` method [[#96](https://github.com/Ideguchi-Lab/muscopy/issues/96)]
+  - Adds same illumination angle analysis capability for multiple spectra processing
+  - Displays spectrum index for each calculation when enabled
+  - Provides consistent functionality across single and multiple spectrum workflows
 
 ---
 

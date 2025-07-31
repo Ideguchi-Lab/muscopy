@@ -12,6 +12,8 @@
   - Calculates and prints illumination NA when `print_illumination_angle` is True
   - Uses formula: illumination_na = |illumination_shift|/(params.aperturesize_px//2) * params.na
   - Provides quantitative measure of illumination numerical aperture
+  - Also calculates and prints theta angle from illumination_shift = [cos(theta), sin(theta)]
+  - Displays theta in both radians and degrees for convenient analysis
 
 ---
 

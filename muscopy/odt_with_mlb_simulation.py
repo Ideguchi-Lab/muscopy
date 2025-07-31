@@ -32,13 +32,8 @@ from muscopy.dh import get_spectrum
 from muscopy.odt import ODTConfig, ODTParameters, odt
 
 try:
-    from muscopy_mlbsim import (  # pyright: ignore[reportMissingImports]
-        HologramGenerator,
-        MLBForward,
-        MLBParameters,
-        get_oblique_wave_fft,
-        get_scatter_potential,
-    )
+    from muscopy_mlbsim.hologram_generator import HologramGenerator, MLBParameters
+    from muscopy_mlbsim.mlb import get_oblique_wave_fft, get_scatter_potential
 
     MLB_AVAILABLE = True
 except ImportError:

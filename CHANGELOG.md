@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+---
+
+## Version 0.6.1 [2025-07-31]
+
 ### Added
 
 - `print_illumination_angle` option in `get_spectrum()` method [[#94](https://github.com/Ideguchi-Lab/muscopy/issues/94)]

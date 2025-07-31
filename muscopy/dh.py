@@ -347,6 +347,7 @@ def get_spectrums(
     *,
     crop_center: bool = False,
     c_r: int = 5,
+    print_illumination_angle: bool = False,
 ) -> list[Array]:
     r"""Get the spectrums of the complex fileds.
 
@@ -363,6 +364,13 @@ def get_spectrums(
         This option is used for MIP-QPI
     c_r : `int`, optional
         The crop radius, by default 5
+    print_illumination_angle : `bool`, optional
+        Whether to print the illumination angle in NUMPY coordinate for each spectrum, by default False
+        The illumination shift is calculated as [maximum_value_coordinate[0] - shape[0] // 2,
+        maximum_value_coordinate[1] - shape[1] // 2]
+        Also calculates and prints theta angle from illumination_shift = [cos(theta), sin(theta)]
+        and the illumination NA using the formula:
+        illumination_na = |illumination_shift|/(params.aperturesize_px//2) * params.na
 
     Returns
     -------
@@ -370,8 +378,17 @@ def get_spectrums(
         The spectrums of complex amplitude
     """
     cp_spectrums = []
-    for offaxis_center in offaxis_centers:
-        cp_spectrum = get_spectrum(ft_array, params, offaxis_center, crop_center=crop_center, c_r=c_r)
+    for i, offaxis_center in enumerate(offaxis_centers):
+        if print_illumination_angle:
+            print(f"\n--- Spectrum {i} ---")  # noqa: T201
+        cp_spectrum = get_spectrum(
+            ft_array,
+            params,
+            offaxis_center,
+            crop_center=crop_center,
+            c_r=c_r,
+            print_illumination_angle=print_illumination_angle,
+        )
         cp_spectrums.append(cp_spectrum)
     return cp_spectrums
 

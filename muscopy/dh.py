@@ -283,6 +283,7 @@ def get_spectrum(
     crop_center: bool = False,
     c_r: int = 5,
     print_illumination_angle: bool = False,
+    edge_size: int = 0,
 ) -> Array:
     r"""Get the spectrum of the hologram array.
 
@@ -301,11 +302,13 @@ def get_spectrum(
         The crop radius, by default 5
     print_illumination_angle : `bool`, optional
         Whether to print the illumination angle in NUMPY coordinate, by default False
-        The illumination shift is calculated as [maximum_value_coordinate[0] - shape[0] // 2,
-        maximum_value_coordinate[1] - shape[1] // 2]
+        The illumination shift is calculated as [maximum_value_coordinate[0] - offaxis_center[0],
+        maximum_value_coordinate[1] - offaxis_center[1]]
         Also calculates and prints theta angle from illumination_shift = [cos(theta), sin(theta)]
         and the illumination NA using the formula:
         illumination_na = |illumination_shift|/(params.aperturesize_px//2) * params.na
+    edge_size : `int`, optional
+        Size of edge to trim from the cropped spectrum, by default 0
 
     Returns
     -------
@@ -323,8 +326,7 @@ def get_spectrum(
         # Find the maximum value coordinate in the masked spectrum
         abs_ft_array = jnp.abs(ft_array)
         max_coords = jnp.unravel_index(jnp.argmax(abs_ft_array), abs_ft_array.shape)
-        shape = abs_ft_array.shape
-        illumination_shift = [int(max_coords[0]) - shape[0] // 2, int(max_coords[1]) - shape[1] // 2]
+        illumination_shift = [int(max_coords[0]) - offaxis_center[0], int(max_coords[1]) - offaxis_center[1]]
         print(f"Illumination shift (NUMPY coordinate): {illumination_shift}")  # noqa: T201
 
         # Calculate theta from illumination_shift = [cos(theta), sin(theta)]
@@ -337,7 +339,13 @@ def get_spectrum(
         illumination_na = illumination_shift_magnitude / (params.aperturesize_px // 2) * params.na
         print(f"Illumination NA: {illumination_na:.4f}")  # noqa: T201
 
-    return crop_array(ft_array, offaxis_center, params.aperturesize_px)
+    cropped_spectrum = crop_array(ft_array, offaxis_center, params.aperturesize_px)
+
+    # Apply edge trimming if specified
+    if edge_size > 0:
+        cropped_spectrum = cropped_spectrum[edge_size:-edge_size, edge_size:-edge_size]
+
+    return cropped_spectrum
 
 
 def get_spectrums(

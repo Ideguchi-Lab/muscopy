@@ -318,9 +318,9 @@ def odt(
         max_x, max_y, _ = _find_max_args(jnp.abs(ref_cp_spectrum))
         illumination_vector = (max_x - params.aperturesize_px // 2, max_y - params.aperturesize_px // 2)
         expanded_cp_spectrum = _shift_dh_spectrum(params, cp_spectrum, illumination_vector)
-        expanded_cp_spectrum = jnp.asarray(expanded_cp_spectrum)
+        expanded_cp_spectrum = jnp.asarray(expanded_cp_spectrum, dtype=config.precision.complex_precision())
         expanded_ref_cp_spectrum = _shift_dh_spectrum(params, ref_cp_spectrum, illumination_vector)
-        expanded_ref_cp_spectrum = jnp.asarray(expanded_ref_cp_spectrum)
+        expanded_ref_cp_spectrum = jnp.asarray(expanded_ref_cp_spectrum, dtype=config.precision.complex_precision())
         cp_field = jnp.fft.ifft2(jnp.fft.ifftshift(expanded_cp_spectrum), norm="ortho")
         ref_cp_field = jnp.fft.ifft2(jnp.fft.ifftshift(expanded_ref_cp_spectrum), norm="ortho")
         scattering_spectrum_array = _calc_1st_scattering_spectrum(

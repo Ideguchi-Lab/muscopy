@@ -22,7 +22,7 @@ from muscopy.qpi_utils import unwrap_phase
 # config
 SHOW_IMAGE = True
 
-print(jax.default_backend())
+print(f"backend: {jax.default_backend()}")
 
 # %%
 # Set microscopy parameters
@@ -69,12 +69,14 @@ complex_amplitude_with_gradient = magnitude * jnp.exp(1j * phase_with_gradient)
 complex_amplitude_gradient_corrected = correct_gradient(complex_amplitude_with_gradient)
 
 # Define offset regions for constant phase correction (use corners)
-aperture_size = params.aperturesize_px
 offset_regions = [
     ((5, 10), (5, 10)),  # top-left
-    ((aperture_size - 10, aperture_size - 5), (5, 10)),  # top-right
-    ((5, 10), (aperture_size - 10, aperture_size - 5)),  # bottom-left
-    ((aperture_size - 10, aperture_size - 5), (aperture_size - 10, aperture_size - 5)),  # bottom-right
+    ((params.img_size_px - 10, params.img_size_px - 5), (5, 10)),  # top-right
+    ((5, 10), (params.img_size_px - 10, params.img_size_px - 5)),  # bottom-left
+    (
+        (params.img_size_px - 10, params.img_size_px - 5),
+        (params.img_size_px - 10, params.img_size_px - 5),
+    ),  # bottom-right
 ]
 
 # Apply constant phase offset correction

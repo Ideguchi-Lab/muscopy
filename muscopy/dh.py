@@ -301,8 +301,8 @@ def get_spectrum(
         The crop radius, by default 5
     print_illumination_angle : `bool`, optional
         Whether to print the illumination angle in NUMPY coordinate, by default False
-        The illumination shift is calculated as [maximum_value_coordinate[0] - shape[0] // 2,
-        maximum_value_coordinate[1] - shape[1] // 2]
+        The illumination shift is calculated as [maximum_value_coordinate[0] - offaxis_center[0],
+        maximum_value_coordinate[1] - offaxis_center[1]]
         Also calculates and prints theta angle from illumination_shift = [cos(theta), sin(theta)]
         and the illumination NA using the formula:
         illumination_na = |illumination_shift|/(params.aperturesize_px//2) * params.na
@@ -323,8 +323,7 @@ def get_spectrum(
         # Find the maximum value coordinate in the masked spectrum
         abs_ft_array = jnp.abs(ft_array)
         max_coords = jnp.unravel_index(jnp.argmax(abs_ft_array), abs_ft_array.shape)
-        shape = abs_ft_array.shape
-        illumination_shift = [int(max_coords[0]) - shape[0] // 2, int(max_coords[1]) - shape[1] // 2]
+        illumination_shift = [int(max_coords[0]) - offaxis_center[0], int(max_coords[1]) - offaxis_center[1]]
         print(f"Illumination shift (NUMPY coordinate): {illumination_shift}")  # noqa: T201
 
         # Calculate theta from illumination_shift = [cos(theta), sin(theta)]

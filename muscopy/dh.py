@@ -283,7 +283,6 @@ def get_spectrum(
     crop_center: bool = False,
     c_r: int = 5,
     print_illumination_angle: bool = False,
-    edge_size: int = 0,
 ) -> Array:
     r"""Get the spectrum of the hologram array.
 
@@ -307,8 +306,6 @@ def get_spectrum(
         Also calculates and prints theta angle from illumination_shift = [cos(theta), sin(theta)]
         and the illumination NA using the formula:
         illumination_na = |illumination_shift|/(params.aperturesize_px//2) * params.na
-    edge_size : `int`, optional
-        Size of edge to trim from the cropped spectrum, by default 0
 
     Returns
     -------
@@ -339,13 +336,7 @@ def get_spectrum(
         illumination_na = illumination_shift_magnitude / (params.aperturesize_px // 2) * params.na
         print(f"Illumination NA: {illumination_na:.4f}")  # noqa: T201
 
-    cropped_spectrum = crop_array(ft_array, offaxis_center, params.aperturesize_px)
-
-    # Apply edge trimming if specified
-    if edge_size > 0:
-        cropped_spectrum = cropped_spectrum[edge_size:-edge_size, edge_size:-edge_size]
-
-    return cropped_spectrum
+    return crop_array(ft_array, offaxis_center, params.aperturesize_px)
 
 
 def get_spectrums(

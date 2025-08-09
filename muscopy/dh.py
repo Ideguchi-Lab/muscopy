@@ -436,6 +436,48 @@ def correct_offset(
     return array * cmath.exp(-1j * phase_offset) / amplitude_scale
 
 
+def correct_gradient(array: Array) -> Array:
+    """Correct the gradient of the array.
+
+    This function estimates and removes linear phase gradients from complex amplitude data.
+    It uses median-based gradient estimation for robustness. For constant phase offset
+    removal, use the separate `correct_offset` function.
+
+    Parameters
+    ----------
+    array : `jax.Array`
+        Complex amplitude array
+
+    Returns
+    -------
+    `jax.Array`
+        The corrected array with gradient removed
+    """
+    height, width = array.shape
+    phase = jnp.angle(array)
+
+    # Create coordinate arrays
+    yy, xx = jnp.meshgrid(jnp.arange(height), jnp.arange(width), indexing="ij")
+
+    # Calculate phase differences
+    phase_diff_x = jnp.diff(phase, axis=1)
+    phase_diff_y = jnp.diff(phase, axis=0)
+
+    # Handle phase wrapping by converting to complex and back
+    phase_diff_x = jnp.angle(jnp.exp(1j * phase_diff_x))
+    phase_diff_y = jnp.angle(jnp.exp(1j * phase_diff_y))
+
+    # Estimate gradients using median for robustness
+    gradient_x = jnp.median(phase_diff_x)
+    gradient_y = jnp.median(phase_diff_y)
+
+    # Create phase ramp to subtract
+    phase_ramp = gradient_x * (xx - width // 2) + gradient_y * (yy - height // 2)
+
+    # Apply gradient correction
+    return array * jnp.exp(-1j * phase_ramp)
+
+
 @typing.overload
 def offaxis_dh(
     array: Array,

@@ -98,6 +98,10 @@ phase_diff = phase_corrected - phase_original
 # %%
 # Visualize results
 
+# Calculate amplitude arrays for analysis
+amplitude_original = jnp.abs(complex_amplitude_with_gradient)
+amplitude_corrected = jnp.abs(complex_amplitude_corrected)
+
 if SHOW_IMAGE:
     fig, axes = plt.subplots(2, 3, figsize=(18, 12))
 
@@ -130,8 +134,6 @@ if SHOW_IMAGE:
     plt.colorbar(im4, ax=axes[1, 0], label="Phase [rad]")
 
     # Amplitude preservation check
-    amplitude_original = jnp.abs(complex_amplitude_with_gradient)
-    amplitude_corrected = jnp.abs(complex_amplitude_corrected)
     im5 = axes[1, 1].imshow(jax.device_get(amplitude_corrected), cmap="viridis")
     axes[1, 1].set_title("Amplitude\n(preserved)")
     axes[1, 1].set_xlabel("x [pixels]")

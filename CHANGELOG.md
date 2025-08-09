@@ -11,6 +11,10 @@
 
 ### Changed
 
+- Fixed illumination shift calculation in `get_spectrum()` method
+  - Changed illumination shift calculation from using `shape[0] // 2, shape[1] // 2` to using `offaxis_center[0], offaxis_center[1]`
+  - Provides more accurate illumination angle tracking by using the actual off-axis center instead of assuming centered coordinates
+  - Improves precision in IDT reconstruction workflows where illumination angle accuracy is critical
 - Corrected scaling factor in ODT reconstruction
   - Fixed scaling factor from `(2π)³` to `(2π)^(3/2)` in both `odt()` and `pt_signal_1st_order()` functions
   - Ensures proper physical units and normalization in refractive index reconstruction

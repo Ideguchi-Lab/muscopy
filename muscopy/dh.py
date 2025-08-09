@@ -9,6 +9,7 @@ This module provides:
 - `get_spectrum`: A function to get the spectrum of the hologram array.
 - `get_spectrums`: A function to get the spectrums of the complex fields.
 - `correct_offset`: A function to correct the phase and amplitude offset of the array.
+- `correct_gradient`: A function to correct linear phase gradients in complex amplitude data.
 - `offaxis_dh`: A function to reconstruct the complex wave front using off-axis digital holography.
 - `demultiplex_cp_arrays`: A function to demultiplex a set of CP arrays using a demultiplexing matrix.
 - `ps_idh_reconstruct`: A function for phase-shifting inline digital holography reconstruction.
@@ -434,6 +435,58 @@ def correct_offset(
     amplitude_scale = jnp.mean(jnp.array(amplitude_offset_list)) if amplitude else 1
 
     return array * cmath.exp(-1j * phase_offset) / amplitude_scale
+
+
+def correct_gradient(array: Array, *, edge_size: int = 0) -> Array:
+    """Correct the gradient of the array.
+
+    This function estimates and removes linear phase gradients from complex amplitude data.
+    It uses median-based gradient estimation for robustness. For constant phase offset
+    removal, use the separate `correct_offset` function.
+
+    Parameters
+    ----------
+    array : `jax.Array`
+        Complex amplitude array
+    edge_size : `int`, optional
+        Number of pixels to exclude from the edges when estimating gradients.
+        This helps avoid edge artifacts that might bias the gradient estimation.
+        By default 0 (use entire image)
+
+    Returns
+    -------
+    `jax.Array`
+        The corrected array with gradient removed
+    """
+    height, width = array.shape
+    phase = jnp.angle(array)
+
+    # Calculate phase differences and handle wrapping
+    phase_diff_x = jnp.angle(jnp.exp(1j * jnp.diff(phase, axis=1)))
+    phase_diff_y = jnp.angle(jnp.exp(1j * jnp.diff(phase, axis=0)))
+
+    # Apply edge exclusion if specified
+    if edge_size > 0:
+        # Calculate effective edge sizes (don't exceed array dimensions)
+        ex = min(edge_size, phase_diff_x.shape[1] // 2)
+        ey = min(edge_size, phase_diff_x.shape[0] // 2)
+
+        # Exclude edges from gradient estimation
+        x_roi = phase_diff_x[ey:-ey, ex:-ex] if ex > 0 and ey > 0 else phase_diff_x
+        y_roi = phase_diff_y[ey:-ey, ex:-ex] if ex > 0 and ey > 0 else phase_diff_y
+    else:
+        x_roi = phase_diff_x
+        y_roi = phase_diff_y
+
+    # Estimate gradients using median for robustness
+    gradient_x = jnp.median(x_roi)
+    gradient_y = jnp.median(y_roi)
+
+    # Create coordinate arrays and phase ramp
+    yy, xx = jnp.meshgrid(jnp.arange(height), jnp.arange(width), indexing="ij")
+    phase_ramp = gradient_x * (xx - width // 2) + gradient_y * (yy - height // 2)
+
+    return array * jnp.exp(-1j * phase_ramp)
 
 
 @typing.overload

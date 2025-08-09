@@ -8,6 +8,17 @@
   - Added `edge_size` parameter to `_calc_1st_scattering_spectrum()` function
   - Removes edge pixels from complex phase fields to minimize boundary artifacts
   - Configurable edge removal size for optimal reconstruction accuracy
+- Phase gradient correction functionality [[#47](https://github.com/Ideguchi-Lab/muscopy/issues/47)]
+  - Added `correct_gradient()` function in `dh` module for removing linear phase gradients
+  - Supports `edge_size` parameter to exclude edge pixels from gradient estimation
+  - Uses median-based gradient estimation for robustness against outliers
+  - Handles phase wrapping issues through complex exponential unwrapping
+  - Separates gradient correction from constant phase offset correction for modularity
+- Phase gradient correction demonstration
+  - Added `examples/phase_gradient_correction.py` with comprehensive visualization
+  - Shows step-by-step correction process (gradient removal + offset correction)
+  - Includes quantitative analysis with proper phase unwrapping
+  - Demonstrates edge exclusion functionality
 
 ### Changed
 

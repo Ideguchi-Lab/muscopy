@@ -317,12 +317,10 @@ def odt(
     for cp_spectrum, ref_cp_spectrum in zip(cp_spectrums, ref_cp_spectrums, strict=False):
         max_x, max_y, _ = _find_max_args(jnp.abs(ref_cp_spectrum))
         illumination_vector = (max_x - params.aperturesize_px // 2, max_y - params.aperturesize_px // 2)
-        expanded_cp_spectrum = _shift_dh_spectrum(params, cp_spectrum, illumination_vector).astype(
-            config.precision.complex_precision()
-        )
-        expanded_ref_cp_spectrum = _shift_dh_spectrum(params, ref_cp_spectrum, illumination_vector).astype(
-            config.precision.complex_precision()
-        )
+        expanded_cp_spectrum = _shift_dh_spectrum(params, cp_spectrum, illumination_vector)
+        expanded_cp_spectrum = jnp.asarray(expanded_cp_spectrum)
+        expanded_ref_cp_spectrum = _shift_dh_spectrum(params, ref_cp_spectrum, illumination_vector)
+        expanded_ref_cp_spectrum = jnp.asarray(expanded_ref_cp_spectrum)
         cp_field = jnp.fft.ifft2(jnp.fft.ifftshift(expanded_cp_spectrum), norm="ortho")
         ref_cp_field = jnp.fft.ifft2(jnp.fft.ifftshift(expanded_ref_cp_spectrum), norm="ortho")
         scattering_spectrum_array = _calc_1st_scattering_spectrum(
@@ -660,4 +658,4 @@ def _calc_kz_disk(
     fz_disk = (params.light_freq_px**2 - disk) * disk_mask
     fz_disk = jnp.where(fz_disk < 0, 0, fz_disk)
     kz_disk = fz_disk**0.5 * params.k_per_px
-    return kz_disk.astype(precision.float_precision())
+    return jnp.asarray(kz_disk, dtype=precision.float_precision())

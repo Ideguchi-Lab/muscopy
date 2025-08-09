@@ -317,16 +317,20 @@ def odt(
     for cp_spectrum, ref_cp_spectrum in zip(cp_spectrums, ref_cp_spectrums, strict=False):
         max_x, max_y, _ = _find_max_args(jnp.abs(ref_cp_spectrum))
         illumination_vector = (max_x - params.aperturesize_px // 2, max_y - params.aperturesize_px // 2)
-        expanded_cp_spectrum = _shift_dh_spectrum(params, cp_spectrum, illumination_vector).astype(
-            config.precision.complex_precision()
-        )
-        expanded_ref_cp_spectrum = _shift_dh_spectrum(params, ref_cp_spectrum, illumination_vector).astype(
-            config.precision.complex_precision()
-        )
+        expanded_cp_spectrum = _shift_dh_spectrum(params, cp_spectrum, illumination_vector)
+        expanded_cp_spectrum = jnp.asarray(expanded_cp_spectrum, dtype=config.precision.complex_precision())
+        expanded_ref_cp_spectrum = _shift_dh_spectrum(params, ref_cp_spectrum, illumination_vector)
+        expanded_ref_cp_spectrum = jnp.asarray(expanded_ref_cp_spectrum, dtype=config.precision.complex_precision())
         cp_field = jnp.fft.ifft2(jnp.fft.ifftshift(expanded_cp_spectrum), norm="ortho")
         ref_cp_field = jnp.fft.ifft2(jnp.fft.ifftshift(expanded_ref_cp_spectrum), norm="ortho")
         scattering_spectrum_array = _calc_1st_scattering_spectrum(
-            cp_field, ref_cp_field, params, config.approx_type, illumination_vector, config.offset_regions
+            cp_field,
+            ref_cp_field,
+            params,
+            config.approx_type,
+            illumination_vector,
+            config.edge_size,
+            config.offset_regions,
         )
         scattering_spectrum = ScatteringSpectrum(scattering_spectrum_array, illumination_vector)
         scattering_spectrums.append(scattering_spectrum)
@@ -340,7 +344,7 @@ def odt(
 
     scattering_potential = jnp.fft.fftshift(scattering_potential, axes=(2))
 
-    factor = params.spectrum2cpfield_xy**2 * params.spectrum2cpfield_z / (2 * jnp.pi) ** 3
+    factor = params.spectrum2cpfield_xy**2 * params.spectrum2cpfield_z / (2 * jnp.pi) ** (3 / 2)
     scattering_potential *= factor
 
     refractive_index = calc_refractive_index(scattering_potential, params)
@@ -459,7 +463,7 @@ def pt_signal_1st_order(
     ft_pt_signal = scattering_potential_pt / (params.light_freq_px * params.k_per_px) ** 2 / params.n_sol * 2 * jnp.pi
     pt_signal = jnp.fft.ifftn(jnp.fft.ifftshift(ft_pt_signal), norm="ortho")
 
-    factor = params.spectrum2cpfield_xy**2 * params.spectrum2cpfield_z / (2 * jnp.pi) ** 3
+    factor = params.spectrum2cpfield_xy**2 * params.spectrum2cpfield_z / (2 * jnp.pi) ** (3 / 2)
     pt_signal *= factor
 
     return pt_signal, ft_pt_signal
@@ -544,8 +548,12 @@ def _calc_1st_scattering_spectrum(
     params: ODTParameters,
     approx_type: str,
     illumination_vector: tuple[int, int],
+    edge_size: int = 0,
     offset_regions: OffsetRegions = None,
 ) -> Array:
+    cp_field = cp_field[edge_size:, edge_size:]
+    ref_cp_field = ref_cp_field[edge_size:, edge_size:]
+
     if approx_type == "Born":
         scattering_field = (cp_field - ref_cp_field) / ref_cp_field
     elif approx_type == "Rytov":
@@ -660,4 +668,4 @@ def _calc_kz_disk(
     fz_disk = (params.light_freq_px**2 - disk) * disk_mask
     fz_disk = jnp.where(fz_disk < 0, 0, fz_disk)
     kz_disk = fz_disk**0.5 * params.k_per_px
-    return kz_disk.astype(precision.float_precision())
+    return jnp.asarray(kz_disk, dtype=precision.float_precision())

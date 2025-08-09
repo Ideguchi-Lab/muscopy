@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+---
+
+## Version 0.6.2 [2025-08-09]
+
 ### Added
 
 - Edge removal functionality in ODT first-order scattering wave calculation [[#98](https://github.com/Ideguchi-Lab/muscopy/issues/98)]

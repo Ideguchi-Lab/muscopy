@@ -324,7 +324,13 @@ def odt(
         cp_field = jnp.fft.ifft2(jnp.fft.ifftshift(expanded_cp_spectrum), norm="ortho")
         ref_cp_field = jnp.fft.ifft2(jnp.fft.ifftshift(expanded_ref_cp_spectrum), norm="ortho")
         scattering_spectrum_array = _calc_1st_scattering_spectrum(
-            cp_field, ref_cp_field, params, config.approx_type, illumination_vector, config.offset_regions
+            cp_field,
+            ref_cp_field,
+            params,
+            config.approx_type,
+            illumination_vector,
+            config.edge_size,
+            config.offset_regions,
         )
         scattering_spectrum = ScatteringSpectrum(scattering_spectrum_array, illumination_vector)
         scattering_spectrums.append(scattering_spectrum)
@@ -542,8 +548,12 @@ def _calc_1st_scattering_spectrum(
     params: ODTParameters,
     approx_type: str,
     illumination_vector: tuple[int, int],
+    edge_size: int = 0,
     offset_regions: OffsetRegions = None,
 ) -> Array:
+    cp_field = cp_field[edge_size:, edge_size:]
+    ref_cp_field = ref_cp_field[edge_size:, edge_size:]
+
     if approx_type == "Born":
         scattering_field = (cp_field - ref_cp_field) / ref_cp_field
     elif approx_type == "Rytov":

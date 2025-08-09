@@ -66,7 +66,8 @@ complex_amplitude_with_gradient = magnitude * jnp.exp(1j * phase_with_gradient)
 # Apply gradient correction
 
 # First apply gradient correction
-complex_amplitude_gradient_corrected = correct_gradient(complex_amplitude_with_gradient)
+# Use edge_size=10 to exclude edge pixels from gradient estimation
+complex_amplitude_gradient_corrected = correct_gradient(complex_amplitude_with_gradient, edge_size=10)
 
 # Define offset regions for constant phase correction (use corners)
 offset_regions = [

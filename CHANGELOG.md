@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Added
+
+- Edge removal functionality in ODT first-order scattering wave calculation [[#98](https://github.com/Ideguchi-Lab/muscopy/issues/98)]
+  - Added `edge_size` parameter to `_calc_1st_scattering_spectrum()` function
+  - Removes edge pixels from complex phase fields to minimize boundary artifacts
+  - Configurable edge removal size for optimal reconstruction accuracy
+
+### Changed
+
+- Corrected scaling factor in ODT reconstruction
+  - Fixed scaling factor from `(2π)³` to `(2π)^(3/2)` in both `odt()` and `pt_signal_1st_order()` functions
+  - Ensures proper physical units and normalization in refractive index reconstruction
+- Optimized type conversions in ODT calculations
+  - Replaced `astype()` calls with `jnp.asarray()` for more efficient array type handling
+  - Added proper type specifications to improve numerical stability
+
 ---
 
 ## Version 0.6.1 [2025-07-31]

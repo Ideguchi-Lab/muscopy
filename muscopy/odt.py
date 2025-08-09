@@ -344,7 +344,7 @@ def odt(
 
     scattering_potential = jnp.fft.fftshift(scattering_potential, axes=(2))
 
-    factor = params.spectrum2cpfield_xy**2 * params.spectrum2cpfield_z / (2 * jnp.pi) ** 3
+    factor = params.spectrum2cpfield_xy**2 * params.spectrum2cpfield_z / (2 * jnp.pi) ** (3 / 2)
     scattering_potential *= factor
 
     refractive_index = calc_refractive_index(scattering_potential, params)
@@ -463,7 +463,7 @@ def pt_signal_1st_order(
     ft_pt_signal = scattering_potential_pt / (params.light_freq_px * params.k_per_px) ** 2 / params.n_sol * 2 * jnp.pi
     pt_signal = jnp.fft.ifftn(jnp.fft.ifftshift(ft_pt_signal), norm="ortho")
 
-    factor = params.spectrum2cpfield_xy**2 * params.spectrum2cpfield_z / (2 * jnp.pi) ** 3
+    factor = params.spectrum2cpfield_xy**2 * params.spectrum2cpfield_z / (2 * jnp.pi) ** (3 / 2)
     pt_signal *= factor
 
     return pt_signal, ft_pt_signal

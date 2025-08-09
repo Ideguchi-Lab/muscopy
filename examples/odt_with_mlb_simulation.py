@@ -539,7 +539,7 @@ def main() -> None:  # noqa: PLR0914
         approx_type="Rytov",
         hermite_symmetry=True,
         precision=precision,
-        edge_size=0,
+        edge_size=8,
     )
 
     refractive_index, synthetic_spectra = odt(cp_spectrums, ref_cp_spectrums, odt_params, odt_config)

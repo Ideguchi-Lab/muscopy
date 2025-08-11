@@ -537,8 +537,12 @@ def _shift_dh_spectrum(params: ODTParameters, cp_spectrum: Array, illumination_v
     )
 
     return expanded_cp_spectrum.at[
-        params.aperturesize_px // 2 - illumination_vector[0] : 3 * params.aperturesize_px // 2 - illumination_vector[0],
-        params.aperturesize_px // 2 - illumination_vector[1] : 3 * params.aperturesize_px // 2 - illumination_vector[1],
+        params.aperturesize_px // 2 - illumination_vector[0] : 3 * (params.aperturesize_px // 2)
+        - illumination_vector[0]
+        + 1,
+        params.aperturesize_px // 2 - illumination_vector[1] : 3 * (params.aperturesize_px // 2)
+        - illumination_vector[1]
+        + 1,
     ].set(cp_spectrum)
 
 

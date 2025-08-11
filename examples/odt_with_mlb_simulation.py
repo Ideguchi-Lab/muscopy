@@ -514,6 +514,7 @@ def main() -> None:  # noqa: PLR0914
     # Setup parameters
     odt_params, mlb_params, precision = _setup_parameters()
     offaxis_center = (200, 200)
+    opposite_offaxis_center = (odt_params.img_size_px - offaxis_center[0], odt_params.img_size_px - offaxis_center[1])
     num_angles = 10  # Number of illumination angles for tomographic acquisition
 
     # Generate sample (sphere)
@@ -531,7 +532,9 @@ def main() -> None:  # noqa: PLR0914
     )
 
     # Extract complex field spectra
-    cp_spectrums, ref_cp_spectrums = _extract_spectra(target_holograms, ref_holograms, odt_params, offaxis_center)
+    cp_spectrums, ref_cp_spectrums = _extract_spectra(
+        target_holograms, ref_holograms, odt_params, opposite_offaxis_center
+    )
 
     # ODT reconstruction
     print("Performing ODT reconstruction...")

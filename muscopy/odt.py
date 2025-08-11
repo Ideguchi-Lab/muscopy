@@ -25,7 +25,7 @@ from jax import Array
 from tqdm import tqdm
 
 from muscopy.cfg import ArrayPrecision, OffsetRegions
-from muscopy.dh import MuParameters, make_disk
+from muscopy.dh import MuParameters, correct_offset, make_disk
 from muscopy.qpi_utils import unwrap_phase
 
 if TYPE_CHECKING:
@@ -84,7 +84,7 @@ class ODTParameters(MuParameters):
         `int`
             The axial extent of Fourier space in pixels.
         """
-        return 2 * self.aperturesize_px // 2 + 1
+        return 2 * (self.aperturesize_px // 2) + 1
 
     @property
     def imgpx_lateral_m_per_px(self) -> float:
@@ -283,7 +283,7 @@ def calc_refractive_index(scattering_potential: Array, params: ODTParameters) ->
         3D refractive index
     """
     return params.n_sol * jnp.sqrt(
-        jnp.ones_like(scattering_potential) + scattering_potential / (params.light_freq_px * params.freq_per_px) ** 2
+        jnp.ones_like(scattering_potential) - scattering_potential / (params.light_freq_px * params.k_per_px) ** 2
     )
 
 
@@ -537,8 +537,12 @@ def _shift_dh_spectrum(params: ODTParameters, cp_spectrum: Array, illumination_v
     )
 
     return expanded_cp_spectrum.at[
-        params.aperturesize_px // 2 - illumination_vector[0] : 3 * params.aperturesize_px // 2 - illumination_vector[0],
-        params.aperturesize_px // 2 - illumination_vector[1] : 3 * params.aperturesize_px // 2 - illumination_vector[1],
+        params.aperturesize_px // 2 - illumination_vector[0] : 3 * (params.aperturesize_px // 2)
+        - illumination_vector[0]
+        + 1,
+        params.aperturesize_px // 2 - illumination_vector[1] : 3 * (params.aperturesize_px // 2)
+        - illumination_vector[1]
+        + 1,
     ].set(cp_spectrum)
 
 
@@ -564,13 +568,7 @@ def _calc_1st_scattering_spectrum(
 
     # offset correction
     if offset_regions:
-        amplitude_offset = 0.0
-        for region in offset_regions:
-            amplitude_offset += float(
-                jnp.mean(jnp.abs(scattering_field[region[0][0] : region[0][1], region[1][0] : region[1][1]]))
-            )
-        amplitude_offset /= len(offset_regions)
-        scattering_field = scattering_field - amplitude_offset  # noqa: PLR6104
+        scattering_field = correct_offset(scattering_field, offset_regions)
 
     scattering_spectrum = (
         jnp.fft.fftshift(jnp.fft.fft2(scattering_field, norm="ortho"))
@@ -579,8 +577,8 @@ def _calc_1st_scattering_spectrum(
     )  # last factor is to adjust to the non-Unitary derivation in Tamamitsu's paper
     mask_for_synthesis = make_disk(
         (
-            params.aperturesize_px + illumination_vector[0],
-            params.aperturesize_px + illumination_vector[1],
+            params.aperturesize_px - illumination_vector[0],
+            params.aperturesize_px - illumination_vector[1],
         ),
         params.aperturesize_px // 2,
         cp_field.shape[0],
@@ -589,10 +587,10 @@ def _calc_1st_scattering_spectrum(
 
 
 def _log_field(cp_field: Array, ref_cp_field: Array) -> Array:
-    field_log = jnp.log(cp_field + 1e-40)
+    field_log = jnp.log(cp_field)
     field_log_real = jnp.real(field_log)
     field_log_imag = jnp.imag(field_log)
-    ref_field_log = jnp.log(ref_cp_field + 1e-40)
+    ref_field_log = jnp.log(ref_cp_field)
     ref_field_log_real = jnp.real(ref_field_log)
     ref_field_log_imag = jnp.imag(ref_field_log)
 
@@ -611,27 +609,24 @@ def _embed_3d_spectrum(
     mode: str,
 ) -> Array:
     xx, yy = jnp.meshgrid(
-        jnp.arange(-shape_3d[0] // 2, shape_3d[0] // 2),
-        jnp.arange(
-            -shape_3d[1] // 2,
-            shape_3d[1] // 2,
-        ),
+        jnp.arange(-shape_3d[0] // 2 + 1, shape_3d[0] // 2 + 1),
+        jnp.arange(-shape_3d[1] // 2 + 1, shape_3d[1] // 2 + 1),
         indexing="ij",
     )
 
     _, _, zz = jnp.meshgrid(
-        jnp.arange(-shape_3d[0] // 2, shape_3d[0] // 2),
-        jnp.arange(-shape_3d[1] // 2, shape_3d[1] // 2),
-        jnp.arange(-shape_3d[2] // 2, shape_3d[2] // 2),
+        jnp.arange(-shape_3d[0] // 2 + 1, shape_3d[0] // 2 + 1),
+        jnp.arange(-shape_3d[1] // 2 + 1, shape_3d[1] // 2 + 1),
+        jnp.arange(-shape_3d[2] // 2 + 1, shape_3d[2] // 2 + 1),
         indexing="ij",
     )
 
-    circle = (xx - illumination_vector[0]) ** 2 + (yy - illumination_vector[1]) ** 2 <= (
+    circle = (xx + illumination_vector[0]) ** 2 + (yy + illumination_vector[1]) ** 2 <= (
         params.aperturesize_px // 2
     ) ** 2
 
     fz_circle = jnp.sqrt(
-        params.light_freq_px**2 - (xx - illumination_vector[0]) ** 2 - (yy - illumination_vector[1]) ** 2
+        params.light_freq_px**2 - (xx + illumination_vector[0]) ** 2 - (yy + illumination_vector[1]) ** 2
     ) - jnp.sqrt(params.light_freq_px**2 - illumination_vector[0] ** 2 - illumination_vector[1] ** 2)
 
     if mode == "Backward":
@@ -658,12 +653,12 @@ def _calc_kz_disk(
     if isinstance(shape, int):
         shape = (shape, shape)
     xx, yy = jnp.meshgrid(
-        jnp.arange(-shape[0] // 2, shape[0] // 2),
-        jnp.arange(-shape[1] // 2, shape[1] // 2),
+        jnp.arange(-shape[0] // 2 + 1, shape[0] // 2 + 1),
+        jnp.arange(-shape[1] // 2 + 1, shape[1] // 2 + 1),
         indexing="ij",
     )
 
-    disk = (xx - illumination_vector[0]) ** 2 + (yy - illumination_vector[1]) ** 2
+    disk = (xx + illumination_vector[0]) ** 2 + (yy + illumination_vector[1]) ** 2
     disk_mask = disk <= (params.aperturesize_px // 2) ** 2
     fz_disk = (params.light_freq_px**2 - disk) * disk_mask
     fz_disk = jnp.where(fz_disk < 0, 0, fz_disk)

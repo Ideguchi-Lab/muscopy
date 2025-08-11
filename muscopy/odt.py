@@ -84,7 +84,7 @@ class ODTParameters(MuParameters):
         `int`
             The axial extent of Fourier space in pixels.
         """
-        return 2 * self.aperturesize_px // 2 + 1
+        return 2 * (self.aperturesize_px // 2) + 1
 
     @property
     def imgpx_lateral_m_per_px(self) -> float:

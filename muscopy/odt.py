@@ -605,18 +605,15 @@ def _embed_3d_spectrum(
     mode: str,
 ) -> Array:
     xx, yy = jnp.meshgrid(
-        jnp.arange(-shape_3d[0] // 2, shape_3d[0] // 2),
-        jnp.arange(
-            -shape_3d[1] // 2,
-            shape_3d[1] // 2,
-        ),
+        jnp.arange(-shape_3d[0] // 2 + 1, shape_3d[0] // 2 + 1),
+        jnp.arange(-shape_3d[1] // 2 + 1, shape_3d[1] // 2 + 1),
         indexing="ij",
     )
 
     _, _, zz = jnp.meshgrid(
-        jnp.arange(-shape_3d[0] // 2, shape_3d[0] // 2),
-        jnp.arange(-shape_3d[1] // 2, shape_3d[1] // 2),
-        jnp.arange(-shape_3d[2] // 2, shape_3d[2] // 2),
+        jnp.arange(-shape_3d[0] // 2 + 1, shape_3d[0] // 2 + 1),
+        jnp.arange(-shape_3d[1] // 2 + 1, shape_3d[1] // 2 + 1),
+        jnp.arange(-shape_3d[2] // 2 + 1, shape_3d[2] // 2 + 1),
         indexing="ij",
     )
 
@@ -652,8 +649,8 @@ def _calc_kz_disk(
     if isinstance(shape, int):
         shape = (shape, shape)
     xx, yy = jnp.meshgrid(
-        jnp.arange(-shape[0] // 2, shape[0] // 2),
-        jnp.arange(-shape[1] // 2, shape[1] // 2),
+        jnp.arange(-shape[0] // 2 + 1, shape[0] // 2 + 1),
+        jnp.arange(-shape[1] // 2 + 1, shape[1] // 2 + 1),
         indexing="ij",
     )
 

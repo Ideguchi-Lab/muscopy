@@ -283,7 +283,7 @@ def calc_refractive_index(scattering_potential: Array, params: ODTParameters) ->
         3D refractive index
     """
     return params.n_sol * jnp.sqrt(
-        jnp.ones_like(scattering_potential) + scattering_potential / (params.light_freq_px * params.freq_per_px) ** 2
+        jnp.ones_like(scattering_potential) - scattering_potential / (params.light_freq_px * params.k_per_px) ** 2
     )
 
 

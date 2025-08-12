@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+### Version 0.6.3 [2025-08-12]
+
 ### Added
 
 - Regularization term to suppress ODT reconstruction error.

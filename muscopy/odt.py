@@ -25,7 +25,7 @@ from jax import Array
 from tqdm import tqdm
 
 from muscopy.cfg import ArrayPrecision, OffsetRegions
-from muscopy.dh import MuParameters, correct_offset, make_disk
+from muscopy.dh import MuParameters, correct_gradient, correct_offset, make_disk
 from muscopy.qpi_utils import unwrap_phase
 
 if TYPE_CHECKING:
@@ -290,7 +290,7 @@ def calc_refractive_index(scattering_potential: Array, params: ODTParameters) ->
     )
 
 
-def odt(
+def odt(  # noqa: PLR0914
     cp_spectrums: Sequence[Array],
     ref_cp_spectrums: Sequence[Array],
     params: ODTParameters,
@@ -319,7 +319,8 @@ def odt(
     scattering_spectrums = []
     for cp_spectrum, ref_cp_spectrum in zip(cp_spectrums, ref_cp_spectrums, strict=False):
         max_x, max_y, _ = _find_max_args(jnp.abs(ref_cp_spectrum))
-        illumination_vector = (max_x - params.aperturesize_px // 2, max_y - params.aperturesize_px // 2)
+        center_idx = cp_spectrum.shape[0] // 2
+        illumination_vector = (max_x - center_idx, max_y - center_idx)
         expanded_cp_spectrum = _shift_dh_spectrum(params, cp_spectrum, illumination_vector)
         expanded_cp_spectrum = jnp.asarray(expanded_cp_spectrum, dtype=config.precision.complex_precision())
         expanded_ref_cp_spectrum = _shift_dh_spectrum(params, ref_cp_spectrum, illumination_vector)
@@ -573,6 +574,8 @@ def _calc_1st_scattering_spectrum(
     if offset_regions:
         scattering_field = correct_offset(scattering_field, offset_regions)
 
+    scattering_field = correct_gradient(scattering_field, edge_size=edge_size)
+
     scattering_spectrum = (
         jnp.fft.fftshift(jnp.fft.fft2(scattering_field, norm="ortho"))
         * (params.cpfield_xy2spectrum) ** 2
@@ -580,8 +583,8 @@ def _calc_1st_scattering_spectrum(
     )  # last factor is to adjust to the non-Unitary derivation in Tamamitsu's paper
     mask_for_synthesis = make_disk(
         (
-            params.aperturesize_px - illumination_vector[0],
-            params.aperturesize_px - illumination_vector[1],
+            cp_field.shape[0] // 2 - illumination_vector[0],
+            cp_field.shape[1] // 2 - illumination_vector[1],
         ),
         params.aperturesize_px // 2,
         cp_field.shape[0],

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- Regularization term to suppress ODT reconstruction error.
+
 ### Fixed
 
 - Fixed critical calculation errors in ODT reconstruction

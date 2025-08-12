@@ -562,7 +562,7 @@ def _calc_1st_scattering_spectrum(
     ref_cp_field = ref_cp_field[edge_size:, edge_size:]
 
     if approx_type == "Born":
-        scattering_field = (cp_field - ref_cp_field) / (ref_cp_field + EPSILON)
+        scattering_field = (cp_field - ref_cp_field) / jnp.where(jnp.abs(ref_cp_field) < EPSILON, EPSILON, ref_cp_field)
     elif approx_type == "Rytov":
         scattering_field = _log_field(cp_field, ref_cp_field)
     else:

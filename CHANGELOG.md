@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Added
+
+- Gradient correction in ODT
+
+---
+
 ### Version 0.6.3 [2025-08-12]
 
 ### Added
@@ -11,7 +17,7 @@
 ### Fixed
 
 - Fixed critical calculation errors in ODT reconstruction
-  - Corrected index calculations in `_embed_3d_spectrum()` to use proper range bounds 
+  - Corrected index calculations in `_embed_3d_spectrum()` to use proper range bounds
   - Fixed scattering potential calculation using `k_per_px` instead of incorrect `freq_per_px`
   - Fixed illumination vector sign errors in spectrum shifting and mask calculations
   - Improved numerical stability by removing unnecessary epsilon additions in logarithmic calculations

@@ -32,6 +32,9 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
 
+EPSILON = 1e-8
+
+
 @dataclasses.dataclass
 class ODTParameters(MuParameters):
     """Optical Diffraction Tomography (ODT) parameters.
@@ -559,7 +562,7 @@ def _calc_1st_scattering_spectrum(
     ref_cp_field = ref_cp_field[edge_size:, edge_size:]
 
     if approx_type == "Born":
-        scattering_field = (cp_field - ref_cp_field) / ref_cp_field
+        scattering_field = (cp_field - ref_cp_field) / (ref_cp_field + EPSILON)
     elif approx_type == "Rytov":
         scattering_field = _log_field(cp_field, ref_cp_field)
     else:
@@ -587,10 +590,10 @@ def _calc_1st_scattering_spectrum(
 
 
 def _log_field(cp_field: Array, ref_cp_field: Array) -> Array:
-    field_log = jnp.log(cp_field)
+    field_log = jnp.log(cp_field + EPSILON)
     field_log_real = jnp.real(field_log)
     field_log_imag = jnp.imag(field_log)
-    ref_field_log = jnp.log(ref_cp_field)
+    ref_field_log = jnp.log(ref_cp_field + EPSILON)
     ref_field_log_real = jnp.real(ref_field_log)
     ref_field_log_imag = jnp.imag(ref_field_log)
 

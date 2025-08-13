@@ -1,4 +1,6 @@
-"""Debug and visualize IDT transfer functions.
+"""
+IDT Transfer Functions Visualization
+====================================
 
 This script provides tools to visualize and analyze transfer functions
 used in Intensity Diffraction Tomography (IDT) reconstruction.
@@ -151,6 +153,8 @@ def analyze_transfer_function_properties(
                 print("    WARNING: H_im contains NaN or Inf values!")
 
 
+# %%
+# Main execution
 def main() -> None:
     """Run transfer function debugging visualization."""
     # Example usage
@@ -191,5 +195,7 @@ def main() -> None:
         )
 
 
+# %%
+# Execute the main function
 if __name__ == "__main__":
     main()

@@ -481,6 +481,8 @@ def visualize_synthetic_spectra_profiles(synthetic_spectra: Array) -> None:  # n
     print(f"3D volume shape: {log_abs_spectra.shape}")
 
 
+# %%
+# Main execution
 def main() -> None:  # noqa: PLR0914
     """Demonstrate ODT with MLB simulation."""
     if not MLB_AVAILABLE:
@@ -557,5 +559,7 @@ def main() -> None:  # noqa: PLR0914
     visualize_synthetic_spectra_profiles(synthetic_spectra)
 
 
+# %%
+# Execute the main function
 if __name__ == "__main__":
     main()

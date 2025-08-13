@@ -1,4 +1,6 @@
-"""IDT with MLB simulation example.
+"""
+IDT with MLB Simulation Example
+===============================
 
 This example demonstrates how to use Intensity Diffraction Tomography (IDT)
 with Multi-layer Born (MLB) simulation for microscopy analysis.
@@ -400,6 +402,8 @@ def _visualize_results(  # noqa: PLR0914, PLR0915
     print(f"Recovery ratio: {n_reconstructed_np.max() / delta_n:.2f}")
 
 
+# %%
+# Main execution
 def main() -> None:
     """Demonstrate IDT with MLB simulation."""
     # Clear JAX compilation cache at the start to prevent memory accumulation
@@ -466,5 +470,7 @@ def main() -> None:
     # visualize_synthetic_spectra_profiles()
 
 
+# %%
+# Execute the main function
 if __name__ == "__main__":
     main()

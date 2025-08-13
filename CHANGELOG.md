@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+---
+
+## Version 0.7.0 [2025-08-13]
+
 ### Added
 
 - Gradient correction in ODT

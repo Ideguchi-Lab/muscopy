@@ -5,6 +5,11 @@
 ### Added
 
 - Gradient correction in ODT
+- Enhanced aberration correction API with pupil function support
+  - Added optional `pupil_func` parameter to `offaxis_dh()` function for direct aberration correction during reconstruction
+  - Added optional `pupil_func` parameter to `qpi()` function for streamlined QPI phase calculation with aberration correction
+  - Enables seamless integration of aberration correction into existing workflows without manual spectrum processing
+  - Maintains backward compatibility with existing code that doesn't use aberration correction
 - Optical aberration correction functionality
   - Added `correct_aberration()` function in `dh` module for correcting optical aberrations using pupil functions
   - Supports correction of spherical aberration, astigmatism, coma and other wavefront distortions
@@ -15,6 +20,7 @@
   - Includes detailed visualization comparing without aberration, with aberration, and corrected results
   - Provides quantitative analysis with correction efficiency, SNR improvement, and error metrics
   - Demonstrates 83.3% correction efficiency and 15.6 dB SNR improvement in example case
+  - Updated to use simplified API with `qpi()` function for cleaner, more readable code
 
 ---
 

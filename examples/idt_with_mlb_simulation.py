@@ -407,7 +407,7 @@ def _visualize_results(  # noqa: PLR0914, PLR0915
 
     plt.tight_layout()
     plt.savefig("idt_mlb_simulation_results.png", dpi=150, bbox_inches="tight")
-    plt.show()
+    print("IDT reconstruction visualization saved to idt_mlb_simulation_results.png")
     plt.close()  # Close the figure to free memory
 
     # Print summary
@@ -448,7 +448,8 @@ def main() -> None:
         plt.title("IDT with MLB Simulation Example")
         plt.tight_layout()
         plt.savefig("idt_mlb_simulation_placeholder.png", dpi=150, bbox_inches="tight")
-        plt.show()
+        print("Placeholder visualization saved to idt_mlb_simulation_placeholder.png")
+        plt.close()
         return
 
     # Clear JAX compilation cache at the start to prevent memory accumulation

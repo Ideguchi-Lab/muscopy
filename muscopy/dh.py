@@ -10,6 +10,7 @@ This module provides:
 - `get_spectrums`: A function to get the spectrums of the complex fields.
 - `correct_offset`: A function to correct the phase and amplitude offset of the array.
 - `correct_gradient`: A function to correct linear phase gradients in complex amplitude data.
+- `correct_aberration`: A function to correct the aberration of the spectrum.
 - `offaxis_dh`: A function to reconstruct the complex wave front using off-axis digital holography.
 - `demultiplex_cp_arrays`: A function to demultiplex a set of CP arrays using a demultiplexing matrix.
 - `ps_idh_reconstruct`: A function for phase-shifting inline digital holography reconstruction.
@@ -487,6 +488,24 @@ def correct_gradient(array: Array, *, edge_size: int = 0) -> Array:
     phase_ramp = gradient_x * (xx - width // 2) + gradient_y * (yy - height // 2)
 
     return array * jnp.exp(-1j * phase_ramp)
+
+
+def correct_aberration(spectrum: Array, pupil_func: Array) -> Array:
+    """Correct the aberration of the spectrum using the pupil function.
+
+    Parameters
+    ----------
+    spectrum : `jax.Array`
+        The input spectrum to be corrected.
+    pupil_func : `jax.Array`
+        The pupil function used for correction.
+
+    Returns
+    -------
+    `jax.Array`
+        The corrected spectrum.
+    """
+    return spectrum / pupil_func
 
 
 @typing.overload

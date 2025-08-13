@@ -522,6 +522,8 @@ def offaxis_dh(
     reference: Array,
     params: MuParameters,
     offaxis_centers: tuple[int, int],
+    *,
+    pupil_func: Array | None = None,
 ) -> Array: ...
 
 
@@ -531,6 +533,8 @@ def offaxis_dh(
     reference: Array,
     params: MuParameters,
     offaxis_centers: Sequence[tuple[int, int]],
+    *,
+    pupil_func: Array | None = None,
 ) -> list[Array]: ...
 
 
@@ -539,6 +543,8 @@ def offaxis_dh(
     reference: Array,
     params: MuParameters,
     offaxis_centers: tuple[int, int] | Sequence[tuple[int, int]],
+    *,
+    pupil_func: Array | None = None,
 ) -> Array | list[Array]:
     r"""Reconstruct the complex wave front using off-axis digital holography.
 
@@ -552,6 +558,8 @@ def offaxis_dh(
         Microscopy Parameters class
     offaxis_centers : `tuple`\[`int`, `int`\] | `collections.abc.Sequence`\[`tuple`\[`int`, `int`\]\]
         The crop centers of off-axis digital holography
+    pupil_func : `jax.Array` | `None`, optional
+        Pupil function for aberration correction, by default None
 
     Returns
     -------
@@ -574,6 +582,11 @@ def offaxis_dh(
         offaxis_centers = typing.cast("tuple[int, int]", offaxis_centers)
         spectrum = get_spectrum(ft_array, params, offaxis_centers)
         ref_spectrum = get_spectrum(ft_reference, params, offaxis_centers)
+
+        if pupil_func is not None:
+            spectrum = correct_aberration(spectrum, pupil_func)
+            ref_spectrum = correct_aberration(ref_spectrum, pupil_func)
+
         cp_field = jnp.fft.ifft2(jnp.fft.ifftshift(spectrum)) * params.spectrum2cpfield
         ref_cp_field = jnp.fft.ifft2(jnp.fft.ifftshift(ref_spectrum)) * params.spectrum2cpfield
         cp_field /= ref_cp_field
@@ -585,9 +598,16 @@ def offaxis_dh(
 
     cp_fields = []
 
-    for spectrum, ref_spectrum in zip(spectrums, ref_spectrums, strict=False):
-        cp_field = jnp.fft.ifft2(jnp.fft.ifftshift(spectrum)) * params.spectrum2cpfield
-        ref_cp_field = jnp.fft.ifft2(jnp.fft.ifftshift(ref_spectrum)) * params.spectrum2cpfield
+    for orig_spectrum, orig_ref_spectrum in zip(spectrums, ref_spectrums, strict=False):
+        curr_spectrum = orig_spectrum
+        curr_ref_spectrum = orig_ref_spectrum
+
+        if pupil_func is not None:
+            curr_spectrum = correct_aberration(curr_spectrum, pupil_func)
+            curr_ref_spectrum = correct_aberration(curr_ref_spectrum, pupil_func)
+
+        cp_field = jnp.fft.ifft2(jnp.fft.ifftshift(curr_spectrum)) * params.spectrum2cpfield
+        ref_cp_field = jnp.fft.ifft2(jnp.fft.ifftshift(curr_ref_spectrum)) * params.spectrum2cpfield
         cp_field /= ref_cp_field
         cp_fields.append(cp_field)
 

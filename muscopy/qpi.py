@@ -30,6 +30,8 @@ def qpi(
     reference: Array,
     params: MuParameters,
     offaxis_centers: tuple[int, int],
+    *,
+    pupil_func: Array | None = None,
 ) -> Array: ...
 
 
@@ -39,6 +41,8 @@ def qpi(
     reference: Array,
     params: MuParameters,
     offaxis_centers: Sequence[tuple[int, int]],
+    *,
+    pupil_func: Array | None = None,
 ) -> list[Array]: ...
 
 
@@ -47,6 +51,8 @@ def qpi(
     reference: Array,
     params: MuParameters,
     offaxis_centers: tuple[int, int] | Sequence[tuple[int, int]],
+    *,
+    pupil_func: Array | None = None,
 ) -> Array | list[Array]:
     r"""Calculate the QPI phase image.
 
@@ -60,13 +66,15 @@ def qpi(
         Microscopy Parameters class
     offaxis_centers : `collections.abc.Sequence`\[`tuple`\[`int`, `int`\]\]
         The crop centers of off-axis digital holography
+    pupil_func : `Array` | `None`, optional
+        Pupil function for aberration correction, by default None
 
     Returns
     -------
     `list`\[`Array`\]
         The QPI phase image
     """
-    cp_fields = offaxis_dh(array, reference, params, offaxis_centers)
+    cp_fields = offaxis_dh(array, reference, params, offaxis_centers, pupil_func=pupil_func)
 
     if isinstance(cp_fields, list):
         return [jnp.angle(cp_field) for cp_field in cp_fields]

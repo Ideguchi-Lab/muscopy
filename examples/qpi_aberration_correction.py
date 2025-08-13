@@ -176,8 +176,10 @@ if SHOW_IMAGE:
     pupil_phase_show = jax.device_get(jnp.angle(pupil_function))
 
     # Set common color scale for phase images
-    vmin = min(jnp.min(phase_without_show), jnp.min(phase_with_show), jnp.min(phase_corrected_show))
-    vmax = max(jnp.max(phase_without_show), jnp.max(phase_with_show), jnp.max(phase_corrected_show))
+    phase_mins = jnp.array([jnp.min(phase_without_show), jnp.min(phase_with_show), jnp.min(phase_corrected_show)])
+    phase_maxs = jnp.array([jnp.max(phase_without_show), jnp.max(phase_with_show), jnp.max(phase_corrected_show)])
+    vmin = float(jnp.min(phase_mins))
+    vmax = float(jnp.max(phase_maxs))
 
     # Create main comparison figure
     fig, axes = plt.subplots(2, 3, figsize=(18, 12))

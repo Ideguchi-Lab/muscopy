@@ -1,6 +1,7 @@
 name: doc
 
 on:
+  pull_request:
   workflow_dispatch:
 
 permissions:

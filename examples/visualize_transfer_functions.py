@@ -1,4 +1,6 @@
-"""Debug and visualize IDT transfer functions.
+"""
+IDT Transfer Functions Visualization
+====================================
 
 This script provides tools to visualize and analyze transfer functions
 used in Intensity Diffraction Tomography (IDT) reconstruction.
@@ -15,6 +17,7 @@ def visualize_transfer_functions(  # noqa: PLR0914
     u_illumination_list: list[tuple[float, float]],
     z_slice: float = 0.0,
     save_path: str | None = None,
+    show_inline: bool = False,
 ) -> None:
     """Visualize transfer functions for debugging IDT implementation.
 
@@ -28,6 +31,8 @@ def visualize_transfer_functions(  # noqa: PLR0914
         Z position for transfer function calculation, by default 0.0
     save_path : str | None, optional
         Path to save the visualization, by default None
+    show_inline : bool, optional
+        Whether to display the plot inline, by default False
     """
     print(f"Visualizing transfer functions at z={z_slice}...")
 
@@ -100,7 +105,9 @@ def visualize_transfer_functions(  # noqa: PLR0914
         plt.savefig(save_path, dpi=150, bbox_inches="tight")
         print(f"Transfer function visualization saved to {save_path}")
 
-    plt.show()
+    if show_inline:
+        plt.show()
+
     plt.close()
 
 
@@ -151,6 +158,8 @@ def analyze_transfer_function_properties(
                 print("    WARNING: H_im contains NaN or Inf values!")
 
 
+# %%
+# Main execution
 def main() -> None:
     """Run transfer function debugging visualization."""
     # Example usage
@@ -186,10 +195,18 @@ def main() -> None:
     z_positions = [0.0, 2e-6, 5e-6]  # z positions in meters
     for z_pos in z_positions:
         print(f"\nVisualizing transfer functions at z={z_pos * 1e6:.1f}μm...")
+        # Save to file by default, inline display available as option
+        save_path = f"transfer_functions_z{z_pos * 1e6:.1f}um.png"
         visualize_transfer_functions(
-            idt_params, u_illumination_list, z_slice=z_pos, save_path=f"transfer_functions_z{z_pos * 1e6:.1f}um.png"
+            idt_params,
+            u_illumination_list,
+            z_slice=z_pos,
+            save_path=save_path,  # Save to file by default
+            show_inline=False,  # Don't show inline by default
         )
 
 
+# %%
+# Execute the main function
 if __name__ == "__main__":
     main()

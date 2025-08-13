@@ -307,7 +307,7 @@ def get_spectrum(
         maximum_value_coordinate[1] - offaxis_center[1]]
         Also calculates and prints theta angle from illumination_shift = [cos(theta), sin(theta)]
         and the illumination NA using the formula:
-        illumination_na = |illumination_shift|/(params.aperturesize_px//2) * params.na
+        illumination_na = \|illumination_shift\|/(params.aperturesize_px//2) * params.na
 
     Returns
     -------
@@ -371,7 +371,7 @@ def get_spectrums(
         maximum_value_coordinate[1] - shape[1] // 2]
         Also calculates and prints theta angle from illumination_shift = [cos(theta), sin(theta)]
         and the illumination NA using the formula:
-        illumination_na = |illumination_shift|/(params.aperturesize_px//2) * params.na
+        illumination_na = \|illumination_shift\|/(params.aperturesize_px//2) * params.na
 
     Returns
     -------

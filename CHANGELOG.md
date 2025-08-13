@@ -22,6 +22,19 @@
   - Demonstrates 83.3% correction efficiency and 15.6 dB SNR improvement in example case
   - Updated to use simplified API with `qpi()` function for cleaner, more readable code
 
+### Fixed
+
+- Fixed Sphinx documentation build warnings and improved CI compatibility
+  - Updated example files to use proper Sphinx-Gallery format with titles and cell delimiters
+  - Added environment-based ignore pattern for MLB simulation examples in CI environments
+  - Configured conditional file inclusion based on availability of muscopy_mlbsim dependency
+  - Resolved all toctree warnings, missing title warnings, and cross-reference issues
+  - Enabled warning-free documentation builds in both local development and GitHub Actions environments
+- Improved example file robustness and user experience
+  - Added muscopy_mlbsim availability check to `idt_with_mlb_simulation.py` with graceful fallback
+  - Enhanced `visualize_transfer_functions.py` to show plots inline by default while maintaining file save option
+  - Improved error handling for missing dependencies in example scripts
+
 ---
 
 ### Version 0.6.3 [2025-08-12]

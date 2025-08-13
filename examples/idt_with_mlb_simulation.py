@@ -19,16 +19,29 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 from jax import Array
-from muscopy_mlbsim.hologram_generator import HologramGenerator
-from muscopy_mlbsim.mlb import (
-    MLBForward,
-    MLBParameters,
-    get_oblique_wave_fft,
-    get_scatter_potential,
-)
 from tqdm import tqdm
 
 from muscopy.idt import IDTParameters, compute_idt
+
+try:
+    from muscopy_mlbsim.hologram_generator import HologramGenerator  # pyright: ignore[reportMissingImports]
+    from muscopy_mlbsim.mlb import (  # pyright: ignore[reportMissingImports]
+        MLBForward,
+        MLBParameters,
+        get_oblique_wave_fft,
+        get_scatter_potential,
+    )
+
+    MLB_AVAILABLE = True
+except ImportError:
+    MLB_AVAILABLE = False
+    print("Warning: muscopy_mlbsim is not installed. This example requires muscopy_mlbsim.")
+    print("Skipping example execution.")
+    HologramGenerator: typing.Any = None  # type: ignore[no-redef]
+    MLBForward: typing.Any = None  # type: ignore[no-redef]
+    MLBParameters: typing.Any = None  # type: ignore[no-redef]
+    get_oblique_wave_fft: typing.Any = None  # type: ignore[no-redef]
+    get_scatter_potential: typing.Any = None  # type: ignore[no-redef]
 
 # Suppress JAX warnings about dtype conversion that can interfere with execution
 warnings.filterwarnings("ignore", category=FutureWarning, message=".*scatter inputs have incompatible types.*")
@@ -45,6 +58,10 @@ class IntensityImageSetGenerator:
         idt_params: IDTParameters,
         mlb_params: MLBParameters,
     ) -> None:
+        if not MLB_AVAILABLE:
+            msg = "muscopy_mlbsim is required but not available"
+            raise ImportError(msg)
+
         self.idt_params = idt_params
         self.mlb_params = mlb_params
 
@@ -406,6 +423,34 @@ def _visualize_results(  # noqa: PLR0914, PLR0915
 # Main execution
 def main() -> None:
     """Demonstrate IDT with MLB simulation."""
+    if not MLB_AVAILABLE:
+        print("Skipping IDT with MLB simulation demo - muscopy_mlbsim not available.")
+        # Create a simple placeholder plot for documentation
+        _, ax = plt.subplots(figsize=(8, 6))
+        message = (
+            "muscopy_mlbsim Required\\n\\n"
+            "This example requires the muscopy_mlbsim package.\\n"
+            "Please install it with:\\n"
+            "pip install -e ./muscopy-mlbsim"
+        )
+        ax.text(
+            0.5,
+            0.5,
+            message,
+            ha="center",
+            va="center",
+            fontsize=12,
+            bbox={"boxstyle": "round,pad=0.3", "facecolor": "lightgray"},
+        )
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+        ax.axis("off")
+        plt.title("IDT with MLB Simulation Example")
+        plt.tight_layout()
+        plt.savefig("idt_mlb_simulation_placeholder.png", dpi=150, bbox_inches="tight")
+        plt.show()
+        return
+
     # Clear JAX compilation cache at the start to prevent memory accumulation
     jax.clear_caches()  # type: ignore[no-untyped-call]
 

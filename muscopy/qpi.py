@@ -30,6 +30,8 @@ def qpi(
     reference: Array,
     params: MuParameters,
     offaxis_centers: tuple[int, int],
+    *,
+    pupil_func: Array | None = None,
 ) -> Array: ...
 
 
@@ -39,6 +41,8 @@ def qpi(
     reference: Array,
     params: MuParameters,
     offaxis_centers: Sequence[tuple[int, int]],
+    *,
+    pupil_func: Array | None = None,
 ) -> list[Array]: ...
 
 
@@ -47,26 +51,30 @@ def qpi(
     reference: Array,
     params: MuParameters,
     offaxis_centers: tuple[int, int] | Sequence[tuple[int, int]],
+    *,
+    pupil_func: Array | None = None,
 ) -> Array | list[Array]:
     r"""Calculate the QPI phase image.
 
     Parameters
     ----------
-    array : `Array`
+    array : `jax.Array`
         Hologram array
-    reference : `Array`
+    reference : `jax.Array`
         Reference hologram array
     params : `MuParameters`
         Microscopy Parameters class
     offaxis_centers : `collections.abc.Sequence`\[`tuple`\[`int`, `int`\]\]
         The crop centers of off-axis digital holography
+    pupil_func : `jax.Array` | `None`, optional
+        Pupil function for aberration correction, by default None
 
     Returns
     -------
-    `list`\[`Array`\]
+    `list`\[`jax.Array`\]
         The QPI phase image
     """
-    cp_fields = offaxis_dh(array, reference, params, offaxis_centers)
+    cp_fields = offaxis_dh(array, reference, params, offaxis_centers, pupil_func=pupil_func)
 
     if isinstance(cp_fields, list):
         return [jnp.angle(cp_field) for cp_field in cp_fields]
@@ -88,9 +96,9 @@ def mip_qpi(
 
     Parameters
     ----------
-    array_on : `Array`
+    array_on : `jax.Array`
         MIR ON hologram array
-    array_off : `Array`
+    array_off : `jax.Array`
         MIR OFF hologram array
     params : `MuParameters`
         Micorsocpy Parameters class
@@ -106,7 +114,7 @@ def mip_qpi(
 
     Returns
     -------
-    `Array`
+    `jax.Array`
         The MIP-QPI phase image
 
     Raises
@@ -152,14 +160,14 @@ def correct_phase_offset(
 
     Parameters
     ----------
-    phase_array : `Array`
+    phase_array : `jax.Array`
         Phase array to be corrected
     offset_regs : `OffsetRegions`
         The regions to be used for phase offset correction
 
     Returns
     -------
-    `Array`
+    `jax.Array`
         The phase array with the offset corrected
     """
     if not offset_regs:

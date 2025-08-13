@@ -16,8 +16,8 @@ import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 
-from muscopy.dh import MuParameters, correct_aberration, get_spectrum, make_disk, offaxis_dh, print_all_parameters
-from muscopy.qpi import correct_phase_offset
+from muscopy.dh import MuParameters, make_disk, print_all_parameters
+from muscopy.qpi import correct_phase_offset, qpi
 
 # config
 SHOW_IMAGE = True
@@ -114,38 +114,16 @@ ref_hologram_aberration = ref_hologram  # Use same reference for both cases
 
 # %%
 
-# Reconstruct complex field with aberration using offaxis_dh
-cp_field_with_aberration = offaxis_dh(hologram_aberration, ref_hologram_aberration, params, off_axis_center)
-phase_with_aberration = jnp.angle(cp_field_with_aberration)
+# Reconstruct QPI phase with aberration
+phase_with_aberration = qpi(hologram_aberration, ref_hologram_aberration, params, off_axis_center)
 
-# Reconstruct complex field without aberration
-cp_field_without_aberration = offaxis_dh(hologram, ref_hologram, params, off_axis_center)
-phase_without_aberration = jnp.angle(cp_field_without_aberration)
+# Reconstruct QPI phase without aberration
+phase_without_aberration = qpi(hologram, ref_hologram, params, off_axis_center)
 
 # %%
 
-# Correct aberration with known pupil function
-# Get spectrum from hologram with aberration
-hologram_spectrum = get_spectrum(
-    jnp.fft.fftshift(jnp.fft.fft2(hologram_aberration)) * params.hologram2spectrum, params, off_axis_center
-)
-ref_hologram_spectrum = get_spectrum(
-    jnp.fft.fftshift(jnp.fft.fft2(ref_hologram_aberration)) * params.hologram2spectrum, params, off_axis_center
-)
-
-# Apply aberration correction
-hologram_spectrum_corrected = correct_aberration(hologram_spectrum, pupil_function)
-ref_hologram_spectrum_corrected = correct_aberration(ref_hologram_spectrum, pupil_function)
-
-# Reconstruct complex field
-cp_field_corrected_temp = jnp.fft.ifft2(jnp.fft.ifftshift(hologram_spectrum_corrected)) * params.spectrum2cpfield
-ref_cp_field_corrected_temp = (
-    jnp.fft.ifft2(jnp.fft.ifftshift(ref_hologram_spectrum_corrected)) * params.spectrum2cpfield
-)
-cp_field_aberration_corrected = cp_field_corrected_temp / ref_cp_field_corrected_temp
-
-# Extract phase
-phase_corrected = jnp.angle(cp_field_aberration_corrected)
+# Correct aberration with known pupil function using the new API
+phase_corrected = qpi(hologram_aberration, ref_hologram_aberration, params, off_axis_center, pupil_func=pupil_function)
 
 # %%
 # Apply phase offset correction to both images

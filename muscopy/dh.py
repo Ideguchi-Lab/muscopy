@@ -504,7 +504,15 @@ def correct_aberration(spectrum: Array, pupil_func: Array) -> Array:
     -------
     `jax.Array`
         The corrected spectrum.
+
+    Raises
+    ------
+    ValueError
+        If the spectrum and pupil function shapes do not match.
     """
+    if spectrum.shape != pupil_func.shape:
+        msg = f"Spectrum shape {spectrum.shape} and pupil function shape {pupil_func.shape} must match"
+        raise ValueError(msg)
     return spectrum / pupil_func
 
 

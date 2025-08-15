@@ -4,7 +4,8 @@
 
 ### Fixed
 
-- Fixed edge_size parameter handling in ODT reconstruction [[#107](https://github.com/Ideguchi-Lab/muscopy/issues/107)]
+=======
+- Fixed edge_size parameter handling in ODT reconstruction
   - Updated `_shift_dh_spectrum()` function to properly accept and use `edge_size` parameter
   - Fixed `synthesize_spectrum()` to remove incorrect edge_size subtraction from spectrum dimensions
   - Updated `odt()` function to pass `edge_size` parameter from config to spectrum shifting operations

@@ -223,8 +223,8 @@ def synthesize_spectrum(
     """
     synthesized_spectrum = jnp.zeros(
         (
-            2 * params.aperturesize_px + 1 - config.edge_size,
-            2 * params.aperturesize_px + 1 - config.edge_size,
+            2 * params.aperturesize_px + 1 - 2 * config.edge_size,
+            2 * params.aperturesize_px + 1 - 2 * config.edge_size,
             params.freq_axial_extent_px,
         ),
         dtype=config.precision.complex_precision(),
@@ -559,8 +559,9 @@ def _calc_1st_scattering_spectrum(
     edge_size: int = 0,
     offset_regions: OffsetRegions = None,
 ) -> Array:
-    cp_field = cp_field[edge_size:, edge_size:]
-    ref_cp_field = ref_cp_field[edge_size:, edge_size:]
+    if edge_size != 0:
+        cp_field = cp_field[edge_size:-edge_size, edge_size:-edge_size]
+        ref_cp_field = ref_cp_field[edge_size:-edge_size, edge_size:-edge_size]
 
     if approx_type == "Born":
         scattering_field = (cp_field - ref_cp_field) / jnp.where(jnp.abs(ref_cp_field) < EPSILON, EPSILON, ref_cp_field)

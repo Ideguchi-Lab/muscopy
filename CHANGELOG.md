@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Fixed
+
+- Fixed edge_size parameter handling in ODT reconstruction [[#107](https://github.com/Ideguchi-Lab/muscopy/issues/107)]
+  - Updated `_shift_dh_spectrum()` function to properly accept and use `edge_size` parameter
+  - Fixed `synthesize_spectrum()` to remove incorrect edge_size subtraction from spectrum dimensions
+  - Updated `odt()` function to pass `edge_size` parameter from config to spectrum shifting operations
+  - Added proper TODO comment with author and issue reference for future FFT factor corrections
+  - Resolved ruff linting errors related to TODO comment formatting
+
 ---
 
 ## Version 0.7.0 [2025-08-13]

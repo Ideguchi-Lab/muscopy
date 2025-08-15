@@ -223,8 +223,8 @@ def synthesize_spectrum(
     """
     synthesized_spectrum = jnp.zeros(
         (
-            2 * params.aperturesize_px + 1 - config.edge_size,
-            2 * params.aperturesize_px + 1 - config.edge_size,
+            2 * params.aperturesize_px + 1,
+            2 * params.aperturesize_px + 1,
             params.freq_axial_extent_px,
         ),
         dtype=config.precision.complex_precision(),
@@ -321,9 +321,9 @@ def odt(  # noqa: PLR0914
         max_x, max_y, _ = _find_max_args(jnp.abs(ref_cp_spectrum))
         center_idx = cp_spectrum.shape[0] // 2
         illumination_vector = (max_x - center_idx, max_y - center_idx)
-        expanded_cp_spectrum = _shift_dh_spectrum(params, cp_spectrum, illumination_vector)
+        expanded_cp_spectrum = _shift_dh_spectrum(params, cp_spectrum, illumination_vector, config.edge_size)
         expanded_cp_spectrum = jnp.asarray(expanded_cp_spectrum, dtype=config.precision.complex_precision())
-        expanded_ref_cp_spectrum = _shift_dh_spectrum(params, ref_cp_spectrum, illumination_vector)
+        expanded_ref_cp_spectrum = _shift_dh_spectrum(params, ref_cp_spectrum, illumination_vector, config.edge_size)
         expanded_ref_cp_spectrum = jnp.asarray(expanded_ref_cp_spectrum, dtype=config.precision.complex_precision())
         cp_field = jnp.fft.ifft2(jnp.fft.ifftshift(expanded_cp_spectrum), norm="ortho")
         ref_cp_field = jnp.fft.ifft2(jnp.fft.ifftshift(expanded_ref_cp_spectrum), norm="ortho")
@@ -535,18 +535,24 @@ def _find_max_args(array: Array) -> tuple[int, int, float]:
     return max_x, max_y, max_value
 
 
-def _shift_dh_spectrum(params: ODTParameters, cp_spectrum: Array, illumination_vector: tuple[int, int]) -> Array:
+def _shift_dh_spectrum(
+    params: ODTParameters, cp_spectrum: Array, illumination_vector: tuple[int, int], edge_size: int = 0
+) -> Array:
+    # TODO(@fukushima-ilab): I should treat fft factor change induced by a slight shape change here (#107)
     expanded_cp_spectrum = jnp.zeros(
-        (2 * params.aperturesize_px + 1, 2 * params.aperturesize_px + 1), dtype=cp_spectrum.dtype
+        (2 * params.aperturesize_px + 1 + 2 * edge_size, 2 * params.aperturesize_px + 1 + 2 * edge_size),
+        dtype=cp_spectrum.dtype,
     )
 
     return expanded_cp_spectrum.at[
-        params.aperturesize_px // 2 - illumination_vector[0] : 3 * (params.aperturesize_px // 2)
+        params.aperturesize_px // 2 - illumination_vector[0] + edge_size : 3 * (params.aperturesize_px // 2)
         - illumination_vector[0]
-        + 1,
-        params.aperturesize_px // 2 - illumination_vector[1] : 3 * (params.aperturesize_px // 2)
+        + 1
+        + edge_size,
+        params.aperturesize_px // 2 - illumination_vector[1] + edge_size : 3 * (params.aperturesize_px // 2)
         - illumination_vector[1]
-        + 1,
+        + 1
+        + edge_size,
     ].set(cp_spectrum)
 
 

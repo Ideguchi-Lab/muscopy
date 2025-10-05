@@ -4,13 +4,16 @@
 
 ### Fixed
 
-=======
 - Fixed edge_size parameter handling in ODT reconstruction
   - Updated `_shift_dh_spectrum()` function to properly accept and use `edge_size` parameter
   - Fixed `synthesize_spectrum()` to remove incorrect edge_size subtraction from spectrum dimensions
   - Updated `odt()` function to pass `edge_size` parameter from config to spectrum shifting operations
   - Added proper TODO comment with author and issue reference for future FFT factor corrections
   - Resolved ruff linting errors related to TODO comment formatting
+- Shift z coord of `odt.pt_signal_1st_order` to center
+  - Added `jnp.fft.fftshift()` to `pt_signal` output in `pt_signal_1st_order()` function
+  - Ensures z-axis centering of PT signal for consistent visualization and analysis
+  - Maintains compatibility with existing workflows by only modifying output centering
 
 ---
 

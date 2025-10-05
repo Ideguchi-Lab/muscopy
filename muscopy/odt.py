@@ -470,6 +470,8 @@ def pt_signal_1st_order(
     factor = params.spectrum2cpfield_xy**2 * params.spectrum2cpfield_z / (2 * jnp.pi) ** (3 / 2)
     pt_signal *= factor
 
+    pt_signal = jnp.fft.fftshift(pt_signal, axes=2)
+
     return pt_signal, ft_pt_signal
 
 

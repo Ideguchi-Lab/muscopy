@@ -178,3 +178,19 @@ def correct_phase_offset(
     phase_offset = jnp.mean(jnp.array(phase_offset_list))
 
     return phase_array - phase_offset
+
+
+def optical_volume(phase_array: Array) -> Array:
+    """Calculate the summation of phase.
+
+    Parameters
+    ----------
+    phase_array : Array
+        array to be accumulated
+
+    Returns
+    -------
+    float
+        optical volume
+    """
+    return jnp.sum(phase_array)

@@ -19,24 +19,26 @@ MIN_WAVENUMBER_ELEMENTS = 2
 
 
 class PhasorResult(NamedTuple):
-    r"""Phasor analysis result.
+    r"""Phasor analysis result."""
 
-    Attributes
-    ----------
+    g: Array
+    """
     g : `jax.Array`
         Real component of phasor (cosine transform).
         Shape matches the spatial dimensions of input array.
+    """
+    s: Array
+    """
     s : `jax.Array`
         Imaginary component of phasor (sine transform).
         Shape matches the spatial dimensions of input array.
+        """
+    i_sum: Array
+    """
     i_sum : `jax.Array`
         Total intensity used for normalization.
         Shape matches the spatial dimensions of input array.
     """
-
-    g: Array
-    s: Array
-    i_sum: Array
 
 
 @dataclasses.dataclass

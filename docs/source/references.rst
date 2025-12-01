@@ -10,4 +10,5 @@ Module Reference
     dh
     qpi_doc
     odt_doc
+    phasor_doc
     phase_noise_doc

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Added
+
+- Phasor analysis for multi-dimensional spectral imaging data [[#113](https://github.com/Ideguchi-Lab/muscopy/issues/113)]
+  - `PhasorResult`: Named tuple to store phasor analysis results (g, s, i_sum)
+  - `PhasorParameters`: Configuration class for phasor analysis with wavenumbers validation
+  - `phasor()`: Core function to calculate phasor components from 2D or 3D spectral imaging data
+  - Supports automatic detection of spatial dimensionality (3D array → 2D spatial, 4D array → 3D spatial)
+  - Configurable spectral axis position via `spectral_axis` parameter
+  - Comprehensive test coverage with 21 test cases
+
 ### Fixed
 
 - Fixed edge_size parameter handling in ODT reconstruction

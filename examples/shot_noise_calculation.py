@@ -77,13 +77,13 @@ if SHOW_IMAGE:
     visibility_to_show = jax.device_get(visibility)
     phase_noise_to_show = jax.device_get(phase_noise)
     fig, ax = plt.subplots(1, 2, figsize=(10, 5))
-    ax[0].imshow(visibility)
+    img1 = ax[0].imshow(visibility_to_show)
     ax[0].set_title("Visibility")
-    ax[1].imshow(phase_noise)
+    img2 = ax[1].imshow(phase_noise_to_show)
     ax[1].set_title("Phase noise")
     # colorbar
-    fig.colorbar(ax[0].imshow(visibility_to_show), ax=ax[0])
-    fig.colorbar(ax[1].imshow(phase_noise_to_show), ax=ax[1])
+    fig.colorbar(img1, ax=ax[0])
+    fig.colorbar(img2, ax=ax[1])
     plt.show()
 
 # %%

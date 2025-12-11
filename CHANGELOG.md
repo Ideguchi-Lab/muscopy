@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+---
+
+## Version 0.7.1 [2025-12-11]
+
 ### Added
 
 - Phasor analysis for multi-dimensional spectral imaging data [[#113](https://github.com/Ideguchi-Lab/muscopy/issues/113)]

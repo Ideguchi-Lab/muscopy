@@ -53,9 +53,9 @@ def unwrap_phase(phase_image: Array, *, roi: Array | None = None, keep_mean: boo
 
     if keep_mean:
         if original_roi is not None:
-            # Use ROI-masked mean for ROI case
+            # Use ROI-masked mean for ROI case, only apply to ROI pixels
             mean_roi = jnp.sum(jnp.where(roi, phase_image, 0.0)) / jnp.sum(roi)
-            phi = phi + mean_roi  # noqa: PLR6104
+            phi = jnp.where(roi, phi + mean_roi, phi)
         else:
             phi = phi + phase_image.mean()  # noqa: PLR6104
 

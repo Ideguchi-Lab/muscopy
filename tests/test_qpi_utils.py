@@ -119,6 +119,9 @@ class TestUnwrapPhase:
         # Relax tolerance - the unwrapped mean may differ due to ROI boundary effects
         assert_allclose(unwrapped_mean_roi, wrapped_mean_roi, atol=0.5)
 
+        # IMPORTANT: Pixels outside ROI should remain unchanged (original wrapped values)
+        assert_allclose(np.asarray(unwrapped)[~roi_np], np.asarray(wrapped_phase)[~roi_np], atol=1e-6)
+
     @staticmethod
     def test_no_wrapping_case() -> None:
         """Test that phase without wrapping is preserved."""

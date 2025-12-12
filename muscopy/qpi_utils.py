@@ -29,16 +29,22 @@ def unwrap_phase(phase_image: Array, *, roi: Array | None = None, keep_mean: boo
     `Array`
         The unwrapped phase image.
     """
-    if roi is None:
-        roi = jnp.ones_like(phase_image)
+    original_roi = roi
+    roi = jnp.ones(phase_image.shape, dtype=bool) if roi is None else roi.astype(bool)
 
-    wrapped = jnp.where(roi, phase_image, 0.0)
+    # Calculate forward differences (shape: (n, m-1), (n-1, m))
+    dx = _wraptopi(jnp.diff(phase_image, axis=1))
+    dy = _wraptopi(jnp.diff(phase_image, axis=0))
 
-    dx = jnp.zeros_like(wrapped)
-    dx = dx.at[:, 1:].set(_wraptopi(jnp.diff(wrapped, axis=1)))
-    dy = jnp.zeros_like(wrapped)
-    dy = dy.at[1:, :].set(_wraptopi(jnp.diff(wrapped, axis=0)))
-    rho = jnp.diff(dx, axis=1, prepend=0.0) + jnp.diff(dy, axis=0, prepend=0.0)
+    # Mask gradients: only use differences where both endpoints are inside ROI
+    roi_x = roi[:, 1:] & roi[:, :-1]
+    roi_y = roi[1:, :] & roi[:-1, :]
+
+    dx = jnp.where(roi_x, dx, 0.0)
+    dy = jnp.where(roi_y, dy, 0.0)
+
+    # Divergence with Neumann BC: pad both sides with 0 via prepend+append
+    rho = jnp.diff(dx, axis=1, prepend=0.0, append=0.0) + jnp.diff(dy, axis=0, prepend=0.0, append=0.0)
 
     rho = jnp.where(roi, rho, 0.0)
 
@@ -46,7 +52,12 @@ def unwrap_phase(phase_image: Array, *, roi: Array | None = None, keep_mean: boo
     phi = jnp.where(roi, phi, phase_image)
 
     if keep_mean:
-        phi = phi + phase_image.mean()  # noqa: PLR6104
+        if original_roi is not None:
+            # Use ROI-masked mean for ROI case
+            mean_roi = jnp.sum(jnp.where(roi, phase_image, 0.0)) / jnp.sum(roi)
+            phi = phi + mean_roi  # noqa: PLR6104
+        else:
+            phi = phi + phase_image.mean()  # noqa: PLR6104
 
     return phi
 

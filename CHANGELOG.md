@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+---
+
+## Version 0.7.2 [2025-12-15]
+
 ### Added
 
 - `use_skimage` option in `unwrap_phase()` function [[#109](https://github.com/Ideguchi-Lab/muscopy/issues/109)]

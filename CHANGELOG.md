@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- `use_skimage` option in `unwrap_phase()` function [[#109](https://github.com/Ideguchi-Lab/muscopy/issues/109)]
+
 ### Fixed
 
 - Fixed phase unwrap algorithm instability [[#109](https://github.com/Ideguchi-Lab/muscopy/issues/109)]

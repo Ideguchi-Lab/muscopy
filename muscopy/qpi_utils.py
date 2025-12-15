@@ -5,12 +5,18 @@ This module provides:
 - `unwrap_phase`: Unwraps the phase of a 2D image using the Poisson solver.
 """
 
+from __future__ import annotations
+
 import jax.numpy as jnp
 import jax.scipy as jsp
+import numpy as np
 from jax import Array
+from skimage.restoration import unwrap_phase as skimage_unwrap_phase
 
 
-def unwrap_phase(phase_image: Array, *, roi: Array | None = None, keep_mean: bool = True) -> Array:
+def unwrap_phase(
+    phase_image: Array, *, roi: Array | None = None, keep_mean: bool = True, use_skimage: bool = False
+) -> Array:
     """Unwraps the phase of a 2D image using the Poisson solver.
 
     Parameters
@@ -23,12 +29,21 @@ def unwrap_phase(phase_image: Array, *, roi: Array | None = None, keep_mean: boo
     keep_mean : `bool`, optional
         If `True`, the mean of the original phase image is added back to the unwrapped phase.
         Default is `True`.
+    use_skimage : `bool`, optional
+        If `True`, uses `skimage.restoration.unwrap_phase` for unwrapping. If `False`, uses the Poisson solver method.
+        Default is `False`.
 
     Returns
     -------
     `Array`
         The unwrapped phase image.
     """
+    if use_skimage:
+        # move CPU if necessary
+        phase_cpu = np.asarray(phase_image)
+        unwrapped_cpu = skimage_unwrap_phase(phase_cpu)
+        return jnp.asarray(unwrapped_cpu)
+
     original_roi = roi
     roi = jnp.ones(phase_image.shape, dtype=bool) if roi is None else roi.astype(bool)
 

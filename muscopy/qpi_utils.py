@@ -41,7 +41,7 @@ def unwrap_phase(
     if use_skimage:
         # move CPU if necessary
         phase_cpu = np.asarray(phase_image)
-        unwrapped_cpu = skimage_unwrap_phase(phase_cpu)
+        unwrapped_cpu = skimage_unwrap_phase(phase_cpu)  # type: ignore[no-untyped-call]
         return jnp.asarray(unwrapped_cpu)
 
     original_roi = roi

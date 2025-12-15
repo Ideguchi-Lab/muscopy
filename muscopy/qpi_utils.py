@@ -5,12 +5,18 @@ This module provides:
 - `unwrap_phase`: Unwraps the phase of a 2D image using the Poisson solver.
 """
 
+from __future__ import annotations
+
 import jax.numpy as jnp
 import jax.scipy as jsp
+import numpy as np
 from jax import Array
+from skimage.restoration import unwrap_phase as skimage_unwrap_phase
 
 
-def unwrap_phase(phase_image: Array, *, roi: Array | None = None, keep_mean: bool = True) -> Array:
+def unwrap_phase(
+    phase_image: Array, *, roi: Array | None = None, keep_mean: bool = True, use_skimage: bool = False
+) -> Array:
     """Unwraps the phase of a 2D image using the Poisson solver.
 
     Parameters
@@ -23,22 +29,37 @@ def unwrap_phase(phase_image: Array, *, roi: Array | None = None, keep_mean: boo
     keep_mean : `bool`, optional
         If `True`, the mean of the original phase image is added back to the unwrapped phase.
         Default is `True`.
+    use_skimage : `bool`, optional
+        If `True`, uses ``skimage.restoration.unwrap_phase`` for unwrapping. If `False`, uses the Poisson solver method.
+        Default is `False`.
 
     Returns
     -------
     `Array`
         The unwrapped phase image.
     """
-    if roi is None:
-        roi = jnp.ones_like(phase_image)
+    if use_skimage:
+        # move CPU if necessary
+        phase_cpu = np.asarray(phase_image)
+        unwrapped_cpu = skimage_unwrap_phase(phase_cpu)  # type: ignore[no-untyped-call]
+        return jnp.asarray(unwrapped_cpu)
 
-    wrapped = jnp.where(roi, phase_image, 0.0)
+    original_roi = roi
+    roi = jnp.ones(phase_image.shape, dtype=bool) if roi is None else roi.astype(bool)
 
-    dx = jnp.zeros_like(wrapped)
-    dx = dx.at[:, 1:].set(_wraptopi(jnp.diff(wrapped, axis=1)))
-    dy = jnp.zeros_like(wrapped)
-    dy = dy.at[1:, :].set(_wraptopi(jnp.diff(wrapped, axis=0)))
-    rho = jnp.diff(dx, axis=1, prepend=0.0) + jnp.diff(dy, axis=0, prepend=0.0)
+    # Calculate forward differences (shape: (n, m-1), (n-1, m))
+    dx = _wraptopi(jnp.diff(phase_image, axis=1))
+    dy = _wraptopi(jnp.diff(phase_image, axis=0))
+
+    # Mask gradients: only use differences where both endpoints are inside ROI
+    roi_x = roi[:, 1:] & roi[:, :-1]
+    roi_y = roi[1:, :] & roi[:-1, :]
+
+    dx = jnp.where(roi_x, dx, 0.0)
+    dy = jnp.where(roi_y, dy, 0.0)
+
+    # Divergence with Neumann BC: pad both sides with 0 via prepend+append
+    rho = jnp.diff(dx, axis=1, prepend=0.0, append=0.0) + jnp.diff(dy, axis=0, prepend=0.0, append=0.0)
 
     rho = jnp.where(roi, rho, 0.0)
 
@@ -46,7 +67,12 @@ def unwrap_phase(phase_image: Array, *, roi: Array | None = None, keep_mean: boo
     phi = jnp.where(roi, phi, phase_image)
 
     if keep_mean:
-        phi = phi + phase_image.mean()  # noqa: PLR6104
+        if original_roi is not None:
+            # Use ROI-masked mean for ROI case, only apply to ROI pixels
+            mean_roi = jnp.sum(jnp.where(roi, phase_image, 0.0)) / jnp.sum(roi)
+            phi = jnp.where(roi, phi + mean_roi, phi)
+        else:
+            phi = phi + phase_image.mean()  # noqa: PLR6104
 
     return phi
 

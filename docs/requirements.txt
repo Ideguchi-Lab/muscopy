@@ -1,7 +1,6 @@
 sphinx >= 7.4.0
 sphinx_gallery >= 0.17.0
 sphinx-rtd-theme
-scikit-image
 
 numpy >= 1.22.0
 scipy >= 1.10.0

@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Added
+
+- `use_skimage` option in `unwrap_phase()` function [[#109](https://github.com/Ideguchi-Lab/muscopy/issues/109)]
+
+### Fixed
+
+- Fixed phase unwrap algorithm instability [[#109](https://github.com/Ideguchi-Lab/muscopy/issues/109)]
+  - Corrected divergence (rho) calculation in `unwrap_phase()` to use proper Neumann boundary conditions
+  - Changed from `prepend=0.0` to `prepend=0.0, append=0.0` for correct DCT-based Poisson solver compatibility
+  - Fixed ROI handling to only use gradients where both endpoints are inside ROI, preventing boundary artifacts
+  - Updated `keep_mean` to use ROI-masked mean when ROI is specified
+  - Added comprehensive test suite for `unwrap_phase()` function
+
 ---
 
 ## Version 0.7.1 [2025-12-11]

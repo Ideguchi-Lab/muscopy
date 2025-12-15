@@ -30,7 +30,7 @@ def unwrap_phase(
         If `True`, the mean of the original phase image is added back to the unwrapped phase.
         Default is `True`.
     use_skimage : `bool`, optional
-        If `True`, uses `skimage.restoration.unwrap_phase` for unwrapping. If `False`, uses the Poisson solver method.
+        If `True`, uses ``skimage.restoration.unwrap_phase`` for unwrapping. If `False`, uses the Poisson solver method.
         Default is `False`.
 
     Returns

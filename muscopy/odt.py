@@ -8,9 +8,9 @@ This module provides:
 - `synthesize_spectrum`: A function to synthesize scattering spectrums into 3D scattering potential.
 - `fill_hermite_components`: A function to fill the hermite conjugated spectrum for transparent sample.
 - `calc_refractive_index`: A function to calculate the refractive index from the scattering potential.
+- `calc_scattering_potential`: A function to calculate the scattering potential from complex field spectrums.
 - `odt`: A function to perform ODT reconstruction.
 - `calculate_odt_difference`: A function to calculate the difference between two ODT reconstructions.
-- `pt_signal_1st_order`: A function to calculate the Photothermal signal with 1st order approximation.
 - `discard_higher_axial_freq`: A function to discard higher axial frequency.
 - `zeropad_higher_axial_freq`: A function to zero pad the higher axial frequency.
 """
@@ -164,6 +164,9 @@ class ODTConfig:
     ----------
     approx_type : `str`, optional
         Weak scattering approximation type, [Born, Rytov].
+    linear_approx : `bool`, optional
+        Whether to use linear approximation or not.
+        The approximation linearizes scattering potential to the refractive index distribution.
     hermite_symmetry : `bool`, optional
         Whether to use Hermite embedding or not.
     precision : `ArrayPrecision`
@@ -175,6 +178,7 @@ class ODTConfig:
     """
 
     approx_type: str = "Born"
+    linear_approx: bool = False
     hermite_symmetry: bool = True
     precision: ArrayPrecision = dataclasses.field(default_factory=ArrayPrecision)
     edge_size: int = 0
@@ -290,13 +294,13 @@ def calc_refractive_index(scattering_potential: Array, params: ODTParameters) ->
     )
 
 
-def odt(  # noqa: PLR0914
+def calc_scattering_potential(
     cp_spectrums: Sequence[Array],
     ref_cp_spectrums: Sequence[Array],
     params: ODTParameters,
     config: ODTConfig,
 ) -> tuple[Array, Array]:
-    r"""Optical Diffraction Tomography (ODT) reconstruction.
+    r"""Calculate the scattering potential from complex field spectrums.
 
     Parameters
     ----------
@@ -312,7 +316,7 @@ def odt(  # noqa: PLR0914
     Returns
     -------
     `tuple`\[`Array`, `Array`\]
-        3D refractive index, 3D spectrum
+        3D scattering potential, 3D spectrum
     """
     params.verify_parameters()
     # weak scattering approximation
@@ -351,7 +355,41 @@ def odt(  # noqa: PLR0914
     factor = params.spectrum2cpfield_xy**2 * params.spectrum2cpfield_z / (2 * jnp.pi) ** (3 / 2)
     scattering_potential *= factor
 
-    refractive_index = calc_refractive_index(scattering_potential, params)
+    return scattering_potential, synthesized_spectrum
+
+
+def odt(
+    cp_spectrums: Sequence[Array],
+    ref_cp_spectrums: Sequence[Array],
+    params: ODTParameters,
+    config: ODTConfig,
+) -> tuple[Array, Array]:
+    r"""Optical Diffraction Tomography (ODT) reconstruction.
+
+    Parameters
+    ----------
+    cp_spectrums : `collections.abc.Sequence`\[`Array`\]
+        Spectrum of complex fields
+    ref_cp_spectrums : `collections.abc.Sequence`\[`Array`\]
+        Reference spectrum of complex fields
+    params : `ODTParameters`
+        ODT parameter instance
+    config : `ODTConfig`
+        ODT configuration
+
+    Returns
+    -------
+    `tuple`\[`Array`, `Array`\]
+        3D refractive index, 3D spectrum
+    """
+    scattering_potential, synthesized_spectrum = calc_scattering_potential(
+        cp_spectrums, ref_cp_spectrums, params, config
+    )
+    if config.linear_approx:
+        factor = (params.light_freq_px * params.k_per_px) ** 2 * params.n_sol / (4 * jnp.pi)
+        refractive_index = params.n_sol + scattering_potential / factor
+    else:
+        refractive_index = calc_refractive_index(scattering_potential, params)
     return refractive_index, synthesized_spectrum
 
 
@@ -419,60 +457,6 @@ def calculate_odt_difference(
     refractive_index_diff = refractive_index_1 - refractive_index_2
 
     return refractive_index_diff, refractive_index_1, refractive_index_2
-
-
-def pt_signal_1st_order(
-    cp_spectrums_hot: Sequence[Array],
-    cp_spectrums_cold: Sequence[Array],
-    ref_cp_spectrums: Sequence[Array],
-    params: ODTParameters,
-    config: ODTConfig,
-) -> tuple[Array, Array]:
-    r"""Calculate the Photothermal signal with 1st order approximation.
-
-    Parameters
-    ----------
-    cp_spectrums_hot : `collections.abc.Sequence`\[`Array`\]
-        Complex field spectrum of the hot sample
-    cp_spectrums_cold : `collections.abc.Sequence`\[`Array`\]
-        Complex field spectrum of the cold sample
-    ref_cp_spectrums : `collections.abc.Sequence`\[`Array`\]
-        Reference complex field spectrum
-    params : `ODTParameters`
-        ODT parameter instance
-    config : `ODTConfig`
-        ODT configuration
-
-    Returns
-    -------
-    `tuple`\[`jax.Array`, `jax.Array`\]
-        Photothermal signal and its Fourier transform
-
-    Raises
-    ------
-    ValueError
-        If the number of spectrums in hot and cold datasets do not match,
-        or if the number of reference spectrums does not match the number of spectrums in hot and cold datasets.
-    """
-    if len(cp_spectrums_hot) != len(cp_spectrums_cold):
-        msg = "The number of spectrums in hot and cold datasets must be the same"
-        raise ValueError(msg)
-    if len(ref_cp_spectrums) != len(cp_spectrums_hot):
-        msg = "The number of reference spectrums must match the number of spectrums in hot and cold datasets"
-        raise ValueError(msg)
-    _, synthesized_spectrum_hot = odt(cp_spectrums_hot, ref_cp_spectrums, params, config)
-    _, synthesized_spectrum_cold = odt(cp_spectrums_cold, ref_cp_spectrums, params, config)
-
-    scattering_potential_pt = synthesized_spectrum_hot - synthesized_spectrum_cold
-    ft_pt_signal = scattering_potential_pt / (params.light_freq_px * params.k_per_px) ** 2 / params.n_sol * 2 * jnp.pi
-    pt_signal = jnp.fft.ifftn(jnp.fft.ifftshift(ft_pt_signal), norm="ortho")
-
-    factor = params.spectrum2cpfield_xy**2 * params.spectrum2cpfield_z / (2 * jnp.pi) ** (3 / 2)
-    pt_signal *= factor
-
-    pt_signal = jnp.fft.fftshift(pt_signal, axes=2)
-
-    return pt_signal, ft_pt_signal
 
 
 def discard_higher_axial_freq(array3d: Array, threshold: int) -> Array:

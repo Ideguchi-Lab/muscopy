@@ -386,7 +386,7 @@ def odt(
         cp_spectrums, ref_cp_spectrums, params, config
     )
     if config.linear_approx:
-        factor = (params.light_freq_px * params.k_per_px) ** 2 * params.n_sol / (4 * jnp.pi)
+        factor = -((params.light_freq_px * params.k_per_px) ** 2) * params.n_sol
         refractive_index = params.n_sol + scattering_potential / factor
     else:
         refractive_index = calc_refractive_index(scattering_potential, params)

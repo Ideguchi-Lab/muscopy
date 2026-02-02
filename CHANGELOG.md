@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Added
+
+- Linear approximation mode for ODT reconstruction [[#117](https://github.com/Ideguchi-Lab/muscopy/pull/117)]
+  - Added `linear_approx` option to `ODTConfig` for linearized scattering potential to refractive index conversion
+  - New `calc_scattering_potential()` function extracted from `odt()` for direct access to scattering potential and spectrum
+
+### Removed
+
+- Removed `pt_signal_1st_order()` function from `odt` module [[#117](https://github.com/Ideguchi-Lab/muscopy/pull/117)]
+
 ---
 
 ## Version 0.7.2 [2025-12-15]

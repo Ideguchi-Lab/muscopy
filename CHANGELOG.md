@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+---
+
+## Version 0.7.3 [2026-02-02]
+
 ### Added
 
 - Linear approximation mode for ODT reconstruction [[#117](https://github.com/Ideguchi-Lab/muscopy/pull/117)]

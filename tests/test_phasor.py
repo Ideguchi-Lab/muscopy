@@ -12,9 +12,9 @@ def test_phasor_parameters_valid() -> None:
     """Test valid parameter initialization."""
     wavenumbers = jnp.linspace(1000, 2000, 100)
     params = PhasorParameters(wavenumbers=wavenumbers)
-    assert params.wavenumber_min == 1000.0
-    assert params.wavenumber_max == 2000.0
-    assert params.wavenumber_range == 1000.0
+    assert params.wavenumber_min == pytest.approx(1000.0)
+    assert params.wavenumber_max == pytest.approx(2000.0)
+    assert params.wavenumber_range == pytest.approx(1000.0)
 
 
 def test_phasor_parameters_normalized_frequencies() -> None:
@@ -259,9 +259,9 @@ def test_phasor_mixed_zero_nonzero_pixels() -> None:
     result = phasor(data, params)
 
     # Zero intensity pixels should have zero phasor
-    assert result.g[1, 1] == 0.0
-    assert result.s[1, 1] == 0.0
+    assert result.g[1, 1] == pytest.approx(0.0)
+    assert result.s[1, 1] == pytest.approx(0.0)
 
     # Non-zero intensity pixels should have non-zero i_sum
-    assert result.i_sum[0, 0] == 20.0
-    assert result.i_sum[2, 2] == 40.0
+    assert result.i_sum[0, 0] == pytest.approx(20.0)
+    assert result.i_sum[2, 2] == pytest.approx(40.0)

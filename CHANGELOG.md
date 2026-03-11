@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- `py.typed` marker file for type hinting support [[#118](https://github.com/Ideguchi-Lab/muscopy/pull/118)]
+
 ---
 
 ## Version 0.7.3 [2026-02-02]

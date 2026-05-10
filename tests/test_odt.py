@@ -1,10 +1,20 @@
 """Test cases for ODT module."""
 
+from collections.abc import Sequence
+
 import jax.numpy as jnp
 import pytest
+from jax import Array
 
+from muscopy import odt as odt_module
 from muscopy.cfg import ArrayPrecision
-from muscopy.odt import ODTConfig, ODTParameters, calc_scattering_potential, calculate_odt_difference
+from muscopy.odt import (
+    ODTConfig,
+    ODTParameters,
+    calc_scattering_potential,
+    calculate_odt_difference,
+    synthesize_spectrum,
+)
 
 
 def test_odt_config_defaults_to_32_bit_precision() -> None:
@@ -14,6 +24,42 @@ def test_odt_config_defaults_to_32_bit_precision() -> None:
     assert config.precision.int_precision() == "int32"
     assert config.precision.float_precision() == "float32"
     assert config.precision.complex_precision() == "complex64"
+    assert config.verbose is False
+
+
+def test_synthesize_spectrum_is_silent_by_default(capsys: pytest.CaptureFixture[str]) -> None:
+    """Test that ODT library calls do not print progress by default."""
+    params = ODTParameters(
+        na=0.1,
+        wavelength_m=1.0,
+        img_size_px=8,
+        px_size_m=1.0,
+        n_sol=1.33,
+        na_illumination=0.1,
+    )
+
+    synthesize_spectrum([], params, ODTConfig())
+
+    captured = capsys.readouterr()
+    assert not captured.out
+    assert not captured.err
+
+
+def test_synthesize_spectrum_prints_when_verbose(capsys: pytest.CaptureFixture[str]) -> None:
+    """Test that ODT progress output remains opt-in."""
+    params = ODTParameters(
+        na=0.1,
+        wavelength_m=1.0,
+        img_size_px=8,
+        px_size_m=1.0,
+        n_sol=1.33,
+        na_illumination=0.1,
+    )
+    config = ODTConfig(verbose=True)
+
+    synthesize_spectrum([], params, config)
+
+    assert "Synthesize spectrum..." in capsys.readouterr().out
 
 
 def test_calc_scattering_potential_rejects_mutated_64_bit_precision(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -153,3 +199,62 @@ class TestCalculateODTDifference:
                 raise
             # Otherwise, it's likely a computational error with our simplified test data
             # which is expected and acceptable for this test
+
+    def test_silent_by_default(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Test that difference reconstruction status output is silent by default."""
+
+        def fake_odt(
+            _cp_spectrums: Sequence[Array],
+            _ref_cp_spectrums: Sequence[Array],
+            _params: ODTParameters,
+            _config: ODTConfig,
+        ) -> tuple[Array, Array]:
+            return jnp.ones((1, 1, 1)), jnp.ones((1, 1, 1))
+
+        monkeypatch.setattr(odt_module, "odt", fake_odt)
+
+        calculate_odt_difference(
+            [jnp.ones((self.spectrum_size, self.spectrum_size)) + 0j],
+            [jnp.ones((self.spectrum_size, self.spectrum_size)) + 0j],
+            [jnp.ones((self.spectrum_size, self.spectrum_size)) + 0j],
+            [jnp.ones((self.spectrum_size, self.spectrum_size)) + 0j],
+            self.params,
+            self.config,
+        )
+
+        assert not capsys.readouterr().out
+
+    def test_verbose_prints_status(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Test that difference reconstruction status output is opt-in."""
+
+        def fake_odt(
+            _cp_spectrums: Sequence[Array],
+            _ref_cp_spectrums: Sequence[Array],
+            _params: ODTParameters,
+            _config: ODTConfig,
+        ) -> tuple[Array, Array]:
+            return jnp.ones((1, 1, 1)), jnp.ones((1, 1, 1))
+
+        monkeypatch.setattr(odt_module, "odt", fake_odt)
+        config = ODTConfig(verbose=True)
+
+        calculate_odt_difference(
+            [jnp.ones((self.spectrum_size, self.spectrum_size)) + 0j],
+            [jnp.ones((self.spectrum_size, self.spectrum_size)) + 0j],
+            [jnp.ones((self.spectrum_size, self.spectrum_size)) + 0j],
+            [jnp.ones((self.spectrum_size, self.spectrum_size)) + 0j],
+            self.params,
+            config,
+        )
+
+        captured = capsys.readouterr().out
+        assert "Reconstructing ODT from dataset 1..." in captured
+        assert "Reconstructing ODT from dataset 2..." in captured

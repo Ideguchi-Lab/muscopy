@@ -65,14 +65,16 @@ def qpi(
     params : `MuParameters`
         Microscopy Parameters class
     offaxis_centers : `collections.abc.Sequence`\[`tuple`\[`int`, `int`\]\]
-        The crop centers of off-axis digital holography
+        The crop center or crop centers of off-axis digital holography
     pupil_func : `jax.Array` | `None`, optional
         Pupil function for aberration correction, by default None
 
     Returns
     -------
-    `list`\[`jax.Array`\]
-        The QPI phase image
+    `jax.Array` | `list`\[`jax.Array`\]
+        The QPI phase image. Returns a single array when ``offaxis_centers``
+        is a single center tuple, or a list of arrays when it is a sequence of
+        center tuples.
     """
     cp_fields = offaxis_dh(array, reference, params, offaxis_centers, pupil_func=pupil_func)
 
@@ -105,17 +107,20 @@ def mip_qpi(
     offaxis_center : `tuple`\[`int`, `int`\]
         The crop center of off-axis digital holography
     crop_center : `bool`, optional
-        Whether to crop center or not, by default False
-        This option is used for MIP-QPI
+        Whether to remove the low-frequency center component from each cropped
+        off-axis spectrum before reconstruction, by default False
     c_r : `int`, optional
-        The crop radius, by default 5
+        Radius of the center high-pass mask used when ``crop_center`` is True,
+        by default 5
     mip_center_reg : `Region` | `None`, optional
-        _description_, by default None
+        Region used to estimate the central phase sign. When provided and the
+        mean phase in this region is negative, the MIR ON/OFF field ratio is
+        inverted before taking the output phase, by default None
 
     Returns
     -------
     `jax.Array`
-        The MIP-QPI phase image
+        The MIP-QPI phase image computed as the angle of the MIR ON/OFF field ratio
 
     Raises
     ------

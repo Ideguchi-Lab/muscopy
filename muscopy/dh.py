@@ -255,7 +255,7 @@ def make_disk(
 
 
 def crop_array(array: Array, center: tuple[int, int], width: int) -> Array:
-    r"""Crop the array to the specified width around the center.
+    r"""Crop the array to the specified odd width around the center.
 
     Parameters
     ----------
@@ -264,13 +264,22 @@ def crop_array(array: Array, center: tuple[int, int], width: int) -> Array:
     center : `tuple`\[`int`, `int`\]
         The center position of the crop
     width : `int`
-        The width of the crop
+        The odd width of the center-symmetric crop
 
     Returns
     -------
     `jax.Array`
         The cropped array
+
+    Raises
+    ------
+    ValueError
+        If width is not a positive odd integer
     """
+    if width <= 0 or width % 2 == 0:
+        msg = "width must be a positive odd integer"
+        raise ValueError(msg)
+
     return array[
         center[0] - width // 2 : center[0] + width // 2 + 1,
         center[1] - width // 2 : center[1] + width // 2 + 1,
@@ -563,8 +572,10 @@ def offaxis_dh(
 
     Returns
     -------
-    `list`\[`jax.Array`\]
-        The complex wave front
+    `jax.Array` | `list`\[`jax.Array`\]
+        The complex wave front. Returns a single array when ``offaxis_centers``
+        is a single center tuple, or a list of arrays when it is a sequence of
+        center tuples.
 
     Raises
     ------
@@ -661,7 +672,7 @@ def ps_idh_reconstruct(i_stack: Array, deltas: Array, ref_amp: float = 1.0) -> A
     """Phase-shifting inline digital holography reconstruction.
 
     Reconstruct complex amplitude from phase-shifted inline holograms
-    using the formula: Ô(x,y) = (1/M) * Σ I_k * exp(-j*δ_k) / (2*R)
+    using the implemented formula: O_hat(x, y) = mean_k(I_k(x, y) * exp(j * delta_k)) / R.
 
     Parameters
     ----------
@@ -675,7 +686,7 @@ def ps_idh_reconstruct(i_stack: Array, deltas: Array, ref_amp: float = 1.0) -> A
     Returns
     -------
     `jax.Array`
-        Reconstructed complex field Ô(x,y), shape (H, W), dtype complex64
+        Reconstructed complex field O_hat(x, y), shape (H, W)
 
     Raises
     ------

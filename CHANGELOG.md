@@ -6,15 +6,19 @@
 
 - `py.typed` marker file for type hinting support [[#118](https://github.com/Ideguchi-Lab/muscopy/pull/118)]
 - `IDTConfig` for configuring IDT reconstruction precision [[#123](https://github.com/Ideguchi-Lab/muscopy/issues/123)]
+- `ODTConfig.verbose` option to make ODT reconstruction status and progress output opt-in [[#121](https://github.com/Ideguchi-Lab/muscopy/issues/121)]
 
 ### Changed
 
 - Changed `ArrayPrecision` defaults from 64-bit to portable 32-bit precision (`int32`, `float32`, `complex64`) [[#123](https://github.com/Ideguchi-Lab/muscopy/issues/123)]
 - Updated ODT and IDT reconstruction paths to use explicit precision settings consistently [[#123](https://github.com/Ideguchi-Lab/muscopy/issues/123)]
+- Clarified `offaxis_dh()` and `qpi()` docstrings for single-return and list-return behavior [[#121](https://github.com/Ideguchi-Lab/muscopy/issues/121)]
+- Validated `crop_array()` width as a positive odd integer to match its center-symmetric crop contract [[#121](https://github.com/Ideguchi-Lab/muscopy/issues/121)]
 
 ### Fixed
 
 - Added explicit validation for 64-bit precision requests when JAX x64 support is disabled, avoiding silent dtype truncation [[#123](https://github.com/Ideguchi-Lab/muscopy/issues/123)]
+- Updated `mip_qpi()` and `ps_idh_reconstruct()` documentation to describe the implemented behavior accurately [[#121](https://github.com/Ideguchi-Lab/muscopy/issues/121)]
 
 ---
 

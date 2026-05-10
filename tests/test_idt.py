@@ -1,5 +1,6 @@
 """Test cases for IDT module."""
 
+import jax
 import jax.numpy as jnp
 import pytest
 
@@ -40,9 +41,17 @@ def test_compute_idt_returns_32_bit_arrays_by_default() -> None:
     assert n_im.shape == expected_shape
     assert n_re.dtype == jnp.float32
     assert n_im.dtype == jnp.float32
+    assert bool(jnp.allclose(n_re, 0.0))
+    assert bool(jnp.allclose(n_im, 0.0))
 
 
-def test_compute_idt_rejects_mutated_64_bit_precision() -> None:
+def test_compute_idt_rejects_mutated_64_bit_precision(monkeypatch: pytest.MonkeyPatch) -> None:
+    original_read = jax.config.read
+    monkeypatch.setattr(
+        jax.config,
+        "read",
+        lambda name: False if name == "jax_enable_x64" else original_read(name),
+    )
     params = _small_idt_params()
     precision = ArrayPrecision()
     precision.float_length = 64

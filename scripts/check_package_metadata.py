@@ -40,11 +40,7 @@ def _distribution_metadata(path: Path) -> email.message.Message:
 
 
 def _distribution_paths(dist_dir: Path) -> list[Path]:
-    return sorted(
-        path
-        for path in dist_dir.iterdir()
-        if path.suffix == ".whl" or path.name.endswith(".tar.gz")
-    )
+    return sorted(path for path in dist_dir.iterdir() if path.suffix == ".whl" or path.name.endswith(".tar.gz"))
 
 
 def _main() -> None:

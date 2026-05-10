@@ -21,7 +21,7 @@ import numpy as np
 from jax import Array
 from tqdm import tqdm
 
-from muscopy.idt import IDTParameters, compute_idt
+from muscopy.idt import IDTConfig, IDTParameters, compute_idt
 
 try:
     from muscopy_mlbsim.hologram_generator import HologramGenerator  # pyright: ignore[reportMissingImports]
@@ -488,7 +488,13 @@ def main() -> None:
     print(f"Memory usage before IDT: {sum(img.nbytes for img in target_intensity_images) / 1024**2:.1f} MB")
 
     try:
-        n_re, _ = compute_idt(idt_params, target_intensity_images, ref_intensity_images, u_illumination_list)
+        n_re, _ = compute_idt(
+            idt_params,
+            target_intensity_images,
+            ref_intensity_images,
+            u_illumination_list,
+            config=IDTConfig(),
+        )
         print("IDT computation completed.")
     except Exception as e:
         print(f"IDT computation failed with error: {e}")

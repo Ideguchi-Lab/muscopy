@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 import jax.numpy as jnp
 from jax import Array
 
+from muscopy.cfg import ArrayPrecision
 from muscopy.dh import make_disk
 from muscopy.odt import ODTParameters
 
@@ -25,7 +26,26 @@ class IDTParameters(ODTParameters):
     num_z_slices: int = 10
 
 
-def compute_g_list(i_list: Sequence[Array], i_reference: Sequence[Array], normalize: bool = True) -> list[Array]:
+@dataclasses.dataclass
+class IDTConfig:
+    """Intensity Diffraction Tomography (IDT) configuration.
+
+    Attributes
+    ----------
+    precision : `ArrayPrecision`
+        Precision configuration. Defaults to 32-bit float and complex arrays.
+    """
+
+    precision: ArrayPrecision = dataclasses.field(default_factory=ArrayPrecision)
+
+
+def compute_g_list(
+    i_list: Sequence[Array],
+    i_reference: Sequence[Array],
+    normalize: bool = True,
+    *,
+    precision: ArrayPrecision | None = None,
+) -> list[Array]:
     """Compute list of intensity constrasts g_l for each illumination angle.
 
     Parameters
@@ -35,26 +55,39 @@ def compute_g_list(i_list: Sequence[Array], i_reference: Sequence[Array], normal
     i_reference : background intensity image for subtraction
     normalize : bool
         whether or not to normalize
+    precision : `ArrayPrecision`, optional
+        Precision configuration for the returned arrays.
 
     Returns
     -------
     g_list : list of [Nx, Ny] arrays
         Intensity different or contrast for each angle.
     """
+    if precision is None:
+        precision = ArrayPrecision()
+    precision.validate()
+    float_dtype = precision.float_precision()
     g_list = []
     for i_m, i_ref in zip(i_list, i_reference, strict=False):
+        target_image = jnp.asarray(i_m, dtype=float_dtype)
+        reference_image = jnp.asarray(i_ref, dtype=float_dtype)
         if normalize:
             # Avoid division by zero in normalization
-            i_ref_average = jnp.mean(i_ref)
-            g = (i_m - i_ref_average) / i_ref_average
-            g_list.append(g)
+            i_ref_average = jnp.mean(reference_image)
+            g = (target_image - i_ref_average) / i_ref_average
+            g_list.append(jnp.asarray(g, dtype=float_dtype))
         else:
-            g = i_m - i_ref
-            g_list.append(g)
+            g = target_image - reference_image
+            g_list.append(jnp.asarray(g, dtype=float_dtype))
     return g_list
 
 
-def fourier_transform(params: IDTParameters, g_list: Sequence[Array]) -> list[Array]:
+def fourier_transform(
+    params: IDTParameters,
+    g_list: Sequence[Array],
+    *,
+    precision: ArrayPrecision | None = None,
+) -> list[Array]:
     """
     Compute the Fourier Transform of each g_l in g_list.
 
@@ -64,29 +97,43 @@ def fourier_transform(params: IDTParameters, g_list: Sequence[Array]) -> list[Ar
         The parameters for the IDT model.
     g_list : list of [Nx, Ny] arrays
         Intensity differences per angle (spatial domain)
+    precision : `ArrayPrecision`, optional
+        Precision configuration for the Fourier arrays.
 
     Returns
     -------
     g_tilde_list : list of [Nx, Ny] arrays
         Fourier Transforms of g_l (frequency domain)
     """
+    if precision is None:
+        precision = ArrayPrecision()
+    precision.validate()
+    float_dtype = precision.float_precision()
+    complex_dtype = precision.complex_precision()
     g_tilde_list = []
     incoherent_limit_mask = make_disk(
         (params.aperturesize_px, params.aperturesize_px), params.aperturesize_px, 2 * params.aperturesize_px + 1
     )
-    ft_scaling_factor = jnp.sqrt((2 * params.aperturesize_px + 1) / params.img_size_px)
+    ft_scaling_factor = jnp.asarray(jnp.sqrt((2 * params.aperturesize_px + 1) / params.img_size_px), dtype=float_dtype)
     for g_l in g_list:
-        g_tilde = jnp.fft.fftshift(jnp.fft.fft2(g_l, norm="ortho"))  # FFT with fftshift for centered spectrum
+        g_array = jnp.asarray(g_l, dtype=float_dtype)
+        g_tilde = jnp.fft.fftshift(jnp.fft.fft2(g_array, norm="ortho"))  # FFT with fftshift for centered spectrum
         g_tilde_cropped = g_tilde[
             params.img_size_px // 2 - params.aperturesize_px : params.img_size_px // 2 + params.aperturesize_px + 1,
             params.img_size_px // 2 - params.aperturesize_px : params.img_size_px // 2 + params.aperturesize_px + 1,
         ]
         g_tilde_masked = g_tilde_cropped * incoherent_limit_mask * ft_scaling_factor**2
-        g_tilde_list.append(g_tilde_masked)
+        g_tilde_list.append(jnp.asarray(g_tilde_masked, dtype=complex_dtype))
     return g_tilde_list
 
 
-def make_green_func(params: IDTParameters, u_shift: tuple[float, float], z: float) -> Array:
+def make_green_func(
+    params: IDTParameters,
+    u_shift: tuple[float, float],
+    z: float,
+    *,
+    precision: ArrayPrecision | None = None,
+) -> Array:
     """Generate the Green's function for a given illumination angle.
 
     Parameters
@@ -97,15 +144,22 @@ def make_green_func(params: IDTParameters, u_shift: tuple[float, float], z: floa
         The illumination angle in the x and y directions.
     z : float
         The axial position in the z direction.
+    precision : `ArrayPrecision`, optional
+        Precision configuration for the returned array.
 
     Returns
     -------
     Array
         The Green's function evaluated at the given illumination angle.
     """
+    if precision is None:
+        precision = ArrayPrecision()
+    precision.validate()
+    float_dtype = precision.float_precision()
+    complex_dtype = precision.complex_precision()
     xx, yy = jnp.meshgrid(
-        jnp.arange(-params.aperturesize_px, params.aperturesize_px + 1),
-        jnp.arange(-params.aperturesize_px, params.aperturesize_px + 1),
+        jnp.arange(-params.aperturesize_px, params.aperturesize_px + 1, dtype=float_dtype),
+        jnp.arange(-params.aperturesize_px, params.aperturesize_px + 1, dtype=float_dtype),
         indexing="ij",
     )
     ux = xx + u_shift[0]
@@ -122,7 +176,8 @@ def make_green_func(params: IDTParameters, u_shift: tuple[float, float], z: floa
     # Avoid division by zero
     uz_safe = jnp.where(jnp.abs(uz) < _EPSILON, _EPSILON, uz)
 
-    return jnp.exp(-1j * uz_safe * z * params.k_per_px) / uz_safe
+    green_func = jnp.exp(-1j * uz_safe * z * params.k_per_px) / uz_safe
+    return jnp.asarray(green_func, dtype=complex_dtype)
 
 
 def make_pupil_func(params: IDTParameters, u_shift: tuple[float, float]) -> Array:
@@ -148,7 +203,12 @@ def make_pupil_func(params: IDTParameters, u_shift: tuple[float, float]) -> Arra
 
 
 def transfer_func_re(
-    params: IDTParameters, u_illumination: tuple[float, float], z: float, incident_intensity: float
+    params: IDTParameters,
+    u_illumination: tuple[float, float],
+    z: float,
+    incident_intensity: float,
+    *,
+    precision: ArrayPrecision | None = None,
 ) -> Array:
     """Compute real part of transfer function for IDT.
 
@@ -162,6 +222,8 @@ def transfer_func_re(
         Depth position
     incident_intensity : float
         Incident intensity
+    precision : `ArrayPrecision`, optional
+        Precision configuration for the returned array.
 
     Returns
     -------
@@ -178,23 +240,34 @@ def transfer_func_re(
     if u_ill_z_squared < 0:
         msg = f"Invalid illumination angle {u_illumination}: u_ill_z_squared must be non-negative."
         raise ValueError(msg)
+    if precision is None:
+        precision = ArrayPrecision()
+    precision.validate()
     u_ill_z = jnp.sqrt(u_ill_z_squared)
     first_term = (
-        make_green_func(params, (-u_ill_x, -u_ill_y), z)
+        make_green_func(params, (-u_ill_x, -u_ill_y), z, precision=precision)
         * jnp.exp(-1j * u_ill_z * z * params.k_per_px)
         * make_pupil_func(params, (-u_ill_x, -u_ill_y))
     )
     second_term = (
-        jnp.conjugate(make_green_func(params, (u_ill_x, u_ill_y), z))
+        jnp.conjugate(make_green_func(params, (u_ill_x, u_ill_y), z, precision=precision))
         * jnp.exp(1j * u_ill_z * z * params.k_per_px)
         * jnp.conjugate(make_pupil_func(params, (u_ill_x, u_ill_y)))
     )
 
-    return 1j * (params.k_per_px * params.light_freq_px) ** 2 / 2 * incident_intensity * (first_term - second_term)
+    transfer_func = (
+        1j * (params.k_per_px * params.light_freq_px) ** 2 / 2 * incident_intensity * (first_term - second_term)
+    )
+    return jnp.asarray(transfer_func, dtype=precision.complex_precision())
 
 
 def transfer_func_im(
-    params: IDTParameters, u_illumination: tuple[float, float], z: float, incident_intensity: float
+    params: IDTParameters,
+    u_illumination: tuple[float, float],
+    z: float,
+    incident_intensity: float,
+    *,
+    precision: ArrayPrecision | None = None,
 ) -> Array:
     """Compute imaginary part of transfer function for IDT.
 
@@ -208,26 +281,34 @@ def transfer_func_im(
         Depth position
     incident_intensity : float
         Incident intensity
+    precision : `ArrayPrecision`, optional
+        Precision configuration for the returned array.
 
     Returns
     -------
     Array
         Imaginary part of transfer function
     """
+    if precision is None:
+        precision = ArrayPrecision()
+    precision.validate()
     u_ill_x, u_ill_y = u_illumination
     u_ill_z = (params.light_freq_px**2 - u_ill_x**2 - u_ill_y**2) ** 0.5
     first_term = (
-        make_green_func(params, (-u_ill_x, -u_ill_y), z)
+        make_green_func(params, (-u_ill_x, -u_ill_y), z, precision=precision)
         * jnp.exp(-1j * u_ill_z * z * params.k_per_px)
         * make_pupil_func(params, (-u_ill_x, -u_ill_y))
     )
     second_term = (
-        jnp.conjugate(make_green_func(params, (u_ill_x, u_ill_y), z))
+        jnp.conjugate(make_green_func(params, (u_ill_x, u_ill_y), z, precision=precision))
         * jnp.exp(1j * u_ill_z * z * params.k_per_px)
         * jnp.conjugate(make_pupil_func(params, (u_ill_x, u_ill_y)))
     )
 
-    return -((params.light_freq_px * params.k_per_px) ** 2) / 2 * incident_intensity * (first_term + second_term)
+    transfer_func = (
+        -((params.light_freq_px * params.k_per_px) ** 2) / 2 * incident_intensity * (first_term + second_term)
+    )
+    return jnp.asarray(transfer_func, dtype=precision.complex_precision())
 
 
 def compute_permitivity(  # noqa: PLR0914
@@ -238,6 +319,8 @@ def compute_permitivity(  # noqa: PLR0914
     z: float = 0.0,
     alpha: float = 1e-6,
     beta: float = 1e-6,
+    *,
+    precision: ArrayPrecision | None = None,
 ) -> tuple[Array, Array]:
     """Compute the permittivity changes Δε_Re and Δε_Im for each slice.
 
@@ -257,15 +340,21 @@ def compute_permitivity(  # noqa: PLR0914
         Regularization parameter for the real part of the permittivity, by default 1e-6
     beta : float, optional
         Regularization parameter for the imaginary part of the permittivity, by default 1e-6
+    precision : `ArrayPrecision`, optional
+        Precision configuration for the returned arrays.
 
     Returns
     -------
     tuple[Array, Array]
         The computed permittivity changes Δε_Re and Δε_Im for each slice.
     """
+    if precision is None:
+        precision = ArrayPrecision()
+    precision.validate()
+    complex_dtype = precision.complex_precision()
     h_normalized_re = jnp.stack(
         [
-            transfer_func_re(params, u_illumination_list[i], z, led_illumination_intensities[i])
+            transfer_func_re(params, u_illumination_list[i], z, led_illumination_intensities[i], precision=precision)
             / led_illumination_intensities[i]
             for i in range(len(u_illumination_list))
         ],
@@ -273,14 +362,14 @@ def compute_permitivity(  # noqa: PLR0914
     )
     h_normalized_im = jnp.stack(
         [
-            transfer_func_im(params, u_illumination_list[i], z, led_illumination_intensities[i])
+            transfer_func_im(params, u_illumination_list[i], z, led_illumination_intensities[i], precision=precision)
             / led_illumination_intensities[i]
             for i in range(len(u_illumination_list))
         ],
         axis=-1,
     )
 
-    g_tilde = jnp.stack(g_tilde_list, axis=-1)
+    g_tilde = jnp.asarray(jnp.stack(g_tilde_list, axis=-1), dtype=complex_dtype)
 
     # Fix scale_factor calculation to be real-valued and numerically stable
     # Normalize the transfer functions to prevent numerical overflow
@@ -321,7 +410,7 @@ def compute_permitivity(  # noqa: PLR0914
     eps_re = (eps_re_first_term_scaled - eps_re_second_term_scaled) / scale_factor
     eps_im = (eps_im_first_term_scaled - eps_im_second_term_scaled) / scale_factor
 
-    return eps_re, eps_im
+    return jnp.asarray(eps_re, dtype=complex_dtype), jnp.asarray(eps_im, dtype=complex_dtype)
 
 
 def convert_to_refractive_index(eps_re: Array, eps_im: Array, n_sol: float) -> tuple[Array, Array]:
@@ -360,6 +449,7 @@ def compute_idt(  # noqa: PLR0914
     ref_intensity_images: Sequence[Array],
     u_illumination_list: Sequence[tuple[float, float]],
     *,
+    config: IDTConfig | None = None,
     alpha: float = 1e-2,
     beta: float = 1e-2,
 ) -> tuple[Array, Array]:
@@ -397,6 +487,8 @@ def compute_idt(  # noqa: PLR0914
         The reference intensity images for comparison.
     u_illumination_list : Sequence[tuple[float, float]]
         The illumination angles for each LED.
+    config : `IDTConfig`, optional
+        IDT configuration. Defaults to 32-bit precision.
 
     Returns
     -------
@@ -416,16 +508,21 @@ def compute_idt(  # noqa: PLR0914
     if len(intensity_images) != len(u_illumination_list):
         msg = "Intensity images and illumination angles must have the same length."
         raise ValueError(msg)
+    if config is None:
+        config = IDTConfig()
+    config.precision.validate()
+    float_dtype = config.precision.float_precision()
+    complex_dtype = config.precision.complex_precision()
 
     # STEP 1: intensity images (input)
 
     # STEP 2: compute g_l
 
-    g_l = compute_g_list(intensity_images, ref_intensity_images, normalize=True)
+    g_l = compute_g_list(intensity_images, ref_intensity_images, normalize=True, precision=config.precision)
 
     # STEP 3: Fourier Transform each image
 
-    g_tilde_list = fourier_transform(params, g_l)
+    g_tilde_list = fourier_transform(params, g_l, precision=config.precision)
 
     # STEP 4: Build Transfer Functions
 
@@ -434,8 +531,8 @@ def compute_idt(  # noqa: PLR0914
     # STEP 5: Solve inverse problem
 
     aperture_size = 2 * params.aperturesize_px + 1
-    eps_re_3d = jnp.zeros((aperture_size, aperture_size, params.num_z_slices))
-    eps_im_3d = jnp.zeros((aperture_size, aperture_size, params.num_z_slices))
+    eps_re_3d = jnp.zeros((aperture_size, aperture_size, params.num_z_slices), dtype=complex_dtype)
+    eps_im_3d = jnp.zeros((aperture_size, aperture_size, params.num_z_slices), dtype=complex_dtype)
 
     led_illumination_intensities = [
         float(jnp.mean(ref_image)) for ref_image in ref_intensity_images
@@ -451,6 +548,7 @@ def compute_idt(  # noqa: PLR0914
             z=z,
             alpha=alpha,
             beta=beta,
+            precision=config.precision,
         )
         eps_re_3d = eps_re_3d.at[:, :, idx].set(eps_re)
         eps_im_3d = eps_im_3d.at[:, :, idx].set(eps_im)
@@ -463,7 +561,7 @@ def compute_idt(  # noqa: PLR0914
     n_re, n_im = convert_to_refractive_index(eps_re_3d_spatial, eps_im_3d_spatial, params.n_sol)
 
     # Take real part since result should be real in spatial domain
-    n_re_spatial = jnp.real(n_re)
-    n_im_spatial = jnp.real(n_im)
+    n_re_spatial = jnp.asarray(jnp.real(n_re), dtype=float_dtype)
+    n_im_spatial = jnp.asarray(jnp.real(n_im), dtype=float_dtype)
 
     return n_re_spatial, n_im_spatial

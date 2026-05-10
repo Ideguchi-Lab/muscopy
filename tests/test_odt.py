@@ -4,7 +4,34 @@ import jax.numpy as jnp
 import pytest
 
 from muscopy.cfg import ArrayPrecision
-from muscopy.odt import ODTConfig, ODTParameters, calculate_odt_difference
+from muscopy.odt import ODTConfig, ODTParameters, calc_scattering_potential, calculate_odt_difference
+
+
+def test_odt_config_defaults_to_32_bit_precision() -> None:
+    """Test that ODT defaults to the portable precision contract."""
+    config = ODTConfig()
+
+    assert config.precision.int_precision() == "int32"
+    assert config.precision.float_precision() == "float32"
+    assert config.precision.complex_precision() == "complex64"
+
+
+def test_calc_scattering_potential_rejects_mutated_64_bit_precision() -> None:
+    """Test that ODT validates precision before reconstruction."""
+    params = ODTParameters(
+        na=0.1,
+        wavelength_m=1.0,
+        img_size_px=8,
+        px_size_m=1.0,
+        n_sol=1.33,
+        na_illumination=0.1,
+    )
+    precision = ArrayPrecision()
+    precision.float_length = 64
+    config = ODTConfig(precision=precision)
+
+    with pytest.raises(ValueError, match="64-bit precision requires JAX x64 support"):
+        calc_scattering_potential([], [], params, config)
 
 
 class TestCalculateODTDifference:

@@ -319,6 +319,7 @@ def calc_scattering_potential(
         3D scattering potential, 3D spectrum
     """
     params.verify_parameters()
+    config.precision.validate()
     # weak scattering approximation
     scattering_spectrums = []
     for cp_spectrum, ref_cp_spectrum in zip(cp_spectrums, ref_cp_spectrums, strict=False):

@@ -175,6 +175,8 @@ class ODTConfig:
         Size of removed edge in FT calculation.
     offset_regions : `OffsetRegions`, optional
         Regions to be used for offset calculation.
+    verbose : `bool`, optional
+        Whether to print reconstruction status and progress output.
     """
 
     approx_type: str = "Born"
@@ -183,6 +185,7 @@ class ODTConfig:
     precision: ArrayPrecision = dataclasses.field(default_factory=ArrayPrecision)
     edge_size: int = 0
     offset_regions: OffsetRegions = None
+    verbose: bool = False
 
 
 @dataclasses.dataclass
@@ -235,8 +238,9 @@ def synthesize_spectrum(
     )
     synthesized_weight = jnp.ones_like(synthesized_spectrum, dtype=config.precision.int_precision())
 
-    print("Synthesize spectrum...")  # noqa: T201
-    for scattering_spectrum in tqdm(scattering_spectrums):
+    if config.verbose:
+        print("Synthesize spectrum...")  # noqa: T201
+    for scattering_spectrum in tqdm(scattering_spectrums, disable=not config.verbose):
         kz_disk = _calc_kz_disk(
             params, scattering_spectrum.array.shape[0], scattering_spectrum.illumination_vector, config.precision
         )
@@ -448,10 +452,12 @@ def calculate_odt_difference(
         msg = "The number of spectrums and reference spectrums must match in dataset 2"
         raise ValueError(msg)
 
-    print("Reconstructing ODT from dataset 1...")  # noqa: T201
+    if config.verbose:
+        print("Reconstructing ODT from dataset 1...")  # noqa: T201
     refractive_index_1, _ = odt(cp_spectrums_1, ref_cp_spectrums_1, params, config)
 
-    print("Reconstructing ODT from dataset 2...")  # noqa: T201
+    if config.verbose:
+        print("Reconstructing ODT from dataset 2...")  # noqa: T201
     refractive_index_2, _ = odt(cp_spectrums_2, ref_cp_spectrums_2, params, config)
 
     # Calculate the difference

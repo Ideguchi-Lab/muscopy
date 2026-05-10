@@ -110,6 +110,14 @@ def test_crop_array() -> None:
     assert jnp.array_equal(cropped, expected)
 
 
+@pytest.mark.parametrize("width", [0, -1, 4])
+def test_crop_array_rejects_non_positive_or_even_width(width: int) -> None:
+    arr = jnp.arange(100).reshape(10, 10)
+
+    with pytest.raises(ValueError, match="width must be a positive odd integer"):
+        crop_array(arr, (5, 5), width)
+
+
 def test_get_spectrum() -> None:
     params = MuParameters(na=0.1, wavelength_m=500e-9, img_size_px=64, px_size_m=1e-6, n_sol=1.33)
     offaxis_center = (32, 32)
@@ -173,40 +181,18 @@ def test_correct_offset_flags() -> None:
 
 def test_ps_idh_reconstruct() -> None:
     """Test phase-shifting inline digital holography reconstruction."""
-    # Create synthetic phase-shifted holograms
     h, w = 32, 32
     num_holograms = 4
-
-    # Create a simple complex object field
-    object_field = jnp.ones((h, w), dtype=complex) * (1 + 0.5j)
-    ref_amp = 1.0
-
-    # Generate phase shifts (4-step phase shifting)
     deltas = jnp.array([0.0, jnp.pi / 2, jnp.pi, 3 * jnp.pi / 2])
+    i_stack = jnp.arange(num_holograms * h * w, dtype=float).reshape(num_holograms, h, w)
+    ref_amp = 2.0
 
-    # Generate synthetic holograms I_k = |O + R * exp(j*delta_k)|^2
-    i_stack = jnp.zeros((num_holograms, h, w))
-    for k in range(num_holograms):
-        hologram_field = object_field + ref_amp * jnp.exp(1j * deltas[k])
-        i_stack = i_stack.at[k].set(jnp.abs(hologram_field) ** 2)
-
-    # Reconstruct using PS-IDH
     reconstructed = ps_idh_reconstruct(i_stack, deltas, ref_amp)
+    expected = jnp.mean(i_stack * jnp.exp(1j * deltas)[:, None, None], axis=0) / ref_amp
 
-    # Check shape and type
     assert reconstructed.shape == (h, w)
     assert jnp.iscomplexobj(reconstructed)
-
-    # For perfect 4-step phase shifting, we should recover the original object field
-    # The reconstruction formula gives: O_hat = (1/M) * sum(I_k * exp(-j*delta_k)) / (2*R)
-    # For the synthetic data: I_k = |O + R*exp(j*delta_k)|^2
-    # This should approximately recover the object field
-    expected_amplitude = jnp.abs(object_field)
-    reconstructed_amplitude = jnp.abs(reconstructed)
-
-    # Check if the reconstructed amplitude is reasonable (not exact due to interference terms)
-    assert jnp.all(reconstructed_amplitude > 0)
-    assert reconstructed_amplitude.shape == expected_amplitude.shape
+    assert jnp.allclose(reconstructed, expected)
 
 
 def test_ps_idh_reconstruct_shape_mismatch() -> None:

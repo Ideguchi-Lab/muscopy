@@ -573,7 +573,7 @@ def offaxis_dh(
     Returns
     -------
     `jax.Array` | `list`\[`jax.Array`\]
-        The complex wave front. Returns a single array when `offaxis_centers`
+        The complex wave front. Returns a single array when ``offaxis_centers``
         is a single center tuple, or a list of arrays when it is a sequence of
         center tuples.
 

@@ -72,7 +72,7 @@ def qpi(
     Returns
     -------
     `jax.Array` | `list`\[`jax.Array`\]
-        The QPI phase image. Returns a single array when `offaxis_centers`
+        The QPI phase image. Returns a single array when ``offaxis_centers``
         is a single center tuple, or a list of arrays when it is a sequence of
         center tuples.
     """
@@ -110,7 +110,7 @@ def mip_qpi(
         Whether to remove the low-frequency center component from each cropped
         off-axis spectrum before reconstruction, by default False
     c_r : `int`, optional
-        Radius of the center high-pass mask used when `crop_center` is True,
+        Radius of the center high-pass mask used when ``crop_center`` is True,
         by default 5
     mip_center_reg : `Region` | `None`, optional
         Region used to estimate the central phase sign. When provided and the

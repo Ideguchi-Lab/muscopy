@@ -12,6 +12,10 @@ MIPRegion: TypeAlias = Region | None
 X64_BIT_LENGTH = 64
 
 
+def _jax_x64_enabled() -> bool:
+    return bool(jax.config.read("jax_enable_x64"))  # type: ignore[no-untyped-call]
+
+
 class ArrayPrecision:
     """A class to define the precision of arrays used in the library.
 
@@ -47,7 +51,7 @@ class ArrayPrecision:
         if self.float_length not in {32, 64}:
             msg = "float_length must be one of 32 or 64."
             raise ValueError(msg)
-        if X64_BIT_LENGTH in {self.int_length, self.float_length} and not jax.config.read("jax_enable_x64"):
+        if X64_BIT_LENGTH in {self.int_length, self.float_length} and not _jax_x64_enabled():
             msg = "64-bit precision requires JAX x64 support. Enable jax_enable_x64 before creating ArrayPrecision."
             raise ValueError(msg)
 

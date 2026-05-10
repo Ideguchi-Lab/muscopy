@@ -453,29 +453,29 @@ def compute_idt(  # noqa: PLR0914
     alpha: float = 1e-2,
     beta: float = 1e-2,
 ) -> tuple[Array, Array]:
-    """Compute the refractive index from intensity images using IDT.
+    r"""Compute the refractive index from intensity images using IDT.
 
-    Outline
-    -------
-    Step 1: Collect intensity images under different angles
-            I_list = [I_1, I_2, …]
-            illum_angles = [u_1, u_2,…]
-    Step 2: Subtract background and normalize
-            g_l = (I_l - I_background) / I_background
-            g_list = [g_1, g_2, …]
-    Step 3: Fourier Transform each image
-            g_tilde_l = fft2(g_l)
-            g_tilde_list = [g_tilde_1, …]
-    Step 4: Build Transfer Functions, depends on slice depth (z) and the angel of illumination
-            H_Re[l, m, x, y] #phase
-            H_Im[l, m, x, y] #absorption
-    Step 5: Solve inverse problem
-            Δε_Re[m] = ifft( weighted_sum_over_l( H_Re_conj * g̃ ) / (|H_Re|² + alpha) )
-            Δε_Im[m] = same thing but with H_Im and β
-    Slice by slice reconstruct
-            Δε_Re[x, y, z]
-            Δε_Im[x, y, z]
-    Step 6: Convert permittivity to refractive index
+    Processing steps
+    ----------------
+    1. Collect intensity images and illumination angles.
+    2. Subtract and normalize the background intensity.
+    3. Fourier transform each normalized intensity image.
+    4. Build transfer functions for each slice depth and illumination angle.
+    5. Solve the inverse problem slice by slice. For the real component,
+       the calculation follows:
+
+       .. math::
+
+          \Delta \epsilon_\mathrm{Re}[m] =
+          \operatorname{ifft}\left(
+              \frac{\sum_l H_{\mathrm{Re}, l}^* \tilde{g}_l}
+                   {|H_\mathrm{Re}|^2 + \alpha}
+          \right)
+
+       The imaginary component is solved analogously with
+       :math:`H_\mathrm{Im}` and :math:`\beta`.
+
+    6. Convert permittivity to refractive index.
 
     Parameters
     ----------

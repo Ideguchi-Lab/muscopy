@@ -1,6 +1,5 @@
 """Test cases for ODT module."""
 
-import jax
 import jax.numpy as jnp
 import pytest
 
@@ -19,12 +18,7 @@ def test_odt_config_defaults_to_32_bit_precision() -> None:
 
 def test_calc_scattering_potential_rejects_mutated_64_bit_precision(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that ODT validates precision before reconstruction."""
-    original_read = jax.config.read
-    monkeypatch.setattr(
-        jax.config,
-        "read",
-        lambda name: False if name == "jax_enable_x64" else original_read(name),
-    )
+    monkeypatch.setattr("muscopy.cfg._jax_x64_enabled", lambda: False)
     params = ODTParameters(
         na=0.1,
         wavelength_m=1.0,

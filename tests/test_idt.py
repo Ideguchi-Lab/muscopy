@@ -1,6 +1,5 @@
 """Test cases for IDT module."""
 
-import jax
 import jax.numpy as jnp
 import pytest
 
@@ -46,12 +45,7 @@ def test_compute_idt_returns_32_bit_arrays_by_default() -> None:
 
 
 def test_compute_idt_rejects_mutated_64_bit_precision(monkeypatch: pytest.MonkeyPatch) -> None:
-    original_read = jax.config.read
-    monkeypatch.setattr(
-        jax.config,
-        "read",
-        lambda name: False if name == "jax_enable_x64" else original_read(name),
-    )
+    monkeypatch.setattr("muscopy.cfg._jax_x64_enabled", lambda: False)
     params = _small_idt_params()
     precision = ArrayPrecision()
     precision.float_length = 64

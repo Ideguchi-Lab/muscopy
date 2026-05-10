@@ -1,5 +1,6 @@
 """Validate release artifact metadata against pyproject.toml."""
 
+# This is a standalone CI utility script, not an import package.
 # ruff: noqa: INP001
 
 from __future__ import annotations

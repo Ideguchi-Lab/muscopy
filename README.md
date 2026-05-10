@@ -1,30 +1,33 @@
-# microscopy_converters
+# muscopy
 
-A repository containg microscopy converters and test sets.
+Microscopy analysis utilities for quantitative phase imaging, digital holography,
+optical diffraction tomography, intensity diffraction tomography, phasor analysis,
+and related workflows.
 
 ## How to install
 
-First, clone this repository into your local machine
+First, clone this repository onto your local machine.
 
 ```sh
 git clone git@github.com:Ideguchi-Lab/muscopy.git
+cd muscopy
 ```
 
-Then, you can install this library as usual. I recommend to install it in editable mode because if you find a bug, you can fix it without unintall.
+Then, install the package in editable mode.
 
 ```sh
-(YOUR_VIRTUAL_ENV) pip install -e ./muscopy
+(YOUR_VIRTUAL_ENV) pip install -e .
 ```
 
-If you are willing to contribute, you can install development toolkit with the following installation.
+If you are willing to contribute, install the development dependencies.
 
 ```sh
-(YOUR_VIRTUAL_ENV) pip install -e ./muscopy[dev]
+(YOUR_VIRTUAL_ENV) pip install -e .[dev]
 ```
 
 ## Linter guide
 
-I described linter config in pyproject.toml file, so you can lint and check codes through typing
+The linter and type checker configuration is in `pyproject.toml`.
 
 ```sh
 ruff check ./muscopy    # code style check
@@ -38,7 +41,7 @@ pyright ./muscopy    # static type analysis
 You can build the documentation with the following command.
 
 ```sh
-pip install -e ./muscopy[docs]
+pip install -e .[doc]
 cd ./docs
 make html
 ```

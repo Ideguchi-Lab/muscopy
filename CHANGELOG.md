@@ -12,6 +12,7 @@
 
 - Changed `ArrayPrecision` defaults from 64-bit to portable 32-bit precision (`int32`, `float32`, `complex64`) [[#123](https://github.com/Ideguchi-Lab/muscopy/issues/123)]
 - Updated ODT and IDT reconstruction paths to use explicit precision settings consistently [[#123](https://github.com/Ideguchi-Lab/muscopy/issues/123)]
+- Cleaned up README, documentation landing page, and release metadata checks for consistent muscopy packaging terminology [[#122](https://github.com/Ideguchi-Lab/muscopy/issues/122)]
 - Clarified `offaxis_dh()` and `qpi()` docstrings for single-return and list-return behavior [[#121](https://github.com/Ideguchi-Lab/muscopy/issues/121)]
 - Validated `crop_array()` width as a positive odd integer to match its center-symmetric crop contract [[#121](https://github.com/Ideguchi-Lab/muscopy/issues/121)]
 

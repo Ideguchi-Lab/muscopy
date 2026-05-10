@@ -5,6 +5,16 @@
 ### Added
 
 - `py.typed` marker file for type hinting support [[#118](https://github.com/Ideguchi-Lab/muscopy/pull/118)]
+- `IDTConfig` for configuring IDT reconstruction precision [[#123](https://github.com/Ideguchi-Lab/muscopy/issues/123)]
+
+### Changed
+
+- Changed `ArrayPrecision` defaults from 64-bit to portable 32-bit precision (`int32`, `float32`, `complex64`) [[#123](https://github.com/Ideguchi-Lab/muscopy/issues/123)]
+- Updated ODT and IDT reconstruction paths to use explicit precision settings consistently [[#123](https://github.com/Ideguchi-Lab/muscopy/issues/123)]
+
+### Fixed
+
+- Added explicit validation for 64-bit precision requests when JAX x64 support is disabled, avoiding silent dtype truncation [[#123](https://github.com/Ideguchi-Lab/muscopy/issues/123)]
 
 ---
 

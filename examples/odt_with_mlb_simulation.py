@@ -233,8 +233,8 @@ def _setup_parameters() -> tuple[ODTParameters, MLBParameters, ArrayPrecision]:
     tuple[ODTParameters, MLBParameters, ArrayPrecision]
         ODT parameters, MLB parameters, and array precision settings
     """
-    # Use 32-bit precision to avoid JAX complex128 warnings (complex64 is sufficient)
-    precision = ArrayPrecision(int_length=16, float_length=32)
+    # The default precision is int32, float32, and complex64.
+    precision = ArrayPrecision()
 
     # ODT parameters
     print("Setting ODT parameters...")

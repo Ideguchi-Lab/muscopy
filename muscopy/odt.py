@@ -8,6 +8,8 @@ This module provides:
 - `synthesize_spectrum`: A function to synthesize scattering spectrums into 3D scattering potential.
 - `fill_hermite_components`: A function to fill the hermite conjugated spectrum for transparent sample.
 - `calc_refractive_index`: A function to calculate the refractive index from the scattering potential.
+- `calc_scattering_spectrums`: A function to calculate first-order scattering spectrums.
+- `calc_scattering_potential_from_spectrums`: A function to reconstruct scattering potential from spectrums.
 - `calc_scattering_potential`: A function to calculate the scattering potential from complex field spectrums.
 - `odt`: A function to perform ODT reconstruction.
 - `calculate_odt_difference`: A function to calculate the difference between two ODT reconstructions.
@@ -18,6 +20,7 @@ This module provides:
 from __future__ import annotations
 
 import dataclasses
+import warnings
 from typing import TYPE_CHECKING
 
 import jax.numpy as jnp
@@ -33,6 +36,7 @@ if TYPE_CHECKING:
 
 
 EPSILON = 1e-8
+_ODT_DEPRECATION_REMOVAL_VERSION = "0.9.0"
 
 
 @dataclasses.dataclass
@@ -198,10 +202,13 @@ class ScatteringSpectrum:
         Scattering spectrum
     illumination_vector : `tuple`\[`int`, `int`\]
         Illumination vector in px unit
+    coefficient : `complex`, optional
+        Linear coefficient applied to this spectrum during ODT synthesis.
     """
 
     array: Array
     illumination_vector: tuple[int, int]
+    coefficient: complex = 1.0 + 0.0j
 
 
 def synthesize_spectrum(
@@ -252,7 +259,7 @@ def synthesize_spectrum(
             mode=mode,
         )
 
-        synthesized_spectrum = synthesized_spectrum + scattering_potential  # noqa: PLR6104
+        synthesized_spectrum += scattering_spectrum.coefficient * scattering_potential
         synthesized_weight = synthesized_weight + (scattering_potential != 0)  # noqa: PLR6104
 
     synthesized_weight = synthesized_weight - (synthesized_weight > 1)  # noqa: PLR6104
@@ -322,14 +329,66 @@ def calc_scattering_potential(
     `tuple`\[`Array`, `Array`\]
         3D scattering potential, 3D spectrum
     """
+    _warn_deprecated_odt_api(
+        "calc_scattering_potential() is deprecated and will be removed in "
+        f"muscopy {_ODT_DEPRECATION_REMOVAL_VERSION}. Use calc_scattering_spectrums() followed by "
+        "calc_scattering_potential_from_spectrums() instead. Pass explicit illumination_vectors to "
+        "calc_scattering_spectrums() when the illumination geometry is known."
+    )
+    scattering_spectrums = calc_scattering_spectrums(cp_spectrums, ref_cp_spectrums, params, config)
+    return calc_scattering_potential_from_spectrums(scattering_spectrums, params, config)
+
+
+def calc_scattering_spectrums(
+    cp_spectrums: Sequence[Array],
+    ref_cp_spectrums: Sequence[Array],
+    params: ODTParameters,
+    config: ODTConfig,
+    illumination_vectors: Sequence[tuple[int, int]] | None = None,
+) -> list[ScatteringSpectrum]:
+    r"""Calculate first-order scattering spectrums from complex field spectrums.
+
+    Parameters
+    ----------
+    cp_spectrums : `collections.abc.Sequence`\[`Array`\]
+        Spectrum of complex fields.
+    ref_cp_spectrums : `collections.abc.Sequence`\[`Array`\]
+        Reference spectrum of complex fields.
+    params : `ODTParameters`
+        ODT parameter instance.
+    config : `ODTConfig`
+        ODT configuration.
+    illumination_vectors : `collections.abc.Sequence`\[`tuple`\[`int`, `int`\]\] | `None`, optional
+        Explicit illumination vectors in pixel units. If omitted, vectors are estimated
+        from the reference spectrum peak as in the legacy path.
+
+    Returns
+    -------
+    `list`\[`ScatteringSpectrum`\]
+        First-order scattering spectrums with illumination metadata.
+
+    Raises
+    ------
+    ValueError
+        If explicit illumination vector count does not match the spectrum count.
+    """
     params.verify_parameters()
     config.precision.validate()
-    # weak scattering approximation
+    if len(cp_spectrums) != len(ref_cp_spectrums):
+        msg = "cp_spectrums and ref_cp_spectrums must have the same length."
+        raise ValueError(msg)
+    if illumination_vectors is not None and len(illumination_vectors) != len(cp_spectrums):
+        msg = "illumination_vectors must match the number of complex field spectrums."
+        raise ValueError(msg)
+
     scattering_spectrums = []
-    for cp_spectrum, ref_cp_spectrum in zip(cp_spectrums, ref_cp_spectrums, strict=False):
-        max_x, max_y, _ = _find_max_args(jnp.abs(ref_cp_spectrum))
-        center_idx = cp_spectrum.shape[0] // 2
-        illumination_vector = (max_x - center_idx, max_y - center_idx)
+    for index, (cp_spectrum, ref_cp_spectrum) in enumerate(zip(cp_spectrums, ref_cp_spectrums, strict=True)):
+        if illumination_vectors is None:
+            max_x, max_y, _ = _find_max_args(jnp.abs(ref_cp_spectrum))
+            center_idx = cp_spectrum.shape[0] // 2
+            illumination_vector = (max_x - center_idx, max_y - center_idx)
+        else:
+            illumination_vector = illumination_vectors[index]
         expanded_cp_spectrum = _shift_dh_spectrum(params, cp_spectrum, illumination_vector, config.edge_size)
         expanded_cp_spectrum = jnp.asarray(expanded_cp_spectrum, dtype=config.precision.complex_precision())
         expanded_ref_cp_spectrum = _shift_dh_spectrum(params, ref_cp_spectrum, illumination_vector, config.edge_size)
@@ -348,6 +407,32 @@ def calc_scattering_potential(
         scattering_spectrum = ScatteringSpectrum(scattering_spectrum_array, illumination_vector)
         scattering_spectrums.append(scattering_spectrum)
 
+    return scattering_spectrums
+
+
+def calc_scattering_potential_from_spectrums(
+    scattering_spectrums: Iterable[ScatteringSpectrum],
+    params: ODTParameters,
+    config: ODTConfig,
+) -> tuple[Array, Array]:
+    r"""Calculate scattering potential from first-order scattering spectrums.
+
+    Parameters
+    ----------
+    scattering_spectrums : `collections.abc.Iterable`\[`ScatteringSpectrum`\]
+        First-order scattering spectrums with illumination metadata.
+    params : `ODTParameters`
+        ODT parameter instance.
+    config : `ODTConfig`
+        ODT configuration.
+
+    Returns
+    -------
+    `tuple`\[`Array`, `Array`\]
+        3D scattering potential and synthesized 3D spectrum.
+    """
+    params.verify_parameters()
+    config.precision.validate()
     synthesized_spectrum = synthesize_spectrum(scattering_spectrums, params, config, mode="Forward")
 
     if config.hermite_symmetry:
@@ -387,8 +472,17 @@ def odt(
     `tuple`\[`Array`, `Array`\]
         3D refractive index, 3D spectrum
     """
-    scattering_potential, synthesized_spectrum = calc_scattering_potential(
-        cp_spectrums, ref_cp_spectrums, params, config
+    _warn_deprecated_odt_api(
+        "odt() is deprecated and will be removed in "
+        f"muscopy {_ODT_DEPRECATION_REMOVAL_VERSION}. Use calc_scattering_spectrums(), "
+        "calc_scattering_potential_from_spectrums(), and calc_refractive_index() instead. For linear approximation, "
+        "apply the same linear conversion currently used by odt() after reconstructing the scattering potential."
+    )
+    scattering_spectrums = calc_scattering_spectrums(cp_spectrums, ref_cp_spectrums, params, config)
+    scattering_potential, synthesized_spectrum = calc_scattering_potential_from_spectrums(
+        scattering_spectrums,
+        params,
+        config,
     )
     if config.linear_approx:
         factor = -((params.light_freq_px * params.k_per_px) ** 2) * params.n_sol
@@ -526,6 +620,10 @@ def _find_max_args(array: Array) -> tuple[int, int, float]:
     max_x = int(max_index[0])
     max_y = int(max_index[1])
     return max_x, max_y, max_value
+
+
+def _warn_deprecated_odt_api(message: str) -> None:
+    warnings.warn(message, FutureWarning, stacklevel=2)
 
 
 def _shift_dh_spectrum(

@@ -11,7 +11,10 @@ from muscopy.cfg import ArrayPrecision
 from muscopy.odt import (
     ODTConfig,
     ODTParameters,
+    ScatteringSpectrum,
     calc_scattering_potential,
+    calc_scattering_potential_from_spectrums,
+    calc_scattering_spectrums,
     calculate_odt_difference,
     synthesize_spectrum,
 )
@@ -77,8 +80,199 @@ def test_calc_scattering_potential_rejects_mutated_64_bit_precision(monkeypatch:
     precision.float_length = 64
     config = ODTConfig(precision=precision)
 
-    with pytest.raises(ValueError, match="64-bit precision requires JAX x64 support"):
+    with (
+        pytest.warns(FutureWarning, match="calc_scattering_potential\\(\\) is deprecated"),
+        pytest.raises(ValueError, match="64-bit precision requires JAX x64 support"),
+    ):
         calc_scattering_potential([], [], params, config)
+
+
+def test_synthesize_spectrum_applies_scattering_spectrum_coefficient() -> None:
+    """Test that weighted ODT synthesis applies per-spectrum linear coefficients."""
+    params = ODTParameters(
+        na=0.1,
+        wavelength_m=1.0,
+        img_size_px=8,
+        px_size_m=1.0,
+        n_sol=1.33,
+        na_illumination=0.1,
+    )
+    config = ODTConfig(hermite_symmetry=False)
+    spectrum_shape = 2 * params.aperturesize_px + 1
+    spectrum = jnp.ones((spectrum_shape, spectrum_shape), dtype=jnp.complex64)
+    coefficient = 2.0 + 0.5j
+
+    unweighted = synthesize_spectrum([ScatteringSpectrum(spectrum, (0, 0))], params, config)
+    weighted = synthesize_spectrum([ScatteringSpectrum(spectrum, (0, 0), coefficient)], params, config)
+
+    assert jnp.allclose(weighted, coefficient * unweighted)
+
+
+def test_synthesize_spectrum_keeps_coverage_count_independent_from_coefficients() -> None:
+    """Test that weighted synthesis still averages overlaps by support count."""
+    params = ODTParameters(
+        na=0.1,
+        wavelength_m=1.0,
+        img_size_px=8,
+        px_size_m=1.0,
+        n_sol=1.33,
+        na_illumination=0.1,
+    )
+    config = ODTConfig(hermite_symmetry=False)
+    spectrum_shape = 2 * params.aperturesize_px + 1
+    spectrum = jnp.ones((spectrum_shape, spectrum_shape), dtype=jnp.complex64)
+    coefficient_1 = 2.0 + 0.0j
+    coefficient_2 = 6.0 + 0.0j
+
+    single = synthesize_spectrum([ScatteringSpectrum(spectrum, (0, 0))], params, config)
+    overlapped = synthesize_spectrum(
+        [
+            ScatteringSpectrum(spectrum, (0, 0), coefficient_1),
+            ScatteringSpectrum(spectrum, (0, 0), coefficient_2),
+        ],
+        params,
+        config,
+    )
+
+    assert jnp.allclose(overlapped, ((coefficient_1 + coefficient_2) / 2) * single)
+
+
+def test_calc_scattering_potential_matches_factored_reconstruction_path() -> None:
+    """Test that the legacy wrapper matches the explicit factored ODT path."""
+    params = ODTParameters(
+        na=0.1,
+        wavelength_m=1.0,
+        img_size_px=8,
+        px_size_m=1.0,
+        n_sol=1.33,
+        na_illumination=0.1,
+    )
+    config = ODTConfig(hermite_symmetry=False)
+    cp_spectrum = jnp.ones((params.aperturesize_px, params.aperturesize_px), dtype=jnp.complex64)
+    ref_cp_spectrum = jnp.ones_like(cp_spectrum)
+
+    with pytest.warns(FutureWarning, match="calc_scattering_potential\\(\\) is deprecated"):
+        wrapped_potential, wrapped_spectrum = calc_scattering_potential(
+            [cp_spectrum],
+            [ref_cp_spectrum],
+            params,
+            config,
+        )
+    scattering_spectrums = calc_scattering_spectrums([cp_spectrum], [ref_cp_spectrum], params, config)
+    factored_potential, factored_spectrum = calc_scattering_potential_from_spectrums(
+        scattering_spectrums,
+        params,
+        config,
+    )
+
+    assert jnp.allclose(wrapped_potential, factored_potential)
+    assert jnp.allclose(wrapped_spectrum, factored_spectrum)
+
+
+def test_calc_scattering_potential_warns_with_migration_path() -> None:
+    """Test that the deprecated ODT wrapper points callers to the factored API."""
+    params = ODTParameters(
+        na=0.1,
+        wavelength_m=1.0,
+        img_size_px=8,
+        px_size_m=1.0,
+        n_sol=1.33,
+        na_illumination=0.1,
+    )
+    config = ODTConfig(hermite_symmetry=False)
+    cp_spectrum = jnp.ones((params.aperturesize_px, params.aperturesize_px), dtype=jnp.complex64)
+    ref_cp_spectrum = jnp.ones_like(cp_spectrum)
+
+    with pytest.warns(FutureWarning, match="calc_scattering_spectrums\\(\\) followed by"):
+        calc_scattering_potential([cp_spectrum], [ref_cp_spectrum], params, config)
+
+
+def test_odt_warns_with_migration_path() -> None:
+    """Test that the deprecated high-level ODT wrapper points callers to the factored API."""
+    params = ODTParameters(
+        na=0.1,
+        wavelength_m=1.0,
+        img_size_px=8,
+        px_size_m=1.0,
+        n_sol=1.33,
+        na_illumination=0.1,
+    )
+    config = ODTConfig(hermite_symmetry=False)
+    cp_spectrum = jnp.ones((params.aperturesize_px, params.aperturesize_px), dtype=jnp.complex64)
+    ref_cp_spectrum = jnp.ones_like(cp_spectrum)
+
+    with pytest.warns(FutureWarning, match="calc_scattering_spectrums\\(\\)"):
+        refractive_index, synthesized_spectrum = odt_module.odt([cp_spectrum], [ref_cp_spectrum], params, config)
+
+    assert refractive_index.ndim == 3
+    assert synthesized_spectrum.ndim == 3
+
+
+def test_calc_scattering_spectrums_preserves_explicit_illumination_vectors() -> None:
+    """Test that explicit illumination vectors bypass reference peak inference."""
+    params = ODTParameters(
+        na=0.1,
+        wavelength_m=1.0,
+        img_size_px=8,
+        px_size_m=1.0,
+        n_sol=1.33,
+        na_illumination=0.1,
+    )
+    config = ODTConfig(hermite_symmetry=False)
+    cp_spectrum = jnp.ones((params.aperturesize_px, params.aperturesize_px), dtype=jnp.complex64)
+    ref_cp_spectrum = jnp.ones_like(cp_spectrum)
+
+    scattering_spectrums = calc_scattering_spectrums(
+        [cp_spectrum],
+        [ref_cp_spectrum],
+        params,
+        config,
+        illumination_vectors=[(0, 0)],
+    )
+
+    assert len(scattering_spectrums) == 1
+    assert scattering_spectrums[0].illumination_vector == (0, 0)
+
+
+def test_calc_scattering_spectrums_rejects_illumination_vector_count_mismatch() -> None:
+    """Test that explicit illumination metadata must align with the input spectra."""
+    params = ODTParameters(
+        na=0.1,
+        wavelength_m=1.0,
+        img_size_px=8,
+        px_size_m=1.0,
+        n_sol=1.33,
+        na_illumination=0.1,
+    )
+    config = ODTConfig(hermite_symmetry=False)
+    cp_spectrum = jnp.ones((params.aperturesize_px, params.aperturesize_px), dtype=jnp.complex64)
+    ref_cp_spectrum = jnp.ones_like(cp_spectrum)
+
+    with pytest.raises(ValueError, match="illumination_vectors must match"):
+        calc_scattering_spectrums(
+            [cp_spectrum],
+            [ref_cp_spectrum],
+            params,
+            config,
+            illumination_vectors=[],
+        )
+
+
+def test_calc_scattering_spectrums_rejects_reference_count_mismatch() -> None:
+    """Test that target and reference spectrum counts must match."""
+    params = ODTParameters(
+        na=0.1,
+        wavelength_m=1.0,
+        img_size_px=8,
+        px_size_m=1.0,
+        n_sol=1.33,
+        na_illumination=0.1,
+    )
+    config = ODTConfig(hermite_symmetry=False)
+    cp_spectrum = jnp.ones((params.aperturesize_px, params.aperturesize_px), dtype=jnp.complex64)
+
+    with pytest.raises(ValueError, match="cp_spectrums and ref_cp_spectrums must have the same length"):
+        calc_scattering_spectrums([cp_spectrum], [], params, config)
 
 
 class TestCalculateODTDifference:
@@ -185,14 +379,15 @@ class TestCalculateODTDifference:
         try:
             # Only test that function starts without input validation errors
             # We expect it may fail later due to simplified test data
-            calculate_odt_difference(
-                cp_spectrums_1,
-                ref_cp_spectrums_1,
-                cp_spectrums_2,
-                ref_cp_spectrums_2,
-                self.params,
-                self.config,
-            )
+            with pytest.warns(FutureWarning, match="odt\\(\\) is deprecated"):
+                calculate_odt_difference(
+                    cp_spectrums_1,
+                    ref_cp_spectrums_1,
+                    cp_spectrums_2,
+                    ref_cp_spectrums_2,
+                    self.params,
+                    self.config,
+                )
         except ValueError as e:
             # If it's an input validation error we're testing for, re-raise
             if any(keyword in str(e) for keyword in ["number of spectrums", "must be the same", "must match"]):

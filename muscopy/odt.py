@@ -472,12 +472,6 @@ def odt(
     `tuple`\[`Array`, `Array`\]
         3D refractive index, 3D spectrum
     """
-    _warn_deprecated_odt_api(
-        "odt() is deprecated and will be removed in "
-        f"muscopy {_ODT_DEPRECATION_REMOVAL_VERSION}. Use calc_scattering_spectrums(), "
-        "calc_scattering_potential_from_spectrums(), and calc_refractive_index() instead. For linear approximation, "
-        "apply the same linear conversion currently used by odt() after reconstructing the scattering potential."
-    )
     scattering_spectrums = calc_scattering_spectrums(cp_spectrums, ref_cp_spectrums, params, config)
     scattering_potential, synthesized_spectrum = calc_scattering_potential_from_spectrums(
         scattering_spectrums,

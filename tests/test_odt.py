@@ -1,5 +1,6 @@
 """Test cases for ODT module."""
 
+import warnings
 from collections.abc import Sequence
 
 import jax.numpy as jnp
@@ -187,8 +188,8 @@ def test_calc_scattering_potential_warns_with_migration_path() -> None:
         calc_scattering_potential([cp_spectrum], [ref_cp_spectrum], params, config)
 
 
-def test_odt_warns_with_migration_path() -> None:
-    """Test that the deprecated high-level ODT wrapper points callers to the factored API."""
+def test_odt_remains_supported_without_deprecation_warning() -> None:
+    """Test that the high-level ODT wrapper remains supported."""
     params = ODTParameters(
         na=0.1,
         wavelength_m=1.0,
@@ -201,9 +202,11 @@ def test_odt_warns_with_migration_path() -> None:
     cp_spectrum = jnp.ones((params.aperturesize_px, params.aperturesize_px), dtype=jnp.complex64)
     ref_cp_spectrum = jnp.ones_like(cp_spectrum)
 
-    with pytest.warns(FutureWarning, match="calc_scattering_spectrums\\(\\)"):
+    with warnings.catch_warnings(record=True) as caught_warnings:
+        warnings.simplefilter("always")
         refractive_index, synthesized_spectrum = odt_module.odt([cp_spectrum], [ref_cp_spectrum], params, config)
 
+    assert not [warning for warning in caught_warnings if issubclass(warning.category, FutureWarning)]
     assert refractive_index.ndim == 3
     assert synthesized_spectrum.ndim == 3
 
@@ -379,15 +382,14 @@ class TestCalculateODTDifference:
         try:
             # Only test that function starts without input validation errors
             # We expect it may fail later due to simplified test data
-            with pytest.warns(FutureWarning, match="odt\\(\\) is deprecated"):
-                calculate_odt_difference(
-                    cp_spectrums_1,
-                    ref_cp_spectrums_1,
-                    cp_spectrums_2,
-                    ref_cp_spectrums_2,
-                    self.params,
-                    self.config,
-                )
+            calculate_odt_difference(
+                cp_spectrums_1,
+                ref_cp_spectrums_1,
+                cp_spectrums_2,
+                ref_cp_spectrums_2,
+                self.params,
+                self.config,
+            )
         except ValueError as e:
             # If it's an input validation error we're testing for, re-raise
             if any(keyword in str(e) for keyword in ["number of spectrums", "must be the same", "must match"]):

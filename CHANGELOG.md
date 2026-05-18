@@ -22,7 +22,7 @@
 
 ### Deprecated
 
-- Deprecated `calc_scattering_potential()` and `odt()` in favor of the factored ODT reconstruction APIs. They now emit `FutureWarning` and are scheduled for removal in version 0.9.0.
+- Deprecated `calc_scattering_potential()` in favor of the factored ODT reconstruction APIs. It now emits `FutureWarning` and is scheduled for removal in version 0.9.0. The high-level `odt()` API remains supported.
 
 ### Fixed
 

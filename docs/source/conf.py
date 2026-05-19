@@ -62,7 +62,7 @@ pygments_dark_style = "monokai"
 
 # Configure Sphinx-Gallery ignore pattern based on environment
 ignore_pattern = r"__init__\.py"
-if os.getenv("CI") == "true":
+if os.getenv("CI", "").lower() == "true":
     # Ignore MLB simulation examples in CI environment where muscopy_mlbsim is not available
     ignore_pattern = r"(__init__|odt_with_mlb_simulation|idt_with_mlb_simulation)\.py"
 

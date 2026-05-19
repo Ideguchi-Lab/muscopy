@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import dataclasses
 import warnings
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, TypeAlias
 
 import jax.numpy as jnp
 from jax import Array
@@ -37,6 +37,7 @@ if TYPE_CHECKING:
 
 EPSILON = 1e-8
 _ODT_DEPRECATION_REMOVAL_VERSION = "0.9.0"
+EwaldEmbeddingMode: TypeAlias = Literal["truncate", "nearest", "linear"]
 
 
 @dataclasses.dataclass
@@ -179,6 +180,12 @@ class ODTConfig:
         Size of removed edge in FT calculation.
     offset_regions : `OffsetRegions`, optional
         Regions to be used for offset calculation.
+    gradient_correction : `bool`, optional
+        Whether to remove a median-estimated linear phase ramp from each scattering field.
+    ewald_embedding_mode : `str`, optional
+        Ewald sphere embedding mode. "truncate" preserves the legacy integer truncation,
+        "nearest" places each sample on the nearest axial plane, and "linear" splats
+        each sample into adjacent axial planes with linear weights.
     verbose : `bool`, optional
         Whether to print reconstruction status and progress output.
     """
@@ -189,6 +196,8 @@ class ODTConfig:
     precision: ArrayPrecision = dataclasses.field(default_factory=ArrayPrecision)
     edge_size: int = 0
     offset_regions: OffsetRegions = None
+    gradient_correction: bool = True
+    ewald_embedding_mode: EwaldEmbeddingMode = "truncate"
     verbose: bool = False
 
 
@@ -243,7 +252,7 @@ def synthesize_spectrum(
         ),
         dtype=config.precision.complex_precision(),
     )
-    synthesized_weight = jnp.ones_like(synthesized_spectrum, dtype=config.precision.int_precision())
+    synthesized_weight = jnp.zeros_like(synthesized_spectrum, dtype=config.precision.float_precision())
 
     if config.verbose:
         print("Synthesize spectrum...")  # noqa: T201
@@ -251,18 +260,19 @@ def synthesize_spectrum(
         kz_disk = _calc_kz_disk(
             params, scattering_spectrum.array.shape[0], scattering_spectrum.illumination_vector, config.precision
         )
-        scattering_potential = _embed_3d_spectrum(
+        scattering_potential, embedding_weight = _embed_3d_spectrum_with_weights(
             scattering_spectrum.array * 2j * kz_disk,
             (synthesized_spectrum.shape[0], synthesized_spectrum.shape[1], synthesized_spectrum.shape[2]),
             params,
             scattering_spectrum.illumination_vector,
             mode=mode,
+            ewald_embedding_mode=config.ewald_embedding_mode,
         )
 
         synthesized_spectrum += scattering_spectrum.coefficient * scattering_potential
-        synthesized_weight = synthesized_weight + (scattering_potential != 0)  # noqa: PLR6104
+        synthesized_weight += embedding_weight
 
-    synthesized_weight = synthesized_weight - (synthesized_weight > 1)  # noqa: PLR6104
+    synthesized_weight = jnp.where(synthesized_weight > 0, synthesized_weight, 1)
     return synthesized_spectrum / synthesized_weight
 
 
@@ -403,6 +413,7 @@ def calc_scattering_spectrums(
             illumination_vector,
             config.edge_size,
             config.offset_regions,
+            config.gradient_correction,
         )
         scattering_spectrum = ScatteringSpectrum(scattering_spectrum_array, illumination_vector)
         scattering_spectrums.append(scattering_spectrum)
@@ -628,16 +639,14 @@ def _shift_dh_spectrum(
         (2 * params.aperturesize_px + 1 + 2 * edge_size, 2 * params.aperturesize_px + 1 + 2 * edge_size),
         dtype=cp_spectrum.dtype,
     )
+    center_x = expanded_cp_spectrum.shape[0] // 2
+    center_y = expanded_cp_spectrum.shape[1] // 2
+    start_x = center_x - cp_spectrum.shape[0] // 2 - illumination_vector[0]
+    start_y = center_y - cp_spectrum.shape[1] // 2 - illumination_vector[1]
 
     return expanded_cp_spectrum.at[
-        params.aperturesize_px // 2 - illumination_vector[0] + edge_size : 3 * (params.aperturesize_px // 2)
-        - illumination_vector[0]
-        + 1
-        + edge_size,
-        params.aperturesize_px // 2 - illumination_vector[1] + edge_size : 3 * (params.aperturesize_px // 2)
-        - illumination_vector[1]
-        + 1
-        + edge_size,
+        start_x : start_x + cp_spectrum.shape[0],
+        start_y : start_y + cp_spectrum.shape[1],
     ].set(cp_spectrum)
 
 
@@ -649,6 +658,7 @@ def _calc_1st_scattering_spectrum(
     illumination_vector: tuple[int, int],
     edge_size: int = 0,
     offset_regions: OffsetRegions = None,
+    gradient_correction: bool = True,
 ) -> Array:
     if edge_size != 0:
         cp_field = cp_field[edge_size:-edge_size, edge_size:-edge_size]
@@ -666,7 +676,8 @@ def _calc_1st_scattering_spectrum(
     if offset_regions:
         scattering_field = correct_offset(scattering_field, offset_regions)
 
-    scattering_field = correct_gradient(scattering_field, edge_size=edge_size)
+    if gradient_correction:
+        scattering_field = correct_gradient(scattering_field, edge_size=edge_size)
 
     scattering_spectrum = (
         jnp.fft.fftshift(jnp.fft.fft2(scattering_field, norm="ortho"))
@@ -685,27 +696,86 @@ def _calc_1st_scattering_spectrum(
 
 
 def _log_field(cp_field: Array, ref_cp_field: Array) -> Array:
-    field_log = jnp.log(cp_field + EPSILON)
-    field_log_real = jnp.real(field_log)
-    field_log_imag = jnp.imag(field_log)
-    ref_field_log = jnp.log(ref_cp_field + EPSILON)
-    ref_field_log_real = jnp.real(ref_field_log)
-    ref_field_log_imag = jnp.imag(ref_field_log)
+    field_log_amplitude = jnp.log(jnp.maximum(jnp.abs(cp_field), EPSILON))
+    ref_field_log_amplitude = jnp.log(jnp.maximum(jnp.abs(ref_cp_field), EPSILON))
 
-    amplitude = field_log_real - ref_field_log_real
-    phase = unwrap_phase(field_log_imag - ref_field_log_imag)
+    amplitude = field_log_amplitude - ref_field_log_amplitude
+    phase = unwrap_phase(jnp.angle(cp_field) - jnp.angle(ref_cp_field))
 
     return amplitude + 1j * phase
 
 
-# @jax.jit
 def _embed_3d_spectrum(
     spectrum2d: Array,
     shape_3d: tuple[int, int, int],
     params: ODTParameters,
     illumination_vector: tuple[int, int],
     mode: str,
+    ewald_embedding_mode: EwaldEmbeddingMode = "truncate",
 ) -> Array:
+    embedded_spectrum, _ = _embed_3d_spectrum_with_weights(
+        spectrum2d,
+        shape_3d,
+        params,
+        illumination_vector,
+        mode,
+        ewald_embedding_mode,
+    )
+    return embedded_spectrum
+
+
+def _embed_3d_spectrum_with_weights(
+    spectrum2d: Array,
+    shape_3d: tuple[int, int, int],
+    params: ODTParameters,
+    illumination_vector: tuple[int, int],
+    mode: str,
+    ewald_embedding_mode: EwaldEmbeddingMode,
+) -> tuple[Array, Array]:
+    embedding_weight = _calc_ewald_embedding_weight(
+        shape_3d,
+        params,
+        illumination_vector,
+        mode,
+        ewald_embedding_mode,
+    )
+    array_tiled = jnp.stack([spectrum2d] * shape_3d[2], axis=2)
+    return array_tiled * embedding_weight, embedding_weight
+
+
+def _calc_ewald_embedding_weight(
+    shape_3d: tuple[int, int, int],
+    params: ODTParameters,
+    illumination_vector: tuple[int, int],
+    mode: str,
+    ewald_embedding_mode: EwaldEmbeddingMode,
+) -> Array:
+    xx, yy, zz = _make_ewald_coordinate_grids(shape_3d)
+    circle = (xx + illumination_vector[0]) ** 2 + (yy + illumination_vector[1]) ** 2 <= (
+        params.aperturesize_px // 2
+    ) ** 2
+    fz_circle = _calc_ewald_fz_circle(xx, yy, params, illumination_vector, mode)
+
+    if ewald_embedding_mode == "truncate":
+        return _calc_single_plane_ewald_embedding_weight(
+            zz,
+            circle,
+            fz_circle.astype(jnp.int32),
+            shape_3d[2],
+        ).astype(fz_circle.dtype)
+
+    if ewald_embedding_mode == "nearest":
+        fz_nearest = _round_half_away_from_zero(fz_circle).astype(jnp.int32)
+        return _calc_single_plane_ewald_embedding_weight(zz, circle, fz_nearest, shape_3d[2]).astype(fz_circle.dtype)
+
+    if ewald_embedding_mode == "linear":
+        return _calc_linear_ewald_embedding_weight(zz, circle, fz_circle, shape_3d[2])
+
+    msg = f"Unknown Ewald embedding mode: {ewald_embedding_mode}"
+    raise ValueError(msg)
+
+
+def _make_ewald_coordinate_grids(shape_3d: tuple[int, int, int]) -> tuple[Array, Array, Array]:
     xx, yy = jnp.meshgrid(
         jnp.arange(-shape_3d[0] // 2 + 1, shape_3d[0] // 2 + 1),
         jnp.arange(-shape_3d[1] // 2 + 1, shape_3d[1] // 2 + 1),
@@ -719,27 +789,58 @@ def _embed_3d_spectrum(
         indexing="ij",
     )
 
-    circle = (xx + illumination_vector[0]) ** 2 + (yy + illumination_vector[1]) ** 2 <= (
-        params.aperturesize_px // 2
-    ) ** 2
+    return xx, yy, zz
 
+
+def _calc_ewald_fz_circle(
+    xx: Array,
+    yy: Array,
+    params: ODTParameters,
+    illumination_vector: tuple[int, int],
+    mode: str,
+) -> Array:
     fz_circle = jnp.sqrt(
         params.light_freq_px**2 - (xx + illumination_vector[0]) ** 2 - (yy + illumination_vector[1]) ** 2
     ) - jnp.sqrt(params.light_freq_px**2 - illumination_vector[0] ** 2 - illumination_vector[1] ** 2)
 
     if mode == "Backward":
-        fz_circle = -fz_circle
+        return -fz_circle
 
-    fz_value = fz_circle * circle
-    fz_value -= (1 - circle) * 2 * params.freq_axial_extent_px
-    fz_tile = jnp.tile(fz_value, (shape_3d[2], 1, 1))
-    fz_tile = fz_tile.transpose(1, 2, 0)
-    fz_tile = fz_tile.astype(jnp.int32)  # necessary for the equivalence check
+    return fz_circle
 
-    fz_index = zz == fz_tile
 
-    array_tiled = jnp.stack([spectrum2d] * shape_3d[2], axis=2)
-    return array_tiled * fz_index
+def _calc_single_plane_ewald_embedding_weight(
+    zz: Array,
+    circle: Array,
+    fz_plane: Array,
+    axial_size: int,
+) -> Array:
+    fz_tile = _tile_z_plane(fz_plane, axial_size)
+    return jnp.asarray((zz == fz_tile) & circle[:, :, None], dtype=fz_tile.dtype)
+
+
+def _calc_linear_ewald_embedding_weight(zz: Array, circle: Array, fz_circle: Array, axial_size: int) -> Array:
+    fz_floor = jnp.floor(fz_circle)
+    fz_ceil = fz_floor + 1
+    lower_weight = fz_ceil - fz_circle
+    upper_weight = fz_circle - fz_floor
+    lower_tile = _tile_z_plane(fz_floor.astype(jnp.int32), axial_size)
+    upper_tile = _tile_z_plane(fz_ceil.astype(jnp.int32), axial_size)
+    lower_weight_tile = _tile_z_plane(lower_weight, axial_size)
+    upper_weight_tile = _tile_z_plane(upper_weight, axial_size)
+    circle_tile = jnp.asarray(circle[:, :, None], dtype=fz_circle.dtype)
+    return (
+        jnp.asarray(zz == lower_tile, dtype=fz_circle.dtype) * lower_weight_tile
+        + jnp.asarray(zz == upper_tile, dtype=fz_circle.dtype) * upper_weight_tile
+    ) * circle_tile
+
+
+def _tile_z_plane(array2d: Array, axial_size: int) -> Array:
+    return jnp.tile(array2d, (axial_size, 1, 1)).transpose(1, 2, 0)
+
+
+def _round_half_away_from_zero(array: Array) -> Array:
+    return jnp.sign(array) * jnp.floor(jnp.abs(array) + 0.5)
 
 
 def _calc_kz_disk(

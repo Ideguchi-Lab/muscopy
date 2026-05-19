@@ -33,6 +33,18 @@ Examples
     jax.config.update("jax_enable_x64", True)
     precision = ArrayPrecision(int_length=64, float_length=64)
 
+ODT Reconstruction Options
+--------------------------
+
+``ODTConfig.gradient_correction`` defaults to ``True`` to preserve the existing
+ODT reconstruction behavior. Set it to ``False`` when sample-derived linear
+phase gradients should be preserved.
+
+``ODTConfig.ewald_embedding_mode`` defaults to ``"truncate"`` for compatibility
+with legacy Ewald sphere embedding. Use ``"nearest"`` for explicit nearest-plane
+placement or ``"linear"`` to distribute each Ewald sample into adjacent axial
+planes with linear weights.
+
 .. automodule:: muscopy.cfg
     :members:
 

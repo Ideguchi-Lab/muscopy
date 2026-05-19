@@ -7,6 +7,7 @@
 - `py.typed` marker file for type hinting support [[#118](https://github.com/Ideguchi-Lab/muscopy/pull/118)]
 - `IDTConfig` for configuring IDT reconstruction precision [[#123](https://github.com/Ideguchi-Lab/muscopy/issues/123)]
 - `ODTConfig.verbose` option to make ODT reconstruction status and progress output opt-in [[#121](https://github.com/Ideguchi-Lab/muscopy/issues/121)]
+- `ODTConfig.gradient_correction` and `ODTConfig.ewald_embedding_mode` options for controlling ODT signal-fidelity corrections [[#127](https://github.com/Ideguchi-Lab/muscopy/issues/127)]
 - Factored ODT reconstruction APIs:
   - `calc_scattering_spectrums()` for first-order scattering spectrum extraction
   - `calc_scattering_potential_from_spectrums()` for ODT synthesis from prepared `ScatteringSpectrum` values
@@ -29,6 +30,7 @@
 - Added explicit validation for 64-bit precision requests when JAX x64 support is disabled, avoiding silent dtype truncation [[#123](https://github.com/Ideguchi-Lab/muscopy/issues/123)]
 - Updated `mip_qpi()` and `ps_idh_reconstruct()` documentation to describe the implemented behavior accurately [[#121](https://github.com/Ideguchi-Lab/muscopy/issues/121)]
 - Added explicit ODT target/reference spectrum count validation before first-order spectrum extraction.
+- Fixed centered ODT spectrum placement, support-based spectrum synthesis weights, and Rytov low-amplitude phase stabilization [[#127](https://github.com/Ideguchi-Lab/muscopy/issues/127)]
 
 ---
 

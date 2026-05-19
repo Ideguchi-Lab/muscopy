@@ -1,5 +1,6 @@
 """Test cases for ODT module."""
 
+import math
 import warnings
 from collections.abc import Sequence
 
@@ -28,6 +29,8 @@ def test_odt_config_defaults_to_32_bit_precision() -> None:
     assert config.precision.int_precision() == "int32"
     assert config.precision.float_precision() == "float32"
     assert config.precision.complex_precision() == "complex64"
+    assert config.gradient_correction is True
+    assert config.ewald_embedding_mode == "truncate"
     assert config.verbose is False
 
 
@@ -136,6 +139,261 @@ def test_synthesize_spectrum_keeps_coverage_count_independent_from_coefficients(
     )
 
     assert jnp.allclose(overlapped, ((coefficient_1 + coefficient_2) / 2) * single)
+
+
+def test_synthesize_spectrum_counts_zero_values_as_observed_support() -> None:
+    """Test that zero-valued measurements still contribute to ODT overlap averaging."""
+    params = ODTParameters(
+        na=0.1,
+        wavelength_m=1.0,
+        img_size_px=8,
+        px_size_m=1.0,
+        n_sol=1.33,
+        na_illumination=0.1,
+    )
+    config = ODTConfig(hermite_symmetry=False)
+    spectrum_shape = 2 * params.aperturesize_px + 1
+    measured_spectrum = jnp.ones((spectrum_shape, spectrum_shape), dtype=jnp.complex64)
+    zero_spectrum = jnp.zeros_like(measured_spectrum)
+
+    single = synthesize_spectrum([ScatteringSpectrum(measured_spectrum, (0, 0))], params, config)
+    overlapped_with_zero = synthesize_spectrum(
+        [
+            ScatteringSpectrum(measured_spectrum, (0, 0)),
+            ScatteringSpectrum(zero_spectrum, (0, 0)),
+        ],
+        params,
+        config,
+    )
+    observed_mask = jnp.abs(single) > 0
+
+    assert jnp.any(observed_mask)
+    assert jnp.allclose(overlapped_with_zero[observed_mask], single[observed_mask] / 2)
+
+
+def test_shift_dh_spectrum_preserves_center_for_zero_illumination() -> None:
+    """Test that zero illumination keeps a centered DH spectrum at the expanded center."""
+    params = ODTParameters(
+        na=1.2,
+        wavelength_m=532e-9,
+        img_size_px=64,
+        px_size_m=100e-9,
+        n_sol=1.33,
+        na_illumination=0.9,
+    )
+    cp_spectrum = jnp.zeros((params.aperturesize_px, params.aperturesize_px), dtype=jnp.complex64)
+    cp_spectrum = cp_spectrum.at[params.aperturesize_px // 2, params.aperturesize_px // 2].set(1)
+
+    shifted = odt_module._shift_dh_spectrum(params, cp_spectrum, (0, 0))  # noqa: SLF001
+    shifted_with_edge = odt_module._shift_dh_spectrum(params, cp_spectrum, (0, 0), edge_size=2)  # noqa: SLF001
+
+    assert shifted.shape == (59, 59)
+    assert tuple(index.item() for index in jnp.unravel_index(jnp.argmax(jnp.abs(shifted)), shifted.shape)) == (29, 29)
+    assert tuple(
+        index.item() for index in jnp.unravel_index(jnp.argmax(jnp.abs(shifted_with_edge)), shifted_with_edge.shape)
+    ) == (31, 31)
+
+
+def test_embed_3d_spectrum_supports_explicit_ewald_placement_modes() -> None:
+    """Test Ewald truncation, nearest-plane, and linear axial interpolation semantics."""
+    params = ODTParameters(
+        na=0.5,
+        wavelength_m=1.0,
+        img_size_px=10,
+        px_size_m=1.0,
+        n_sol=1.0,
+        na_illumination=0.5,
+    )
+    illumination_vector = (4, 0)
+    shape_3d = (2 * params.aperturesize_px + 1, 2 * params.aperturesize_px + 1, params.freq_axial_extent_px)
+    coord_x, coord_y = -5, 0
+    x_index = coord_x - (-shape_3d[0] // 2 + 1)
+    y_index = coord_y - (-shape_3d[1] // 2 + 1)
+    z_zero_index = 0 - (-shape_3d[2] // 2 + 1)
+    z_one_index = 1 - (-shape_3d[2] // 2 + 1)
+    spectrum2d = jnp.zeros(shape_3d[:2], dtype=jnp.complex64)
+    spectrum2d = spectrum2d.at[x_index, y_index].set(1)
+    fz_value = math.sqrt(params.light_freq_px**2 - (coord_x + illumination_vector[0]) ** 2) - math.sqrt(
+        params.light_freq_px**2 - illumination_vector[0] ** 2
+    )
+
+    truncated = odt_module._embed_3d_spectrum(  # noqa: SLF001
+        spectrum2d,
+        shape_3d,
+        params,
+        illumination_vector,
+        "Forward",
+        "truncate",
+    )
+    nearest = odt_module._embed_3d_spectrum(  # noqa: SLF001
+        spectrum2d,
+        shape_3d,
+        params,
+        illumination_vector,
+        "Forward",
+        "nearest",
+    )
+    linear = odt_module._embed_3d_spectrum(  # noqa: SLF001
+        spectrum2d,
+        shape_3d,
+        params,
+        illumination_vector,
+        "Forward",
+        "linear",
+    )
+
+    assert 0.5 < fz_value < 1
+    assert truncated[x_index, y_index, z_zero_index] == 1
+    assert nearest[x_index, y_index, z_one_index] == 1
+    assert jnp.allclose(linear[x_index, y_index, z_zero_index], 1 - fz_value)
+    assert jnp.allclose(linear[x_index, y_index, z_one_index], fz_value)
+    assert jnp.allclose(jnp.sum(linear[x_index, y_index, :]), 1)
+
+
+def test_synthesize_spectrum_uses_configured_ewald_embedding_mode() -> None:
+    """Test that ODT synthesis applies the Ewald embedding mode from ODTConfig."""
+    params = ODTParameters(
+        na=0.5,
+        wavelength_m=1.0,
+        img_size_px=10,
+        px_size_m=1.0,
+        n_sol=1.0,
+        na_illumination=0.5,
+    )
+    illumination_vector = (4, 0)
+    spectrum_shape = 2 * params.aperturesize_px + 1
+    coord_x, coord_y = -5, 0
+    x_index = coord_x - (-spectrum_shape // 2 + 1)
+    y_index = coord_y - (-spectrum_shape // 2 + 1)
+    z_zero_index = 0 - (-params.freq_axial_extent_px // 2 + 1)
+    z_one_index = 1 - (-params.freq_axial_extent_px // 2 + 1)
+    spectrum2d = jnp.zeros((spectrum_shape, spectrum_shape), dtype=jnp.complex64)
+    spectrum2d = spectrum2d.at[x_index, y_index].set(1)
+
+    truncated = synthesize_spectrum(
+        [ScatteringSpectrum(spectrum2d, illumination_vector)],
+        params,
+        ODTConfig(hermite_symmetry=False, ewald_embedding_mode="truncate"),
+    )
+    linear = synthesize_spectrum(
+        [ScatteringSpectrum(spectrum2d, illumination_vector)],
+        params,
+        ODTConfig(hermite_symmetry=False, ewald_embedding_mode="linear"),
+    )
+
+    assert truncated[x_index, y_index, z_zero_index] != 0
+    assert truncated[x_index, y_index, z_one_index] == 0
+    assert linear[x_index, y_index, z_zero_index] != 0
+    assert jnp.allclose(linear[x_index, y_index, z_one_index], linear[x_index, y_index, z_zero_index])
+
+
+def test_synthesize_spectrum_rejects_unknown_ewald_embedding_mode() -> None:
+    """Test that invalid Ewald embedding modes fail explicitly at runtime."""
+    params = ODTParameters(
+        na=0.1,
+        wavelength_m=1.0,
+        img_size_px=8,
+        px_size_m=1.0,
+        n_sol=1.33,
+        na_illumination=0.1,
+    )
+    spectrum_shape = 2 * params.aperturesize_px + 1
+    spectrum = jnp.ones((spectrum_shape, spectrum_shape), dtype=jnp.complex64)
+    config = ODTConfig(
+        hermite_symmetry=False,
+        ewald_embedding_mode="invalid",  # type: ignore[arg-type]  # Runtime validation test.
+    )
+
+    with pytest.raises(ValueError, match="Unknown Ewald embedding mode: invalid"):
+        synthesize_spectrum([ScatteringSpectrum(spectrum, (0, 0))], params, config)
+
+
+def test_calc_1st_scattering_spectrum_respects_gradient_correction_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test that ODT gradient correction remains configurable."""
+    params = ODTParameters(
+        na=0.1,
+        wavelength_m=1.0,
+        img_size_px=8,
+        px_size_m=1.0,
+        n_sol=1.33,
+        na_illumination=0.1,
+    )
+    cp_field = jnp.ones((7, 7), dtype=jnp.complex64) * 2
+    ref_cp_field = jnp.ones_like(cp_field)
+    calls = []
+
+    def fake_correct_gradient(array: Array, *, edge_size: int = 0) -> Array:
+        calls.append(edge_size)
+        return array
+
+    monkeypatch.setattr(odt_module, "correct_gradient", fake_correct_gradient)
+
+    odt_module._calc_1st_scattering_spectrum(  # noqa: SLF001
+        cp_field,
+        ref_cp_field,
+        params,
+        "Born",
+        (0, 0),
+        gradient_correction=False,
+    )
+    assert calls == []
+
+    odt_module._calc_1st_scattering_spectrum(cp_field, ref_cp_field, params, "Born", (0, 0))  # noqa: SLF001
+    assert calls == [0]
+
+
+def test_calc_scattering_spectrums_uses_configured_gradient_correction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test that public ODT spectrum extraction applies gradient correction config."""
+    params = ODTParameters(
+        na=0.1,
+        wavelength_m=1.0,
+        img_size_px=8,
+        px_size_m=1.0,
+        n_sol=1.33,
+        na_illumination=0.1,
+    )
+    spectrum_shape = params.aperturesize_px
+    cp_spectrum = jnp.ones((spectrum_shape, spectrum_shape), dtype=jnp.complex64) * 2
+    ref_cp_spectrum = jnp.ones_like(cp_spectrum)
+    calls = []
+
+    def fake_correct_gradient(array: Array, *, edge_size: int = 0) -> Array:
+        calls.append(edge_size)
+        return array
+
+    monkeypatch.setattr(odt_module, "correct_gradient", fake_correct_gradient)
+
+    calc_scattering_spectrums(
+        [cp_spectrum],
+        [ref_cp_spectrum],
+        params,
+        ODTConfig(gradient_correction=False),
+        illumination_vectors=[(0, 0)],
+    )
+    assert calls == []
+
+    calc_scattering_spectrums(
+        [cp_spectrum],
+        [ref_cp_spectrum],
+        params,
+        ODTConfig(),
+        illumination_vectors=[(0, 0)],
+    )
+    assert calls == [0]
+
+
+def test_log_field_preserves_low_amplitude_complex_phase() -> None:
+    """Test that Rytov log stabilization does not perturb low-amplitude phase."""
+    cp_field = jnp.full((3, 3), 1j * odt_module.EPSILON / 10, dtype=jnp.complex64)
+    ref_cp_field = jnp.ones_like(cp_field)
+
+    log_field = odt_module._log_field(cp_field, ref_cp_field)  # noqa: SLF001
+
+    assert jnp.allclose(jnp.imag(log_field), jnp.pi / 2, atol=1e-5)
 
 
 def test_calc_scattering_potential_matches_factored_reconstruction_path() -> None:

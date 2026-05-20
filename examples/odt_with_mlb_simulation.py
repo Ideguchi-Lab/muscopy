@@ -13,14 +13,13 @@ The workflow includes:
 4. Visualizing and analyzing the reconstruction results
 
 Requirements:
-- muscopy-mlbsim>=0.2.1 must be installed
+- muscopy_mlbsim package must be installed
 - GPU support (JAX) is recommended for faster computation
 """
 
 # pyright: reportPossiblyUnboundVariable=false, reportInvalidTypeForm=false
 
 import typing
-from importlib.metadata import PackageNotFoundError, version
 
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
@@ -32,35 +31,6 @@ from muscopy.cfg import ArrayPrecision
 from muscopy.dh import get_spectrum
 from muscopy.odt import ODTConfig, ODTParameters, odt
 
-MIN_MLBSIM_VERSION = "0.2.1"
-MLB_PACKAGE_REQUIREMENT = f"muscopy-mlbsim>={MIN_MLBSIM_VERSION}"
-MLB_IMPORT_ERROR_MESSAGE = f"{MLB_PACKAGE_REQUIREMENT} is required for this example."
-VERSION_PART_COUNT = 3
-
-
-def _version_key(version_text: str) -> tuple[int, int, int]:
-    """Return a comparable key for simple release versions.
-
-    Returns
-    -------
-    tuple[int, int, int]
-        Numeric major, minor, and patch components.
-    """
-    parts: list[int] = []
-    for part in version_text.split(".")[:VERSION_PART_COUNT]:
-        numeric_part = ""
-        for char in part:
-            if not char.isdigit():
-                break
-            numeric_part += char
-        parts.append(int(numeric_part or "0"))
-
-    while len(parts) < VERSION_PART_COUNT:
-        parts.append(0)
-
-    return parts[0], parts[1], parts[2]
-
-
 try:
     from muscopy_mlbsim import (  # pyright: ignore[reportMissingImports]
         HologramGenerator,
@@ -70,20 +40,16 @@ try:
         get_scatter_potential,
     )
 
-    MLB_AVAILABLE = _version_key(version("muscopy_mlbsim")) >= _version_key(MIN_MLBSIM_VERSION)
-except (ImportError, PackageNotFoundError):
+    MLB_AVAILABLE = True
+except ImportError:
     MLB_AVAILABLE = False
-    print(f"Warning: {MLB_IMPORT_ERROR_MESSAGE}")
+    print("Warning: muscopy_mlbsim is not installed. This example requires muscopy_mlbsim.")
     print("Skipping example execution.")
     HologramGenerator: typing.Any = None  # type: ignore[no-redef]
     MLBForward: typing.Any = None  # type: ignore[no-redef]
     MLBParameters: typing.Any = None  # type: ignore[no-redef]
     get_oblique_wave_fft: typing.Any = None  # type: ignore[no-redef]
     get_scatter_potential: typing.Any = None  # type: ignore[no-redef]
-else:
-    if not MLB_AVAILABLE:
-        print(f"Warning: {MLB_IMPORT_ERROR_MESSAGE}")
-        print("Skipping example execution.")
 
 
 class HologramSetGenerator:
@@ -97,7 +63,7 @@ class HologramSetGenerator:
         precision: ArrayPrecision,
     ) -> None:
         if not MLB_AVAILABLE:
-            msg = MLB_IMPORT_ERROR_MESSAGE
+            msg = "muscopy_mlbsim is required but not available"
             raise ImportError(msg)
 
         self.odt_params = odt_params
@@ -516,12 +482,12 @@ def visualize_synthetic_spectra_profiles(synthetic_spectra: Array) -> None:  # n
 def main() -> None:  # noqa: PLR0914
     """Demonstrate ODT with MLB simulation."""
     if not MLB_AVAILABLE:
-        print(f"Skipping ODT with MLB simulation demo - {MLB_IMPORT_ERROR_MESSAGE}")
+        print("Skipping ODT with MLB simulation demo - muscopy_mlbsim not available.")
         # Create a simple placeholder plot for documentation
         _, ax = plt.subplots(figsize=(8, 6))
         message = (
-            f"{MLB_PACKAGE_REQUIREMENT} Required\n\n"
-            f"This example requires {MLB_PACKAGE_REQUIREMENT}.\n"
+            "muscopy_mlbsim Required\n\n"
+            "This example requires the muscopy_mlbsim package.\n"
             "Please install or upgrade muscopy_mlbsim before running this example."
         )
         ax.text(

@@ -31,7 +31,7 @@
 - Updated `mip_qpi()` and `ps_idh_reconstruct()` documentation to describe the implemented behavior accurately [[#121](https://github.com/Ideguchi-Lab/muscopy/issues/121)]
 - Added explicit ODT target/reference spectrum count validation before first-order spectrum extraction.
 - Fixed centered ODT spectrum placement, support-based spectrum synthesis weights, and Rytov low-amplitude phase stabilization [[#127](https://github.com/Ideguchi-Lab/muscopy/issues/127)]
-- Updated the MLB simulation examples to use the `muscopy-mlbsim>=0.2.1` detector-field API and removed local editable-install guidance.
+- Updated the MLB simulation examples to use the current `muscopy_mlbsim` detector-field API.
 
 ---
 

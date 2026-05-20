@@ -20,9 +20,12 @@ Examples
 .. code-block:: python
 
     from muscopy.cfg import ArrayPrecision
-    from muscopy.odt import ODTConfig
+    from muscopy.odt import EwaldEmbeddingMode, ODTConfig
 
-    odt_config = ODTConfig(precision=ArrayPrecision())
+    odt_config = ODTConfig(
+        precision=ArrayPrecision(),
+        ewald_embedding_mode=EwaldEmbeddingMode.TRUNCATE,
+    )
 
 .. code-block:: python
 
@@ -32,6 +35,19 @@ Examples
 
     jax.config.update("jax_enable_x64", True)
     precision = ArrayPrecision(int_length=64, float_length=64)
+
+ODT Reconstruction Options
+--------------------------
+
+``ODTConfig.gradient_correction`` defaults to ``True`` to preserve the existing
+ODT reconstruction behavior. Set it to ``False`` when sample-derived linear
+phase gradients should be preserved.
+
+``ODTConfig.ewald_embedding_mode`` defaults to
+``EwaldEmbeddingMode.TRUNCATE`` for compatibility with legacy Ewald sphere
+embedding. Use ``EwaldEmbeddingMode.NEAREST`` for explicit nearest-plane
+placement or ``EwaldEmbeddingMode.LINEAR`` to distribute each Ewald sample into
+adjacent axial planes with linear weights.
 
 .. automodule:: muscopy.cfg
     :members:

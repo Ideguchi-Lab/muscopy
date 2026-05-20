@@ -344,6 +344,11 @@ def calc_scattering_potential(
 ) -> tuple[Array, Array]:
     r"""Calculate the scattering potential from complex field spectrums.
 
+    .. deprecated:: 0.8.0
+        Use :func:`calc_scattering_spectrums` followed by
+        :func:`calc_scattering_potential_from_spectrums` instead.
+        This wrapper is scheduled for removal in muscopy 0.9.0.
+
     Parameters
     ----------
     cp_spectrums : `collections.abc.Sequence`\[`Array`\]

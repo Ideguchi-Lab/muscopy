@@ -12,6 +12,7 @@ import gc
 import shutil
 import typing
 import warnings
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 import jax
@@ -23,25 +24,58 @@ from tqdm import tqdm
 
 from muscopy.idt import IDTConfig, IDTParameters, compute_idt
 
+MIN_MLBSIM_VERSION = "0.2.1"
+MLB_PACKAGE_REQUIREMENT = f"muscopy-mlbsim>={MIN_MLBSIM_VERSION}"
+MLB_IMPORT_ERROR_MESSAGE = f"{MLB_PACKAGE_REQUIREMENT} is required for this example."
+VERSION_PART_COUNT = 3
+
+
+def _version_key(version_text: str) -> tuple[int, int, int]:
+    """Return a comparable key for simple release versions.
+
+    Returns
+    -------
+    tuple[int, int, int]
+        Numeric major, minor, and patch components.
+    """
+    parts: list[int] = []
+    for part in version_text.split(".")[:VERSION_PART_COUNT]:
+        numeric_part = ""
+        for char in part:
+            if not char.isdigit():
+                break
+            numeric_part += char
+        parts.append(int(numeric_part or "0"))
+
+    while len(parts) < VERSION_PART_COUNT:
+        parts.append(0)
+
+    return parts[0], parts[1], parts[2]
+
+
 try:
-    from muscopy_mlbsim.hologram_generator import HologramGenerator  # pyright: ignore[reportMissingImports]
-    from muscopy_mlbsim.mlb import (  # pyright: ignore[reportMissingImports]
+    from muscopy_mlbsim import (  # pyright: ignore[reportMissingImports]
+        HologramGenerator,
         MLBForward,
         MLBParameters,
         get_oblique_wave_fft,
         get_scatter_potential,
     )
 
-    MLB_AVAILABLE = True
-except ImportError:
+    MLB_AVAILABLE = _version_key(version("muscopy_mlbsim")) >= _version_key(MIN_MLBSIM_VERSION)
+except (ImportError, PackageNotFoundError):
     MLB_AVAILABLE = False
-    print("Warning: muscopy_mlbsim is not installed. This example requires muscopy_mlbsim.")
+    print(f"Warning: {MLB_IMPORT_ERROR_MESSAGE}")
     print("Skipping example execution.")
     HologramGenerator: typing.Any = None  # type: ignore[no-redef]
     MLBForward: typing.Any = None  # type: ignore[no-redef]
     MLBParameters: typing.Any = None  # type: ignore[no-redef]
     get_oblique_wave_fft: typing.Any = None  # type: ignore[no-redef]
     get_scatter_potential: typing.Any = None  # type: ignore[no-redef]
+else:
+    if not MLB_AVAILABLE:
+        print(f"Warning: {MLB_IMPORT_ERROR_MESSAGE}")
+        print("Skipping example execution.")
 
 # Suppress JAX warnings about dtype conversion that can interfere with execution
 warnings.filterwarnings("ignore", category=FutureWarning, message=".*scatter inputs have incompatible types.*")
@@ -59,7 +93,7 @@ class IntensityImageSetGenerator:
         mlb_params: MLBParameters,
     ) -> None:
         if not MLB_AVAILABLE:
-            msg = "muscopy_mlbsim is required but not available"
+            msg = MLB_IMPORT_ERROR_MESSAGE
             raise ImportError(msg)
 
         self.idt_params = idt_params
@@ -91,20 +125,16 @@ class IntensityImageSetGenerator:
         self.angle_offset = angle_offset
         self.angles = np.linspace(0, 2 * np.pi, num_angles, endpoint=False) + angle_offset
 
-    def set_scattering_potential(self, potential: Array) -> None:
-        """Set the 3D scattering potential for the sample.
+    def generate_intensity_image_set(
+        self,
+        scattering_potential: Array,
+    ) -> tuple[list[Array], list[Array]]:
+        r"""Generate intensity image set with different illumination angles.
 
         Parameters
         ----------
-        potential : Array
+        scattering_potential : Array
             3D scattering potential array
-        """
-        self.mlb_forward.set_scattering_potential(potential)
-
-    def generate_intensity_image_set(
-        self,
-    ) -> tuple[list[Array], list[Array]]:
-        r"""Generate intensity image set with different illumination angles.
 
         Returns
         -------
@@ -147,9 +177,8 @@ class IntensityImageSetGenerator:
                 float(ky_ill * self.idt_params.k_per_px),
             )
 
-            # Set input field and simulate forward scattering
-            self.mlb_forward.set_input_field_fft(input_field_fft)
-            output_field = self.mlb_forward.get_observation_field()
+            # Simulate the forward-scattered field at the detector plane
+            output_field = self.mlb_forward.simulate_forward_detector_field(input_field_fft, scattering_potential)
 
             # Generate hologram using muscopy_mlbsim.HologramGenerator
             self.hologram_generator.set_target_field(output_field)
@@ -166,7 +195,7 @@ class IntensityImageSetGenerator:
             target_intensity_images.append(hologram)
 
             # Generate reference hologram (no scattering)
-            ref_field = jnp.fft.ifft2(jnp.fft.ifftshift(input_field_fft))
+            ref_field = self.mlb_forward.propagate_forward_to_detector(input_field_fft)
             self.hologram_generator.set_target_field(ref_field)
             ref_hologram = self.hologram_generator.generate_hologram(
                 hologram_shape=intensity_image_shape,
@@ -301,9 +330,8 @@ def _generate_intensity_images(
     print("Setting up hologram generator...")
     intensity_image_gen = IntensityImageSetGenerator(idt_params, mlb_params)
     intensity_image_gen.set_illumination_angles(num_angles)  # Fewer angles for faster computation
-    intensity_image_gen.set_scattering_potential(scattering_potential)
 
-    intensity_images = intensity_image_gen.generate_intensity_image_set()
+    intensity_images = intensity_image_gen.generate_intensity_image_set(scattering_potential)
     target_intensity_images, ref_intensity_images = intensity_images
 
     u_illumination_list = intensity_image_gen.u_illumination_list
@@ -424,14 +452,13 @@ def _visualize_results(  # noqa: PLR0914, PLR0915
 def main() -> None:
     """Demonstrate IDT with MLB simulation."""
     if not MLB_AVAILABLE:
-        print("Skipping IDT with MLB simulation demo - muscopy_mlbsim not available.")
+        print(f"Skipping IDT with MLB simulation demo - {MLB_IMPORT_ERROR_MESSAGE}")
         # Create a simple placeholder plot for documentation
         _, ax = plt.subplots(figsize=(8, 6))
         message = (
-            "muscopy_mlbsim Required\\n\\n"
-            "This example requires the muscopy_mlbsim package.\\n"
-            "Please install it with:\\n"
-            "pip install -e ./muscopy-mlbsim"
+            f"{MLB_PACKAGE_REQUIREMENT} Required\\n\\n"
+            f"This example requires {MLB_PACKAGE_REQUIREMENT}.\\n"
+            "Please install or upgrade muscopy_mlbsim before running this example."
         )
         ax.text(
             0.5,

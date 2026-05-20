@@ -11,6 +11,7 @@ from jax import Array
 from muscopy import odt as odt_module
 from muscopy.cfg import ArrayPrecision
 from muscopy.odt import (
+    EwaldEmbeddingMode,
     ODTConfig,
     ODTParameters,
     ScatteringSpectrum,
@@ -30,7 +31,7 @@ def test_odt_config_defaults_to_32_bit_precision() -> None:
     assert config.precision.float_precision() == "float32"
     assert config.precision.complex_precision() == "complex64"
     assert config.gradient_correction is True
-    assert config.ewald_embedding_mode == "truncate"
+    assert config.ewald_embedding_mode is EwaldEmbeddingMode.TRUNCATE
     assert config.verbose is False
 
 
@@ -194,7 +195,7 @@ def test_shift_dh_spectrum_preserves_center_for_zero_illumination() -> None:
     ) == (31, 31)
 
 
-def test_embed_3d_spectrum_supports_explicit_ewald_placement_modes() -> None:
+def test_calc_ewald_embedding_weight_supports_explicit_placement_modes() -> None:
     """Test Ewald truncation, nearest-plane, and linear axial interpolation semantics."""
     params = ODTParameters(
         na=0.5,
@@ -211,35 +212,30 @@ def test_embed_3d_spectrum_supports_explicit_ewald_placement_modes() -> None:
     y_index = coord_y - (-shape_3d[1] // 2 + 1)
     z_zero_index = 0 - (-shape_3d[2] // 2 + 1)
     z_one_index = 1 - (-shape_3d[2] // 2 + 1)
-    spectrum2d = jnp.zeros(shape_3d[:2], dtype=jnp.complex64)
-    spectrum2d = spectrum2d.at[x_index, y_index].set(1)
     fz_value = math.sqrt(params.light_freq_px**2 - (coord_x + illumination_vector[0]) ** 2) - math.sqrt(
         params.light_freq_px**2 - illumination_vector[0] ** 2
     )
 
-    truncated = odt_module._embed_3d_spectrum(  # noqa: SLF001
-        spectrum2d,
+    truncated = odt_module._calc_ewald_embedding_weight(  # noqa: SLF001
         shape_3d,
         params,
         illumination_vector,
         "Forward",
-        "truncate",
+        EwaldEmbeddingMode.TRUNCATE,
     )
-    nearest = odt_module._embed_3d_spectrum(  # noqa: SLF001
-        spectrum2d,
+    nearest = odt_module._calc_ewald_embedding_weight(  # noqa: SLF001
         shape_3d,
         params,
         illumination_vector,
         "Forward",
-        "nearest",
+        EwaldEmbeddingMode.NEAREST,
     )
-    linear = odt_module._embed_3d_spectrum(  # noqa: SLF001
-        spectrum2d,
+    linear = odt_module._calc_ewald_embedding_weight(  # noqa: SLF001
         shape_3d,
         params,
         illumination_vector,
         "Forward",
-        "linear",
+        EwaldEmbeddingMode.LINEAR,
     )
 
     assert 0.5 < fz_value < 1
@@ -273,12 +269,12 @@ def test_synthesize_spectrum_uses_configured_ewald_embedding_mode() -> None:
     truncated = synthesize_spectrum(
         [ScatteringSpectrum(spectrum2d, illumination_vector)],
         params,
-        ODTConfig(hermite_symmetry=False, ewald_embedding_mode="truncate"),
+        ODTConfig(hermite_symmetry=False, ewald_embedding_mode=EwaldEmbeddingMode.TRUNCATE),
     )
     linear = synthesize_spectrum(
         [ScatteringSpectrum(spectrum2d, illumination_vector)],
         params,
-        ODTConfig(hermite_symmetry=False, ewald_embedding_mode="linear"),
+        ODTConfig(hermite_symmetry=False, ewald_embedding_mode=EwaldEmbeddingMode.LINEAR),
     )
 
     assert truncated[x_index, y_index, z_zero_index] != 0
@@ -287,25 +283,13 @@ def test_synthesize_spectrum_uses_configured_ewald_embedding_mode() -> None:
     assert jnp.allclose(linear[x_index, y_index, z_one_index], linear[x_index, y_index, z_zero_index])
 
 
-def test_synthesize_spectrum_rejects_unknown_ewald_embedding_mode() -> None:
-    """Test that invalid Ewald embedding modes fail explicitly at runtime."""
-    params = ODTParameters(
-        na=0.1,
-        wavelength_m=1.0,
-        img_size_px=8,
-        px_size_m=1.0,
-        n_sol=1.33,
-        na_illumination=0.1,
-    )
-    spectrum_shape = 2 * params.aperturesize_px + 1
-    spectrum = jnp.ones((spectrum_shape, spectrum_shape), dtype=jnp.complex64)
-    config = ODTConfig(
-        hermite_symmetry=False,
-        ewald_embedding_mode="invalid",  # type: ignore[arg-type]  # Runtime validation test.
-    )
-
-    with pytest.raises(ValueError, match="Unknown Ewald embedding mode: invalid"):
-        synthesize_spectrum([ScatteringSpectrum(spectrum, (0, 0))], params, config)
+def test_odt_config_rejects_unknown_ewald_embedding_mode() -> None:
+    """Test that invalid Ewald embedding modes fail explicitly at configuration time."""
+    with pytest.raises(TypeError, match="ewald_embedding_mode must be an EwaldEmbeddingMode"):
+        ODTConfig(
+            hermite_symmetry=False,
+            ewald_embedding_mode="invalid",  # type: ignore[arg-type]  # Runtime validation test.
+        )
 
 
 def test_calc_1st_scattering_spectrum_respects_gradient_correction_config(

@@ -21,7 +21,8 @@ from __future__ import annotations
 
 import dataclasses
 import warnings
-from typing import TYPE_CHECKING, Literal, TypeAlias
+from enum import StrEnum
+from typing import TYPE_CHECKING
 
 import jax.numpy as jnp
 from jax import Array
@@ -37,7 +38,14 @@ if TYPE_CHECKING:
 
 EPSILON = 1e-8
 _ODT_DEPRECATION_REMOVAL_VERSION = "0.9.0"
-EwaldEmbeddingMode: TypeAlias = Literal["truncate", "nearest", "linear"]
+
+
+class EwaldEmbeddingMode(StrEnum):
+    """Ewald sphere embedding mode."""
+
+    TRUNCATE = "truncate"
+    NEAREST = "nearest"
+    LINEAR = "linear"
 
 
 @dataclasses.dataclass
@@ -182,10 +190,11 @@ class ODTConfig:
         Regions to be used for offset calculation.
     gradient_correction : `bool`, optional
         Whether to remove a median-estimated linear phase ramp from each scattering field.
-    ewald_embedding_mode : `str`, optional
-        Ewald sphere embedding mode. "truncate" preserves the legacy integer truncation,
-        "nearest" places each sample on the nearest axial plane, and "linear" splats
-        each sample into adjacent axial planes with linear weights.
+    ewald_embedding_mode : `EwaldEmbeddingMode`, optional
+        Ewald sphere embedding mode. ``EwaldEmbeddingMode.TRUNCATE`` preserves the
+        legacy integer truncation, ``EwaldEmbeddingMode.NEAREST`` places each sample
+        on the nearest axial plane, and ``EwaldEmbeddingMode.LINEAR`` splats each
+        sample into adjacent axial planes with linear weights.
     verbose : `bool`, optional
         Whether to print reconstruction status and progress output.
     """
@@ -197,8 +206,20 @@ class ODTConfig:
     edge_size: int = 0
     offset_regions: OffsetRegions = None
     gradient_correction: bool = True
-    ewald_embedding_mode: EwaldEmbeddingMode = "truncate"
+    ewald_embedding_mode: EwaldEmbeddingMode = EwaldEmbeddingMode.TRUNCATE
     verbose: bool = False
+
+    def __post_init__(self) -> None:
+        """Validate enum-only configuration fields.
+
+        Raises
+        ------
+        TypeError
+            If ``ewald_embedding_mode`` is not an ``EwaldEmbeddingMode``.
+        """
+        if not isinstance(self.ewald_embedding_mode, EwaldEmbeddingMode):
+            msg = "ewald_embedding_mode must be an EwaldEmbeddingMode."
+            raise TypeError(msg)
 
 
 @dataclasses.dataclass
@@ -696,32 +717,13 @@ def _calc_1st_scattering_spectrum(
 
 
 def _log_field(cp_field: Array, ref_cp_field: Array) -> Array:
-    field_log_amplitude = jnp.log(jnp.maximum(jnp.abs(cp_field), EPSILON))
-    ref_field_log_amplitude = jnp.log(jnp.maximum(jnp.abs(ref_cp_field), EPSILON))
+    field_log = jnp.log(jnp.maximum(jnp.abs(cp_field), EPSILON)) + 1j * jnp.angle(cp_field)
+    ref_field_log = jnp.log(jnp.maximum(jnp.abs(ref_cp_field), EPSILON)) + 1j * jnp.angle(ref_cp_field)
 
-    amplitude = field_log_amplitude - ref_field_log_amplitude
-    phase = unwrap_phase(jnp.angle(cp_field) - jnp.angle(ref_cp_field))
+    amplitude = jnp.real(field_log) - jnp.real(ref_field_log)
+    phase = unwrap_phase(jnp.imag(field_log) - jnp.imag(ref_field_log))
 
     return amplitude + 1j * phase
-
-
-def _embed_3d_spectrum(
-    spectrum2d: Array,
-    shape_3d: tuple[int, int, int],
-    params: ODTParameters,
-    illumination_vector: tuple[int, int],
-    mode: str,
-    ewald_embedding_mode: EwaldEmbeddingMode = "truncate",
-) -> Array:
-    embedded_spectrum, _ = _embed_3d_spectrum_with_weights(
-        spectrum2d,
-        shape_3d,
-        params,
-        illumination_vector,
-        mode,
-        ewald_embedding_mode,
-    )
-    return embedded_spectrum
 
 
 def _embed_3d_spectrum_with_weights(
@@ -756,7 +758,7 @@ def _calc_ewald_embedding_weight(
     ) ** 2
     fz_circle = _calc_ewald_fz_circle(xx, yy, params, illumination_vector, mode)
 
-    if ewald_embedding_mode == "truncate":
+    if ewald_embedding_mode == EwaldEmbeddingMode.TRUNCATE:
         return _calc_single_plane_ewald_embedding_weight(
             zz,
             circle,
@@ -764,11 +766,11 @@ def _calc_ewald_embedding_weight(
             shape_3d[2],
         ).astype(fz_circle.dtype)
 
-    if ewald_embedding_mode == "nearest":
+    if ewald_embedding_mode == EwaldEmbeddingMode.NEAREST:
         fz_nearest = _round_half_away_from_zero(fz_circle).astype(jnp.int32)
         return _calc_single_plane_ewald_embedding_weight(zz, circle, fz_nearest, shape_3d[2]).astype(fz_circle.dtype)
 
-    if ewald_embedding_mode == "linear":
+    if ewald_embedding_mode == EwaldEmbeddingMode.LINEAR:
         return _calc_linear_ewald_embedding_weight(zz, circle, fz_circle, shape_3d[2])
 
     msg = f"Unknown Ewald embedding mode: {ewald_embedding_mode}"

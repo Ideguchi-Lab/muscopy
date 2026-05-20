@@ -87,21 +87,19 @@ class HologramSetGenerator:
         self.angle_offset = angle_offset
         self.angles = np.linspace(0, 2 * np.pi, num_angles, endpoint=False) + angle_offset
 
-    def set_scattering_potential(self, potential: Array) -> None:
-        """Set the 3D scattering potential for the sample.
-
-        Parameters
-        ----------
-        potential : Array
-            3D scattering potential array
-        """
-        self.mlb_forward.set_scattering_potential(potential)
-
     def generate_hologram_set(
         self,
+        scattering_potential: Array,
         amplitude_ref: float = 1.0,
     ) -> tuple[list[Array], list[Array]]:
         r"""Generate hologram set with different illumination angles.
+
+        Parameters
+        ----------
+        scattering_potential : Array
+            3D scattering potential array
+        amplitude_ref : float, optional
+            Reference beam amplitude, by default 1.0
 
         Returns
         -------
@@ -146,9 +144,8 @@ class HologramSetGenerator:
                 float(ky_ill),
             )
 
-            # Set input field and simulate forward scattering
-            self.mlb_forward.set_input_field_fft(input_field_fft)
-            output_field = self.mlb_forward.get_observation_field()
+            # Simulate the forward-scattered field at the detector plane
+            output_field = self.mlb_forward.simulate_forward_detector_field(input_field_fft, scattering_potential)
 
             # Generate hologram using muscopy_mlbsim.HologramGenerator
             self.hologram_generator.set_target_field(output_field)
@@ -161,7 +158,7 @@ class HologramSetGenerator:
             target_holograms.append(hologram)
 
             # Generate reference hologram (no scattering)
-            ref_field = jnp.fft.ifft2(jnp.fft.ifftshift(input_field_fft))
+            ref_field = self.mlb_forward.propagate_forward_to_detector(input_field_fft)
             self.hologram_generator.set_target_field(ref_field)
             ref_hologram = self.hologram_generator.generate_hologram(
                 hologram_shape=hologram_shape,
@@ -280,9 +277,8 @@ def _generate_holograms(
     print("Setting up hologram generator...")
     hol_gen = HologramSetGenerator(odt_params, mlb_params, offaxis_center, precision)
     hol_gen.set_illumination_angles(num_angles)  # Fewer angles for faster computation
-    hol_gen.set_scattering_potential(scattering_potential)
 
-    return hol_gen.generate_hologram_set()
+    return hol_gen.generate_hologram_set(scattering_potential)
 
 
 def _extract_spectra(
@@ -492,8 +488,7 @@ def main() -> None:  # noqa: PLR0914
         message = (
             "muscopy_mlbsim Required\n\n"
             "This example requires the muscopy_mlbsim package.\n"
-            "Please install it with:\n"
-            "pip install -e ./muscopy-mlbsim"
+            "Please install or upgrade muscopy_mlbsim before running this example."
         )
         ax.text(
             0.5,

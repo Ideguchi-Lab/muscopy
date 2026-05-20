@@ -24,8 +24,8 @@ from tqdm import tqdm
 from muscopy.idt import IDTConfig, IDTParameters, compute_idt
 
 try:
-    from muscopy_mlbsim.hologram_generator import HologramGenerator  # pyright: ignore[reportMissingImports]
-    from muscopy_mlbsim.mlb import (  # pyright: ignore[reportMissingImports]
+    from muscopy_mlbsim import (  # pyright: ignore[reportMissingImports]
+        HologramGenerator,
         MLBForward,
         MLBParameters,
         get_oblique_wave_fft,
@@ -91,20 +91,16 @@ class IntensityImageSetGenerator:
         self.angle_offset = angle_offset
         self.angles = np.linspace(0, 2 * np.pi, num_angles, endpoint=False) + angle_offset
 
-    def set_scattering_potential(self, potential: Array) -> None:
-        """Set the 3D scattering potential for the sample.
+    def generate_intensity_image_set(
+        self,
+        scattering_potential: Array,
+    ) -> tuple[list[Array], list[Array]]:
+        r"""Generate intensity image set with different illumination angles.
 
         Parameters
         ----------
-        potential : Array
+        scattering_potential : Array
             3D scattering potential array
-        """
-        self.mlb_forward.set_scattering_potential(potential)
-
-    def generate_intensity_image_set(
-        self,
-    ) -> tuple[list[Array], list[Array]]:
-        r"""Generate intensity image set with different illumination angles.
 
         Returns
         -------
@@ -147,9 +143,8 @@ class IntensityImageSetGenerator:
                 float(ky_ill * self.idt_params.k_per_px),
             )
 
-            # Set input field and simulate forward scattering
-            self.mlb_forward.set_input_field_fft(input_field_fft)
-            output_field = self.mlb_forward.get_observation_field()
+            # Simulate the forward-scattered field at the detector plane
+            output_field = self.mlb_forward.simulate_forward_detector_field(input_field_fft, scattering_potential)
 
             # Generate hologram using muscopy_mlbsim.HologramGenerator
             self.hologram_generator.set_target_field(output_field)
@@ -166,7 +161,7 @@ class IntensityImageSetGenerator:
             target_intensity_images.append(hologram)
 
             # Generate reference hologram (no scattering)
-            ref_field = jnp.fft.ifft2(jnp.fft.ifftshift(input_field_fft))
+            ref_field = self.mlb_forward.propagate_forward_to_detector(input_field_fft)
             self.hologram_generator.set_target_field(ref_field)
             ref_hologram = self.hologram_generator.generate_hologram(
                 hologram_shape=intensity_image_shape,
@@ -301,9 +296,8 @@ def _generate_intensity_images(
     print("Setting up hologram generator...")
     intensity_image_gen = IntensityImageSetGenerator(idt_params, mlb_params)
     intensity_image_gen.set_illumination_angles(num_angles)  # Fewer angles for faster computation
-    intensity_image_gen.set_scattering_potential(scattering_potential)
 
-    intensity_images = intensity_image_gen.generate_intensity_image_set()
+    intensity_images = intensity_image_gen.generate_intensity_image_set(scattering_potential)
     target_intensity_images, ref_intensity_images = intensity_images
 
     u_illumination_list = intensity_image_gen.u_illumination_list
@@ -430,8 +424,7 @@ def main() -> None:
         message = (
             "muscopy_mlbsim Required\\n\\n"
             "This example requires the muscopy_mlbsim package.\\n"
-            "Please install it with:\\n"
-            "pip install -e ./muscopy-mlbsim"
+            "Please install or upgrade muscopy_mlbsim before running this example."
         )
         ax.text(
             0.5,

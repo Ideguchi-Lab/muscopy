@@ -207,7 +207,7 @@ def make_z_position(params: IDTParameters, idx_z: int, config: IDTConfig) -> flo
         If the z-centering mode is unknown.
     """
     if config.z_centering == IDTZCenteringMode.CENTRAL_SLICE_ZERO:
-        z_index = idx_z - params.num_z_slices // 2
+        z_index = float(idx_z - params.num_z_slices // 2)
     elif config.z_centering == IDTZCenteringMode.SYMMETRIC_VOLUME:
         z_index = idx_z - (params.num_z_slices - 1) / 2
     else:  # pragma: no cover - IDTConfig validation should prevent this.
@@ -243,7 +243,7 @@ def relative_imag_residual(arr: Array) -> Array:
     """
     real_norm = jnp.linalg.norm(jnp.real(arr))
     imag_norm = jnp.linalg.norm(jnp.imag(arr))
-    return imag_norm / jnp.maximum(real_norm, _EPSILON)
+    return jnp.asarray(imag_norm / jnp.maximum(real_norm, _EPSILON))
 
 
 def _warn_if_imag_residual_large(arr: Array, *, name: str, config: IDTConfig) -> None:
@@ -534,8 +534,14 @@ def transfer_func_re(
     )
 
     slice_thickness_m = params.imgpx_axial_m_per_px
-    transfer_func = 1j * (params.k_per_px * params.light_freq_px) ** 2 / 2
-    transfer_func *= slice_thickness_m * incident_intensity * (first_term - second_term)
+    transfer_func = (
+        1j
+        * (params.k_per_px * params.light_freq_px) ** 2
+        / 2
+        * slice_thickness_m
+        * incident_intensity
+        * (first_term - second_term)
+    )
     return jnp.asarray(transfer_func, dtype=precision.complex_precision())
 
 
@@ -593,8 +599,13 @@ def transfer_func_im(
     )
 
     slice_thickness_m = params.imgpx_axial_m_per_px
-    transfer_func = -((params.light_freq_px * params.k_per_px) ** 2) / 2
-    transfer_func *= slice_thickness_m * incident_intensity * (first_term + second_term)
+    transfer_func = (
+        -((params.light_freq_px * params.k_per_px) ** 2)
+        / 2
+        * slice_thickness_m
+        * incident_intensity
+        * (first_term + second_term)
+    )
     return jnp.asarray(transfer_func, dtype=precision.complex_precision())
 
 

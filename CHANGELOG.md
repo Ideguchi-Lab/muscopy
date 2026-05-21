@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### Added
+
+- Added explicit IDT aperture support helpers, z-centering configuration, sampling validation, and optional inverse-FFT imaginary residual diagnostics.
+
+### Changed
+
+- Clarified IDT aperture semantics so the intensity spectrum support radius remains distinct from the coherent pupil radius.
+- Renamed `compute_permitivity()` to `compute_permittivity()` while keeping the old misspelled name as a backward-compatible alias.
+
+### Fixed
+
+- Updated the IDT inverse-problem documentation to describe the implemented coupled 2x2 permittivity solve.
+- Added tolerance for near-boundary illumination z-component checks to avoid rejecting valid angles due to roundoff.
+
 ---
 
 ## Version 0.8.0 [2026-05-20]

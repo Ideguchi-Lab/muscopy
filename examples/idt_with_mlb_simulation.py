@@ -12,6 +12,7 @@ import gc
 import shutil
 import typing
 import warnings
+from collections.abc import Sequence
 from pathlib import Path
 
 import jax
@@ -21,11 +22,10 @@ import numpy as np
 from jax import Array
 from tqdm import tqdm
 
-from muscopy.idt import IDTConfig, IDTParameters, compute_idt
+from muscopy.idt import IDTConfig, IDTParameters, compute_g_list, compute_idt, transfer_func_im, transfer_func_re
 
 try:
     from muscopy_mlbsim import (  # pyright: ignore[reportMissingImports]
-        HologramGenerator,
         MLBForward,
         MLBParameters,
         get_oblique_wave_fft,
@@ -37,7 +37,6 @@ except ImportError:
     MLB_AVAILABLE = False
     print("Warning: muscopy_mlbsim is not installed. This example requires muscopy_mlbsim.")
     print("Skipping example execution.")
-    HologramGenerator: typing.Any = None  # type: ignore[no-redef]
     MLBForward: typing.Any = None  # type: ignore[no-redef]
     MLBParameters: typing.Any = None  # type: ignore[no-redef]
     get_oblique_wave_fft: typing.Any = None  # type: ignore[no-redef]
@@ -48,10 +47,59 @@ warnings.filterwarnings("ignore", category=FutureWarning, message=".*scatter inp
 warnings.filterwarnings("ignore", category=UserWarning, message=".*Casting complex values to real.*")
 
 INTENSITY_IMAGE_SIZE = 1023  # Increased for better quality
+_DIAGNOSTIC_EPSILON = 1e-6
+
+
+def _field_to_intensity_image(field: Array, mlb_params: MLBParameters, image_shape: tuple[int, int]) -> Array:
+    """Convert a detector field to a padded intensity image without per-frame normalization.
+
+    Returns
+    -------
+    Array
+        Padded detector intensity image.
+
+    Raises
+    ------
+    ValueError
+        If the requested image shape is smaller than the MLB field shape.
+    """
+    if image_shape[0] < mlb_params.xy_shape[0] or image_shape[1] < mlb_params.xy_shape[1]:
+        msg = "image_shape must be at least as large as the MLB lateral field shape."
+        raise ValueError(msg)
+
+    field_fft = jnp.fft.fftshift(jnp.fft.fft2(field))
+    image_fft = jnp.zeros(image_shape, dtype=field_fft.dtype)
+    x_start = image_shape[0] // 2 - mlb_params.xy_shape[0] // 2
+    y_start = image_shape[1] // 2 - mlb_params.xy_shape[1] // 2
+    image_fft = image_fft.at[
+        x_start : x_start + mlb_params.xy_shape[0],
+        y_start : y_start + mlb_params.xy_shape[1],
+    ].set(field_fft)
+
+    image_field = jnp.fft.ifft2(jnp.fft.ifftshift(image_fft))
+    return jnp.asarray(jnp.abs(image_field) ** 2, dtype=jnp.float32)
+
+
+def _robust_symmetric_limit(array: np.ndarray, *, expected_scale: float) -> float:
+    finite_values = array[np.isfinite(array)]
+    if finite_values.size == 0:
+        return expected_scale
+    percentile_limit = float(np.percentile(np.abs(finite_values), 99.5))
+    return max(percentile_limit, expected_scale)
+
+
+def _robust_image_limits(array: np.ndarray) -> tuple[float, float]:
+    finite_values = array[np.isfinite(array)]
+    if finite_values.size == 0:
+        return 0.0, 1.0
+    vmin, vmax = np.percentile(finite_values, [1.0, 99.0])
+    if np.isclose(vmin, vmax):
+        return float(np.min(finite_values)), float(np.max(finite_values))
+    return float(vmin), float(vmax)
 
 
 class IntensityImageSetGenerator:
-    """Generate intensity image sets using MLB simulation and muscopy_mlbsim.HologramGenerator."""
+    """Generate intensity image sets using MLB simulation."""
 
     def __init__(
         self,
@@ -65,12 +113,8 @@ class IntensityImageSetGenerator:
         self.idt_params = idt_params
         self.mlb_params = mlb_params
 
-        # Initialize MLB forward simulator and hologram generator
+        # Initialize MLB forward simulator
         self.mlb_forward = MLBForward(mlb_params)
-        self.hologram_generator = HologramGenerator(mlb_params)
-
-        # Configure off-axis position
-        self.hologram_generator.set_offaxis_position(0, 0)
 
         # Store illumination angles
         self.angles: np.ndarray[typing.Any, np.dtype[np.floating[typing.Any]]] | None = None
@@ -146,37 +190,16 @@ class IntensityImageSetGenerator:
             # Simulate the forward-scattered field at the detector plane
             output_field = self.mlb_forward.simulate_forward_detector_field(input_field_fft, scattering_potential)
 
-            # Generate hologram using muscopy_mlbsim.HologramGenerator
-            self.hologram_generator.set_target_field(output_field)
-            hologram = self.hologram_generator.generate_hologram(
-                hologram_shape=intensity_image_shape,
-                reference_amplitude=0,
-                bit_depth=16,
-                output_dtype="float32",  # Keep as float for processing
+            target_intensity_images.append(
+                _field_to_intensity_image(output_field, self.mlb_params, intensity_image_shape)
             )
-
-            # Normalize hologram to [0, 1] range for better numerical stability
-            hologram /= 65535.0
-
-            target_intensity_images.append(hologram)
 
             # Generate reference hologram (no scattering)
             ref_field = self.mlb_forward.propagate_forward_to_detector(input_field_fft)
-            self.hologram_generator.set_target_field(ref_field)
-            ref_hologram = self.hologram_generator.generate_hologram(
-                hologram_shape=intensity_image_shape,
-                reference_amplitude=0,
-                bit_depth=16,
-                output_dtype="float32",
+            reference_intensity_images.append(
+                _field_to_intensity_image(ref_field, self.mlb_params, intensity_image_shape)
             )
 
-            # Normalize reference hologram to [0, 1] range for better numerical stability
-            ref_hologram /= 65535.0
-
-            reference_intensity_images.append(ref_hologram)
-
-        # Clean up temporary variables to free memory
-        del hologram, ref_hologram
         gc.collect()
 
         return target_intensity_images, reference_intensity_images
@@ -226,7 +249,7 @@ def generate_sphere_potential(
     refractive_index = jnp.where(sphere_mask, n_sphere, refractive_index)
 
     # Convert to scattering potential
-    return typing.cast("Array", get_scatter_potential(mlb_params, refractive_index))
+    return jnp.asarray(get_scatter_potential(mlb_params, refractive_index))
 
 
 def _setup_parameters() -> tuple[IDTParameters, MLBParameters]:
@@ -240,12 +263,12 @@ def _setup_parameters() -> tuple[IDTParameters, MLBParameters]:
     # IDT parameters - use more conservative values for stability and reduced memory usage
     print("Setting IDT parameters...")
     idt_params = IDTParameters(
-        na=0.6,
+        na=0.8,
         wavelength_m=532e-9,  # 532 nm
         img_size_px=INTENSITY_IMAGE_SIZE,
         px_size_m=3.45e-6 * 3 / 180,
         n_sol=1.33,
-        na_illumination=0.5,
+        na_illumination=0.6,
         num_z_slices=64,  # Increased for better z-resolution
     )
 
@@ -330,14 +353,14 @@ def _generate_intensity_images(
 
 def _visualize_results(  # noqa: PLR0914, PLR0915
     n_reconstructed: Array,
-    target_intensity_images: list[Array],
+    target_intensity_images: Sequence[Array],
     delta_n: float,
 ) -> None:
     """Create visualizations of the reconstruction results."""
     print("Creating visualizations...")
 
     # Convert to numpy for matplotlib
-    n_reconstructed_np = np.array(n_reconstructed) if hasattr(n_reconstructed, "__array__") else n_reconstructed
+    n_reconstructed_np = np.asarray(n_reconstructed)
 
     # Cross-sections through the center
     center_x = n_reconstructed_np.shape[0] // 2
@@ -348,35 +371,31 @@ def _visualize_results(  # noqa: PLR0914, PLR0915
     _, axes = plt.subplots(2, 3, figsize=(15, 10))
 
     # Original hologram
-    hol_display = (
-        np.array(target_intensity_images[0])
-        if hasattr(target_intensity_images[0], "__array__")
-        else target_intensity_images[0]
-    )
+    hol_display = np.asarray(target_intensity_images[0])
 
-    im1 = axes[0, 0].imshow(hol_display, cmap="gray")
-    axes[0, 0].set_title("Sample Hologram")
+    image_vmin, image_vmax = _robust_image_limits(hol_display)
+    im1 = axes[0, 0].imshow(hol_display, cmap="gray", vmin=image_vmin, vmax=image_vmax)
+    axes[0, 0].set_title("Sample Intensity")
     axes[0, 0].set_xlabel("x [px]")
     axes[0, 0].set_ylabel("y [px]")
     plt.colorbar(im1, ax=axes[0, 0])
 
     # Cross-sections of reconstruction
-    # Set vmin=0 and vmax to approximately the expected delta_n
-    vmin = 0
-    vmax = delta_n * 1.2  # Allow 20% above expected value
-    im2 = axes[0, 1].imshow(n_reconstructed_np[:, :, center_z], cmap="viridis", vmin=vmin, vmax=vmax)
+    vmax = _robust_symmetric_limit(n_reconstructed_np, expected_scale=delta_n)
+    vmin = -vmax
+    im2 = axes[0, 1].imshow(n_reconstructed_np[:, :, center_z], cmap="coolwarm", vmin=vmin, vmax=vmax)
     axes[0, 1].set_title("XY Cross-section (Center Z)")
     axes[0, 1].set_xlabel("x [px]")
     axes[0, 1].set_ylabel("y [px]")
     plt.colorbar(im2, ax=axes[0, 1])
 
-    im3 = axes[0, 2].imshow(n_reconstructed_np[:, center_y, :], cmap="viridis", vmin=vmin, vmax=vmax)
+    im3 = axes[0, 2].imshow(n_reconstructed_np[:, center_y, :], cmap="coolwarm", vmin=vmin, vmax=vmax)
     axes[0, 2].set_title("XZ Cross-section (Center Y)")
     axes[0, 2].set_xlabel("z [px]")
     axes[0, 2].set_ylabel("x [px]")
     plt.colorbar(im3, ax=axes[0, 2])
 
-    im4 = axes[1, 0].imshow(n_reconstructed_np[center_x, :, :], cmap="viridis", vmin=vmin, vmax=vmax)
+    im4 = axes[1, 0].imshow(n_reconstructed_np[center_x, :, :], cmap="coolwarm", vmin=vmin, vmax=vmax)
     axes[1, 0].set_title("YZ Cross-section (Center X)")
     axes[1, 0].set_xlabel("z [px]")
     axes[1, 0].set_ylabel("y [px]")
@@ -388,13 +407,13 @@ def _visualize_results(  # noqa: PLR0914, PLR0915
     axes[1, 1].set_title("Central Profile (Z direction)")
     axes[1, 1].set_xlabel("z [px]")
     axes[1, 1].set_ylabel("Δn")
-    axes[1, 1].set_ylim(0, vmax)  # Set same limits as image plots
+    axes[1, 1].set_ylim(vmin, vmax)
     axes[1, 1].grid(True)
 
-    # Show max projection
-    max_proj = np.max(n_reconstructed_np, axis=2)
-    im6 = axes[1, 2].imshow(max_proj, cmap="viridis", vmin=vmin, vmax=vmax)
-    axes[1, 2].set_title("Maximum Projection (Z axis)")
+    # Show max absolute projection
+    max_proj = np.max(np.abs(n_reconstructed_np), axis=2)
+    im6 = axes[1, 2].imshow(max_proj, cmap="magma", vmin=0, vmax=vmax)
+    axes[1, 2].set_title("Max |Δn| Projection (Z axis)")
     axes[1, 2].set_xlabel("x [px]")
     axes[1, 2].set_ylabel("y [px]")
     plt.colorbar(im6, ax=axes[1, 2])
@@ -408,9 +427,91 @@ def _visualize_results(  # noqa: PLR0914, PLR0915
     print("\nReconstruction Summary:")
     print(f"Shape: {n_reconstructed_np.shape}")
     print(f"Δn range: [{n_reconstructed_np.min():.4f}, {n_reconstructed_np.max():.4f}]")
+    print(f"Robust |Δn| display limit: {vmax:.4f}")
     print(f"Expected Δn: {delta_n:.4f}")
-    print(f"Peak Δn: {n_reconstructed_np.max():.4f}")
-    print(f"Recovery ratio: {n_reconstructed_np.max() / delta_n:.2f}")
+    print(f"Peak |Δn|: {np.max(np.abs(n_reconstructed_np)):.4f}")
+    print(f"Peak |Δn| / expected Δn: {np.max(np.abs(n_reconstructed_np)) / delta_n:.2f}")
+
+
+def _print_idt_input_diagnostics(  # noqa: PLR0914
+    idt_params: IDTParameters,
+    target_intensity_images: Sequence[Array],
+    ref_intensity_images: Sequence[Array],
+    u_illumination_list: Sequence[tuple[float, float]],
+    config: IDTConfig,
+) -> None:
+    ref_values = np.concatenate([np.asarray(ref).ravel() for ref in ref_intensity_images])
+    g_values = np.concatenate(
+        [
+            np.asarray(g).ravel()
+            for g in compute_g_list(
+                target_intensity_images,
+                ref_intensity_images,
+                precision=config.precision,
+                ref_floor_ratio=config.ref_floor_ratio,
+                g_clip=config.g_clip,
+            )
+        ]
+    )
+
+    h_re = []
+    h_im = []
+    for u_illumination, ref_image in zip(u_illumination_list, ref_intensity_images, strict=True):
+        incident_intensity = float(jnp.mean(ref_image))
+        h_re.append(
+            transfer_func_re(
+                idt_params,
+                u_illumination,
+                z=0.0,
+                incident_intensity=incident_intensity,
+                precision=config.precision,
+            )
+            / incident_intensity
+        )
+        h_im.append(
+            transfer_func_im(
+                idt_params,
+                u_illumination,
+                z=0.0,
+                incident_intensity=incident_intensity,
+                precision=config.precision,
+            )
+            / incident_intensity
+        )
+
+    h_re_stack = jnp.stack(h_re, axis=-1)
+    h_im_stack = jnp.stack(h_im, axis=-1)
+    h_norm_scale = jnp.maximum(jnp.max(jnp.abs(h_re_stack)), jnp.max(jnp.abs(h_im_stack)))
+    h_norm_scale = jnp.where(h_norm_scale < _DIAGNOSTIC_EPSILON, 1.0, h_norm_scale)
+    h_re_scaled = h_re_stack / h_norm_scale
+    h_im_scaled = h_im_stack / h_norm_scale
+    sum_h_re = jnp.sum(jnp.abs(h_re_scaled) ** 2, axis=-1)
+    sum_h_im = jnp.sum(jnp.abs(h_im_scaled) ** 2, axis=-1)
+    term1 = sum_h_re * sum_h_im
+    term2 = jnp.abs(jnp.sum(jnp.conjugate(h_re_scaled) * h_im_scaled, axis=-1)) ** 2
+    det = np.asarray(jnp.maximum(jnp.real(term1 - term2), 0.0))
+    support = np.asarray((sum_h_re + sum_h_im) > _DIAGNOSTIC_EPSILON)
+    det_support = det[support]
+
+    print("\nIDT input diagnostics:")
+    print(
+        "Reference intensity: "
+        f"min={np.min(ref_values):.6g}, p1={np.percentile(ref_values, 1):.6g}, "
+        f"mean={np.mean(ref_values):.6g}, p99={np.percentile(ref_values, 99):.6g}"
+    )
+    print(
+        "Normalized contrast |g|: "
+        f"max={np.max(np.abs(g_values)):.6g}, p99.9={np.percentile(np.abs(g_values), 99.9):.6g}"
+    )
+    print(f"Transfer h_norm_scale at z=0: {float(h_norm_scale):.6g}")
+    if det_support.size > 0:
+        print(
+            "Coupled inverse determinant at z=0: "
+            f"min={np.min(det_support):.6g}, p1={np.percentile(det_support, 1):.6g}, "
+            f"median={np.median(det_support):.6g}"
+        )
+    else:
+        print("Coupled inverse determinant at z=0: no supported frequencies")
 
 
 # %%
@@ -450,12 +551,12 @@ def main() -> None:
 
     # Setup parameters
     idt_params, mlb_params = _setup_parameters()
-    num_angles = 12  # Reduced number of angles to decrease computation time and memory usage
+    num_angles = 30  # Reduced number of angles to decrease computation time and memory usage
 
     # Generate sample (sphere) - increase scattering for better signal
     print("Generating spherical sample...")
-    radius_um = 2.0  # Larger sphere
-    delta_n = 0.05  # Much stronger scattering
+    radius_um = 3.0  # Larger sphere
+    delta_n = 0.001  # Much stronger scattering
     scattering_potential = generate_sphere_potential(mlb_params, radius_um, delta_n)
 
     # SlicingVisualizer(np.asarray(scattering_potential)).run()
@@ -481,12 +582,20 @@ def main() -> None:
     print(f"Memory usage before IDT: {sum(img.nbytes for img in target_intensity_images) / 1024**2:.1f} MB")
 
     try:
+        config = IDTConfig()
+        _print_idt_input_diagnostics(
+            idt_params,
+            target_intensity_images,
+            ref_intensity_images,
+            u_illumination_list,
+            config,
+        )
         n_re, _ = compute_idt(
             idt_params,
             target_intensity_images,
             ref_intensity_images,
             u_illumination_list,
-            config=IDTConfig(),
+            config=config,
         )
         print("IDT computation completed.")
     except Exception as e:

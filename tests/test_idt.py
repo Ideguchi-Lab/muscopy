@@ -23,6 +23,7 @@ from muscopy.idt import (
     make_green_func,
     make_pupil_func,
     make_z_position,
+    transfer_func_im,
     transfer_func_re,
     validate_idt_params,
 )
@@ -397,6 +398,43 @@ def test_transfer_func_re_rejects_evanescent_illumination_beyond_tolerance() -> 
 
     with pytest.raises(ValueError, match="u_ill_z_squared must be non-negative"):
         transfer_func_re(params, u_illumination, z=0.0, incident_intensity=1.0)
+
+
+def test_transfer_funcs_have_no_fast_axial_carrier_on_axis_dc() -> None:
+    params = _small_idt_params()
+    precision = ArrayPrecision()
+    center = params.aperturesize_px
+    u_illumination = (0.0, 0.0)
+    z_values = jnp.arange(-2, 3, dtype=jnp.float32) * params.imgpx_axial_m_per_px
+
+    h_re_center = []
+    h_im_center = []
+    for z in z_values:
+        z_float = float(z)
+        h_re = transfer_func_re(
+            params,
+            u_illumination,
+            z_float,
+            incident_intensity=1.0,
+            precision=precision,
+        )
+        h_im = transfer_func_im(
+            params,
+            u_illumination,
+            z_float,
+            incident_intensity=1.0,
+            precision=precision,
+        )
+        h_re_center.append(h_re[center, center])
+        h_im_center.append(h_im[center, center])
+
+    h_re_center_array = jnp.asarray(h_re_center)
+    h_im_center_array = jnp.asarray(h_im_center)
+
+    assert bool(jnp.max(jnp.abs(h_re_center_array)) < 1e-5)
+    assert bool(
+        jnp.std(jnp.real(h_im_center_array)) < 1e-5 * jnp.maximum(1.0, jnp.abs(jnp.mean(jnp.real(h_im_center_array)))),
+    )
 
 
 def test_compute_permitivity_rejects_invalid_led_intensity() -> None:

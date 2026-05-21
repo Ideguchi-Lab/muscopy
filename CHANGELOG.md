@@ -13,6 +13,7 @@
 
 ### Fixed
 
+- Fixed IDT axial transfer-function phase signs so on-axis DC illumination no longer carries an artificial `2 k0 z` axial carrier.
 - Updated the IDT inverse-problem documentation to describe the implemented coupled 2x2 permittivity solve.
 - Added tolerance for near-boundary illumination z-component checks to avoid rejecting valid angles due to roundoff.
 

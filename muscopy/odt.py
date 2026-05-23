@@ -5,6 +5,8 @@ This module provides:
 - `ODTParameters`: A class to store ODT parameters.
 - `ODTConfig`: A class to store ODT configuration.
 - `ScatteringSpectrum`: A class to store scattering spectrum.
+- `synthesize_spectrum`: A function to synthesize scattering spectrums into 3D scattering potential.
+- `calc_refractive_index`: A function to calculate the refractive index from the scattering potential.
 - `calc_scattering_spectrums`: A function to calculate first-order scattering spectrums.
 - `calc_scattering_potential_from_spectrums`: A function to reconstruct scattering potential from spectrums.
 - `odt`: A function to perform ODT reconstruction.
@@ -36,10 +38,12 @@ __all__ = [
     "ODTConfig",
     "ODTParameters",
     "ScatteringSpectrum",
+    "calc_refractive_index",
     "calc_scattering_potential_from_spectrums",
     "calc_scattering_spectrums",
     "calculate_odt_difference",
     "odt",
+    "synthesize_spectrum",
 ]
 
 
@@ -244,7 +248,7 @@ class ScatteringSpectrum:
     coefficient: complex = 1.0 + 0.0j
 
 
-def _synthesize_spectrum(
+def synthesize_spectrum(
     scattering_spectrums: Iterable[ScatteringSpectrum],
     params: ODTParameters,
     config: ODTConfig,
@@ -319,7 +323,7 @@ def _fill_hermite_components(spectrum3d: Array) -> Array:
     return jnp.where(overlap_region, spectrum3d / 2, spectrum3d)
 
 
-def _calc_refractive_index(scattering_potential: Array, params: ODTParameters) -> Array:
+def calc_refractive_index(scattering_potential: Array, params: ODTParameters) -> Array:
     """Calculate the refractive index from the scattering potential.
 
     Parameters
@@ -434,7 +438,7 @@ def calc_scattering_potential_from_spectrums(
     """
     params.verify_parameters()
     config.precision.validate()
-    synthesized_spectrum = _synthesize_spectrum(scattering_spectrums, params, config, mode="Forward")
+    synthesized_spectrum = synthesize_spectrum(scattering_spectrums, params, config, mode="Forward")
 
     if config.hermite_symmetry:
         synthesized_spectrum = _fill_hermite_components(synthesized_spectrum)
@@ -483,7 +487,7 @@ def odt(
         factor = -((params.light_freq_px * params.k_per_px) ** 2) * params.n_sol
         refractive_index = params.n_sol + scattering_potential / factor
     else:
-        refractive_index = _calc_refractive_index(scattering_potential, params)
+        refractive_index = calc_refractive_index(scattering_potential, params)
     return refractive_index, synthesized_spectrum
 
 

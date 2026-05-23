@@ -55,10 +55,12 @@ def test_v1_public_api_exports() -> None:
             "ODTConfig",
             "ODTParameters",
             "ScatteringSpectrum",
+            "calc_refractive_index",
             "calc_scattering_potential_from_spectrums",
             "calc_scattering_spectrums",
             "calculate_odt_difference",
             "odt",
+            "synthesize_spectrum",
         ],
     )
     _assert_public_api(
@@ -110,10 +112,8 @@ def test_idt_and_odt_helpers_are_outside_stable_public_api() -> None:
             "_validate_xy_image",
         ],
         odt: [
-            "_calc_refractive_index",
             "_discard_higher_axial_freq",
             "_fill_hermite_components",
-            "_synthesize_spectrum",
             "_zeropad_higher_axial_freq",
         ],
     }

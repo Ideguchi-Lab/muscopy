@@ -22,6 +22,29 @@ _GREEN_FUNC_DENOMINATOR_EPSILON = 1e-6
 _ILLUMINATION_TOL = 1e-9
 _IMAGE_NDIM = 2
 
+__all__ = [
+    "IDTConfig",
+    "IDTParameters",
+    "IDTZCenteringMode",
+    "compute_g_list",
+    "compute_idt",
+    "compute_permittivity",
+    "convert_to_refractive_index",
+    "fourier_transform",
+    "idt_coherent_pupil_radius_px",
+    "idt_intensity_support_radius_px",
+    "make_frequency_grid_xy",
+    "make_green_func",
+    "make_pupil_func",
+    "make_z_position",
+    "relative_imag_residual",
+    "transfer_func_im",
+    "transfer_func_re",
+    "validate_idt_params",
+    "validate_idt_sampling",
+    "validate_xy_image",
+]
+
 
 class IDTZCenteringMode(StrEnum):
     """Axial z-grid convention for IDT reconstruction.
@@ -835,40 +858,6 @@ def compute_permittivity(  # noqa: PLR0914
     eps_im = eps_im_scaled / h_norm_scale
 
     return jnp.asarray(eps_re, dtype=complex_dtype), jnp.asarray(eps_im, dtype=complex_dtype)
-
-
-def compute_permitivity(
-    params: IDTParameters,
-    g_tilde_list: Sequence[Array],
-    u_illumination_list: Sequence[tuple[float, float]],
-    led_illumination_intensities: Sequence[float],
-    z: float = 0.0,
-    alpha: float = 1e-6,
-    beta: float = 1e-6,
-    *,
-    precision: ArrayPrecision | None = None,
-    determinant_rel_floor: float = 1e-4,
-    normalization_epsilon: float = _DEFAULT_NORMALIZATION_EPSILON,
-) -> tuple[Array, Array]:
-    """Backward-compatible alias for :func:`compute_permittivity`.
-
-    Returns
-    -------
-    tuple[Array, Array]
-        The computed permittivity changes Δε_Re and Δε_Im for each slice.
-    """
-    return compute_permittivity(
-        params,
-        g_tilde_list,
-        u_illumination_list,
-        led_illumination_intensities,
-        z=z,
-        alpha=alpha,
-        beta=beta,
-        precision=precision,
-        determinant_rel_floor=determinant_rel_floor,
-        normalization_epsilon=normalization_epsilon,
-    )
 
 
 def convert_to_refractive_index(eps_re: Array, eps_im: Array, n_sol: float) -> tuple[Array, Array]:

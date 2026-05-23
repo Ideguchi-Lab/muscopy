@@ -11,6 +11,14 @@ MIPRegion: TypeAlias = Region | None
 
 X64_BIT_LENGTH = 64
 
+__all__ = [
+    "ArrayPrecision",
+    "MIPRegion",
+    "OffsetRegions",
+    "Region",
+    "Regions",
+]
+
 
 def _jax_x64_enabled() -> bool:
     return bool(jax.config.read("jax_enable_x64"))  # type: ignore[no-untyped-call]

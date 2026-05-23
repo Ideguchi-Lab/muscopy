@@ -23,6 +23,12 @@ if TYPE_CHECKING:
     from muscopy.cfg import OffsetRegions, Region
     from muscopy.dh import MuParameters
 
+__all__ = [
+    "correct_phase_offset",
+    "mip_qpi",
+    "qpi",
+]
+
 
 @typing.overload
 def qpi(

@@ -14,7 +14,6 @@ from muscopy.idt import (
     IDTZCenteringMode,
     compute_g_list,
     compute_idt,
-    compute_permitivity,
     compute_permittivity,
     fourier_transform,
     idt_coherent_pupil_radius_px,
@@ -377,7 +376,7 @@ def test_compute_idt_passes_configured_normalization_epsilon(monkeypatch: pytest
     assert seen["compute_permittivity"] == [configured_epsilon, configured_epsilon]
 
 
-def test_compute_permitivity_restores_normalized_transfer_scale(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_compute_permittivity_restores_normalized_transfer_scale(monkeypatch: pytest.MonkeyPatch) -> None:
     params = _small_idt_params()
     spectrum_shape = (2 * params.aperturesize_px + 1, 2 * params.aperturesize_px + 1)
     g_tilde = jnp.full(spectrum_shape, 6.0 + 0.0j, dtype=jnp.complex64)
@@ -407,7 +406,7 @@ def test_compute_permitivity_restores_normalized_transfer_scale(monkeypatch: pyt
     monkeypatch.setattr(idt_module, "transfer_func_re", fake_transfer_func_re)
     monkeypatch.setattr(idt_module, "transfer_func_im", fake_transfer_func_im)
 
-    eps_re, eps_im = compute_permitivity(
+    eps_re, eps_im = compute_permittivity(
         params,
         [g_tilde],
         [(0.0, 0.0)],
@@ -420,44 +419,7 @@ def test_compute_permitivity_restores_normalized_transfer_scale(monkeypatch: pyt
     assert bool(jnp.allclose(eps_im, 0.0 + 0.0j))
 
 
-def test_compute_permittivity_keeps_backward_compatible_typo_alias(monkeypatch: pytest.MonkeyPatch) -> None:
-    params = _small_idt_params()
-    spectrum_shape = (2 * params.aperturesize_px + 1, 2 * params.aperturesize_px + 1)
-    g_tilde = jnp.full(spectrum_shape, 2.0 + 0.0j, dtype=jnp.complex64)
-
-    def fake_transfer_func_re(
-        params_arg: IDTParameters,
-        u_illumination: tuple[float, float],
-        z: float,
-        incident_intensity: float,
-        *,
-        precision: ArrayPrecision | None = None,
-    ) -> Array:
-        del params_arg, u_illumination, z, incident_intensity, precision
-        return jnp.ones(spectrum_shape, dtype=jnp.complex64)
-
-    def fake_transfer_func_im(
-        params_arg: IDTParameters,
-        u_illumination: tuple[float, float],
-        z: float,
-        incident_intensity: float,
-        *,
-        precision: ArrayPrecision | None = None,
-    ) -> Array:
-        del params_arg, u_illumination, z, incident_intensity, precision
-        return jnp.zeros(spectrum_shape, dtype=jnp.complex64)
-
-    monkeypatch.setattr(idt_module, "transfer_func_re", fake_transfer_func_re)
-    monkeypatch.setattr(idt_module, "transfer_func_im", fake_transfer_func_im)
-
-    fixed_name_result = compute_permittivity(params, [g_tilde], [(0.0, 0.0)], [1.0], alpha=0.0, beta=1.0)
-    typo_alias_result = compute_permitivity(params, [g_tilde], [(0.0, 0.0)], [1.0], alpha=0.0, beta=1.0)
-
-    assert bool(jnp.allclose(fixed_name_result[0], typo_alias_result[0]))
-    assert bool(jnp.allclose(fixed_name_result[1], typo_alias_result[1]))
-
-
-def test_compute_permitivity_zeros_singular_inverse_pixels(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_compute_permittivity_zeros_singular_inverse_pixels(monkeypatch: pytest.MonkeyPatch) -> None:
     params = _small_idt_params()
     spectrum_shape = (2 * params.aperturesize_px + 1, 2 * params.aperturesize_px + 1)
     g_tilde = jnp.full(spectrum_shape, 6.0 + 0.0j, dtype=jnp.complex64)
@@ -476,7 +438,7 @@ def test_compute_permitivity_zeros_singular_inverse_pixels(monkeypatch: pytest.M
     monkeypatch.setattr(idt_module, "transfer_func_re", fake_transfer_func)
     monkeypatch.setattr(idt_module, "transfer_func_im", fake_transfer_func)
 
-    eps_re, eps_im = compute_permitivity(
+    eps_re, eps_im = compute_permittivity(
         params,
         [g_tilde],
         [(0.0, 0.0)],
@@ -548,13 +510,13 @@ def test_transfer_funcs_have_no_fast_axial_carrier_on_axis_dc() -> None:
     )
 
 
-def test_compute_permitivity_rejects_invalid_led_intensity() -> None:
+def test_compute_permittivity_rejects_invalid_led_intensity() -> None:
     params = _small_idt_params()
     spectrum_shape = (2 * params.aperturesize_px + 1, 2 * params.aperturesize_px + 1)
     g_tilde = jnp.zeros(spectrum_shape, dtype=jnp.complex64)
 
     with pytest.raises(ValueError, match=r"led_illumination_intensities\[0\] must be positive and finite"):
-        compute_permitivity(
+        compute_permittivity(
             params,
             [g_tilde],
             [(0.0, 0.0)],
@@ -562,13 +524,13 @@ def test_compute_permitivity_rejects_invalid_led_intensity() -> None:
         )
 
 
-def test_compute_permitivity_rejects_invalid_determinant_rel_floor() -> None:
+def test_compute_permittivity_rejects_invalid_determinant_rel_floor() -> None:
     params = _small_idt_params()
     spectrum_shape = (2 * params.aperturesize_px + 1, 2 * params.aperturesize_px + 1)
     g_tilde = jnp.zeros(spectrum_shape, dtype=jnp.complex64)
 
     with pytest.raises(ValueError, match="determinant_rel_floor must be non-negative"):
-        compute_permitivity(
+        compute_permittivity(
             params,
             [g_tilde],
             [(0.0, 0.0)],
@@ -577,13 +539,13 @@ def test_compute_permitivity_rejects_invalid_determinant_rel_floor() -> None:
         )
 
 
-def test_compute_permitivity_rejects_invalid_normalization_epsilon() -> None:
+def test_compute_permittivity_rejects_invalid_normalization_epsilon() -> None:
     params = _small_idt_params()
     spectrum_shape = (2 * params.aperturesize_px + 1, 2 * params.aperturesize_px + 1)
     g_tilde = jnp.zeros(spectrum_shape, dtype=jnp.complex64)
 
     with pytest.raises(ValueError, match="normalization_epsilon must be positive"):
-        compute_permitivity(
+        compute_permittivity(
             params,
             [g_tilde],
             [(0.0, 0.0)],

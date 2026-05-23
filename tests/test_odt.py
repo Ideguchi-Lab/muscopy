@@ -15,7 +15,6 @@ from muscopy.odt import (
     ODTConfig,
     ODTParameters,
     ScatteringSpectrum,
-    calc_scattering_potential,
     calc_scattering_potential_from_spectrums,
     calc_scattering_spectrums,
     calculate_odt_difference,
@@ -70,7 +69,7 @@ def test_synthesize_spectrum_prints_when_verbose(capsys: pytest.CaptureFixture[s
     assert "Synthesize spectrum..." in capsys.readouterr().out
 
 
-def test_calc_scattering_potential_rejects_mutated_64_bit_precision(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_calc_scattering_spectrums_rejects_mutated_64_bit_precision(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that ODT validates precision before reconstruction."""
     monkeypatch.setattr("muscopy.cfg._jax_x64_enabled", lambda: False)
     params = ODTParameters(
@@ -85,11 +84,8 @@ def test_calc_scattering_potential_rejects_mutated_64_bit_precision(monkeypatch:
     precision.float_length = 64
     config = ODTConfig(precision=precision)
 
-    with (
-        pytest.warns(FutureWarning, match="calc_scattering_potential\\(\\) is deprecated"),
-        pytest.raises(ValueError, match="64-bit precision requires JAX x64 support"),
-    ):
-        calc_scattering_potential([], [], params, config)
+    with pytest.raises(ValueError, match="64-bit precision requires JAX x64 support"):
+        calc_scattering_spectrums([], [], params, config)
 
 
 def test_synthesize_spectrum_applies_scattering_spectrum_coefficient() -> None:
@@ -380,8 +376,8 @@ def test_log_field_preserves_low_amplitude_complex_phase() -> None:
     assert jnp.allclose(jnp.imag(log_field), jnp.pi / 2, atol=1e-5)
 
 
-def test_calc_scattering_potential_matches_factored_reconstruction_path() -> None:
-    """Test that the legacy wrapper matches the explicit factored ODT path."""
+def test_calc_scattering_potential_from_spectrums_matches_factored_reconstruction_path() -> None:
+    """Test the explicit factored ODT path."""
     params = ODTParameters(
         na=0.1,
         wavelength_m=1.0,
@@ -394,40 +390,21 @@ def test_calc_scattering_potential_matches_factored_reconstruction_path() -> Non
     cp_spectrum = jnp.ones((params.aperturesize_px, params.aperturesize_px), dtype=jnp.complex64)
     ref_cp_spectrum = jnp.ones_like(cp_spectrum)
 
-    with pytest.warns(FutureWarning, match="calc_scattering_potential\\(\\) is deprecated"):
-        wrapped_potential, wrapped_spectrum = calc_scattering_potential(
-            [cp_spectrum],
-            [ref_cp_spectrum],
-            params,
-            config,
-        )
     scattering_spectrums = calc_scattering_spectrums([cp_spectrum], [ref_cp_spectrum], params, config)
     factored_potential, factored_spectrum = calc_scattering_potential_from_spectrums(
         scattering_spectrums,
         params,
         config,
     )
-
-    assert jnp.allclose(wrapped_potential, factored_potential)
-    assert jnp.allclose(wrapped_spectrum, factored_spectrum)
-
-
-def test_calc_scattering_potential_warns_with_migration_path() -> None:
-    """Test that the deprecated ODT wrapper points callers to the factored API."""
-    params = ODTParameters(
-        na=0.1,
-        wavelength_m=1.0,
-        img_size_px=8,
-        px_size_m=1.0,
-        n_sol=1.33,
-        na_illumination=0.1,
+    repeated_scattering_spectrums = calc_scattering_spectrums([cp_spectrum], [ref_cp_spectrum], params, config)
+    repeated_potential, repeated_spectrum = calc_scattering_potential_from_spectrums(
+        repeated_scattering_spectrums,
+        params,
+        config,
     )
-    config = ODTConfig(hermite_symmetry=False)
-    cp_spectrum = jnp.ones((params.aperturesize_px, params.aperturesize_px), dtype=jnp.complex64)
-    ref_cp_spectrum = jnp.ones_like(cp_spectrum)
 
-    with pytest.warns(FutureWarning, match="calc_scattering_spectrums\\(\\) followed by"):
-        calc_scattering_potential([cp_spectrum], [ref_cp_spectrum], params, config)
+    assert jnp.allclose(repeated_potential, factored_potential)
+    assert jnp.allclose(repeated_spectrum, factored_spectrum)
 
 
 def test_odt_remains_supported_without_deprecation_warning() -> None:

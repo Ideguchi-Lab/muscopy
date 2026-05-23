@@ -10,7 +10,6 @@ This module provides:
 - `calc_refractive_index`: A function to calculate the refractive index from the scattering potential.
 - `calc_scattering_spectrums`: A function to calculate first-order scattering spectrums.
 - `calc_scattering_potential_from_spectrums`: A function to reconstruct scattering potential from spectrums.
-- `calc_scattering_potential`: A function to calculate the scattering potential from complex field spectrums.
 - `odt`: A function to perform ODT reconstruction.
 - `calculate_odt_difference`: A function to calculate the difference between two ODT reconstructions.
 - `discard_higher_axial_freq`: A function to discard higher axial frequency.
@@ -20,7 +19,6 @@ This module provides:
 from __future__ import annotations
 
 import dataclasses
-import warnings
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
@@ -37,7 +35,22 @@ if TYPE_CHECKING:
 
 
 EPSILON = 1e-8
-_ODT_DEPRECATION_REMOVAL_VERSION = "0.9.0"
+
+__all__ = [
+    "EwaldEmbeddingMode",
+    "ODTConfig",
+    "ODTParameters",
+    "ScatteringSpectrum",
+    "calc_refractive_index",
+    "calc_scattering_potential_from_spectrums",
+    "calc_scattering_spectrums",
+    "calculate_odt_difference",
+    "discard_higher_axial_freq",
+    "fill_hermite_components",
+    "odt",
+    "synthesize_spectrum",
+    "zeropad_higher_axial_freq",
+]
 
 
 class EwaldEmbeddingMode(StrEnum):
@@ -336,45 +349,6 @@ def calc_refractive_index(scattering_potential: Array, params: ODTParameters) ->
     )
 
 
-def calc_scattering_potential(
-    cp_spectrums: Sequence[Array],
-    ref_cp_spectrums: Sequence[Array],
-    params: ODTParameters,
-    config: ODTConfig,
-) -> tuple[Array, Array]:
-    r"""Calculate the scattering potential from complex field spectrums.
-
-    .. deprecated:: 0.8.0
-        Use :func:`calc_scattering_spectrums` followed by
-        :func:`calc_scattering_potential_from_spectrums` instead.
-        This wrapper is scheduled for removal in muscopy 0.9.0.
-
-    Parameters
-    ----------
-    cp_spectrums : `collections.abc.Sequence`\[`Array`\]
-        Spectrum of complex fields
-    ref_cp_spectrums : `collections.abc.Sequence`\[`Array`\]
-        Reference spectrum of complex fields
-    params : `ODTParameters`
-        ODT parameter instance
-    config : `ODTConfig`
-        ODT configuration
-
-    Returns
-    -------
-    `tuple`\[`Array`, `Array`\]
-        3D scattering potential, 3D spectrum
-    """
-    _warn_deprecated_odt_api(
-        "calc_scattering_potential() is deprecated and will be removed in "
-        f"muscopy {_ODT_DEPRECATION_REMOVAL_VERSION}. Use calc_scattering_spectrums() followed by "
-        "calc_scattering_potential_from_spectrums() instead. Pass explicit illumination_vectors to "
-        "calc_scattering_spectrums() when the illumination geometry is known."
-    )
-    scattering_spectrums = calc_scattering_spectrums(cp_spectrums, ref_cp_spectrums, params, config)
-    return calc_scattering_potential_from_spectrums(scattering_spectrums, params, config)
-
-
 def calc_scattering_spectrums(
     cp_spectrums: Sequence[Array],
     ref_cp_spectrums: Sequence[Array],
@@ -651,10 +625,6 @@ def _find_max_args(array: Array) -> tuple[int, int, float]:
     max_x = int(max_index[0])
     max_y = int(max_index[1])
     return max_x, max_y, max_value
-
-
-def _warn_deprecated_odt_api(message: str) -> None:
-    warnings.warn(message, FutureWarning, stacklevel=2)
 
 
 def _shift_dh_spectrum(

@@ -551,12 +551,12 @@ def main() -> None:
 
     # Setup parameters
     idt_params, mlb_params = _setup_parameters()
-    num_angles = 30  # Reduced number of angles to decrease computation time and memory usage
+    num_angles = 10  # Reduced number of angles to decrease computation time and memory usage
 
     # Generate sample (sphere) - increase scattering for better signal
     print("Generating spherical sample...")
     radius_um = 3.0  # Larger sphere
-    delta_n = 0.001  # Much stronger scattering
+    delta_n = 0.01  # Much stronger scattering
     scattering_potential = generate_sphere_potential(mlb_params, radius_um, delta_n)
 
     # SlicingVisualizer(np.asarray(scattering_potential)).run()

@@ -44,6 +44,10 @@ def _distribution_paths(dist_dir: Path) -> list[Path]:
     return sorted(path for path in dist_dir.iterdir() if path.suffix == ".whl" or path.name.endswith(".tar.gz"))
 
 
+def _normalize_specifier_set(specifier: str) -> str:
+    return ",".join(sorted(part.strip() for part in specifier.split(",")))
+
+
 def _main() -> None:
     project_config = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
     project = project_config["project"]
@@ -52,7 +56,7 @@ def _main() -> None:
         "Version": project["version"],
         "Requires-Python": project["requires-python"],
     }
-    expected_extras = set(project_config["tool"]["setuptools"]["dynamic"]["optional-dependencies"])
+    expected_extras = set(project.get("optional-dependencies", {}))
 
     tag_name = os.environ.get("GITHUB_REF_NAME")
     if tag_name is not None:
@@ -69,9 +73,13 @@ def _main() -> None:
     for path in paths:
         metadata = _distribution_metadata(path)
         for field, expected in expected_metadata.items():
-            actual = metadata[field]
-            if actual != expected:
-                msg = f"{path}: {field} is {actual!r}, expected {expected!r}"
+            actual_value = metadata[field]
+            expected_value = expected
+            if field == "Requires-Python":
+                actual_value = _normalize_specifier_set(actual_value)
+                expected_value = _normalize_specifier_set(expected_value)
+            if actual_value != expected_value:
+                msg = f"{path}: {field} is {actual_value!r}, expected {expected_value!r}"
                 raise RuntimeError(msg)
 
         actual_extras = set(metadata.get_all("Provides-Extra", []))

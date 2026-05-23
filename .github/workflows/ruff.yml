@@ -12,11 +12,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: astral-sh/ruff-action@v3
+      - uses: actions/setup-python@v6
         with:
-          version-file: requirements-dev.txt
-          args: check ./muscopy ./tests ./examples
+          python-version: "3.11"
 
-      - run: ruff format --check --diff
+      - uses: astral-sh/setup-uv@v8.1.0
+        with:
+          uv-version: "0.11.16"
+          enable-cache: true
+
+      - run: uv sync --locked --python 3.11 --extra dev
+
+      - run: uv run --no-sync ruff check ./muscopy ./tests ./examples
+
+      - run: uv run --no-sync ruff format --check --diff

@@ -6,23 +6,30 @@ and related workflows.
 
 ## How to install
 
-First, clone this repository onto your local machine.
+Install from source with uv.
 
 ```sh
 git clone git@github.com:Ideguchi-Lab/muscopy.git
 cd muscopy
-```
-
-Then, install the package in editable mode.
-
-```sh
-(YOUR_VIRTUAL_ENV) pip install -e .
+uv sync
 ```
 
 If you are willing to contribute, install the development dependencies.
 
 ```sh
-(YOUR_VIRTUAL_ENV) pip install -e .[dev]
+uv sync --extra dev
+```
+
+Install documentation dependencies when building docs locally.
+
+```sh
+uv sync --extra doc
+```
+
+Install the optional MLB simulation integration when needed.
+
+```sh
+uv sync --extra extra
 ```
 
 ## Public API compatibility
@@ -55,10 +62,10 @@ major release. Experimental APIs may change with changelog notice.
 The linter and type checker configuration is in `pyproject.toml`.
 
 ```sh
-ruff check ./muscopy    # code style check
-ruff format ./muscopy   # code formatter
-mypy ./muscopy    # static type analysis
-pyright ./muscopy    # static type analysis
+uv run ruff check ./muscopy ./tests ./examples
+uv run ruff format ./muscopy ./tests ./examples
+uv run mypy
+uv run pyright
 ```
 
 ## Docs
@@ -66,9 +73,8 @@ pyright ./muscopy    # static type analysis
 You can build the documentation with the following command.
 
 ```sh
-pip install -e .[doc]
-cd ./docs
-make html
+uv sync --extra doc
+uv run sphinx-build -W docs/source docs/build
 ```
 
-Then, you can find the documentation in `build/html/index.html`.
+Then, you can find the documentation in `docs/build/index.html`.

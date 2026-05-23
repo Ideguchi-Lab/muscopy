@@ -7,10 +7,11 @@ from typing import TYPE_CHECKING
 from muscopy import cfg, dh, dir_parser, idt, image_checker, odt, phase_noise, phasor, qpi, qpi_utils
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from types import ModuleType
 
 
-def _assert_public_api(module: ModuleType, expected: list[str]) -> None:
+def _assert_public_api(module: ModuleType, expected: Sequence[str]) -> None:
     assert module.__all__ == expected
     for name in expected:
         assert hasattr(module, name)

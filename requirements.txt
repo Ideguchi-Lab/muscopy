@@ -1,6 +1,0 @@
-jax >= 0.4.0
-jaxlib >= 0.4.0
-scikit-image
-tqdm > 4.60.0
-types-tqdm
-typing_extensions

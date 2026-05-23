@@ -1,5 +1,0 @@
-mypy
-pyright
-ruff
-pre-commit
-pytest

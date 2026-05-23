@@ -9,21 +9,40 @@ description = "A library for microscopy analyze functions"
 readme = "README.md"
 authors = [{name="Masato Fukushima", email="masato63fuk@g.ecc.u-tokyo.ac.jp"}]
 license = {file = "LICENSE"}
-requires-python = ">=3.11.0"
-dynamic = ["dependencies", "optional-dependencies"]
+requires-python = ">=3.11, <3.15"
+dependencies = [
+    "jax>=0.4.0",
+    "jaxlib>=0.4.0",
+    "scikit-image",
+    "tqdm>4.60.0",
+    "types-tqdm",
+    "typing-extensions",
+]
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
 ]
 
-[tool.setuptools.dynamic]
-dependencies = {file = "requirements.txt"}
-
-[tool.setuptools.dynamic.optional-dependencies]
-dev = { file = ["requirements-dev.txt"] }
-doc = { file = ["docs/requirements.txt"] }
-extra = { file = ["requirements-extra.txt"] }
+[project.optional-dependencies]
+dev = [
+    "mypy==2.1.0",
+    "pre-commit==4.6.0",
+    "pyright==1.1.409",
+    "pytest==9.0.3",
+    "ruff==0.15.14",
+]
+doc = [
+    "matplotlib>=3.5.0",
+    "numpy>=1.22.0",
+    "scipy>=1.10.0",
+    "sphinx>=7.4.0",
+    "sphinx-gallery>=0.17.0",
+    "sphinx-rtd-theme",
+]
+extra = [
+    "muscopy-mlbsim @ git+https://github.com/Ideguchi-Lab/muscopy-mlbsim.git",
+]
 
 [tool.setuptools.package-data]
 muscopy = ["py.typed"]
@@ -109,14 +128,4 @@ reportMissingModuleSource = "warning"
 ignore = [
     "examples/idt_with_mlb_simulation.py",
     "examples/odt_with_mlb_simulation.py"
-]
-
-[dependency-groups]
-dev = [
-    "matplotlib>=3.10.3",
-    "mypy>=1.17.0",
-    "pyright>=1.1.403",
-    "pytest>=8.4.1",
-    "ruff>=0.12.4",
-    "scikit-image>=0.25.2",
 ]

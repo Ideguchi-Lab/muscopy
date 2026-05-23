@@ -31,18 +31,8 @@ __all__ = [
     "compute_permittivity",
     "convert_to_refractive_index",
     "fourier_transform",
-    "idt_coherent_pupil_radius_px",
-    "idt_intensity_support_radius_px",
-    "make_frequency_grid_xy",
-    "make_green_func",
-    "make_pupil_func",
-    "make_z_position",
-    "relative_imag_residual",
     "transfer_func_im",
     "transfer_func_re",
-    "validate_idt_params",
-    "validate_idt_sampling",
-    "validate_xy_image",
 ]
 
 
@@ -99,12 +89,12 @@ class IDTParameters(ODTParameters):
     @property
     def intensity_support_radius_px(self) -> float:
         """Radius of the cropped IDT intensity spectrum support."""
-        return idt_intensity_support_radius_px(self)
+        return _idt_intensity_support_radius_px(self)
 
     @property
     def coherent_pupil_radius_px(self) -> float:
         """Radius of the coherent pupil support."""
-        return idt_coherent_pupil_radius_px(self)
+        return _idt_coherent_pupil_radius_px(self)
 
 
 @dataclasses.dataclass
@@ -175,7 +165,7 @@ class IDTConfig:
             raise ValueError(msg)
 
 
-def idt_intensity_support_radius_px(params: IDTParameters) -> float:
+def _idt_intensity_support_radius_px(params: IDTParameters) -> float:
     """Radius of the cropped IDT intensity spectrum support.
 
     Returns
@@ -186,7 +176,7 @@ def idt_intensity_support_radius_px(params: IDTParameters) -> float:
     return params.aperturesize_px
 
 
-def idt_coherent_pupil_radius_px(params: IDTParameters) -> float:
+def _idt_coherent_pupil_radius_px(params: IDTParameters) -> float:
     """Radius of the coherent pupil support.
 
     In IDT, the intensity spectrum support is approximately twice the
@@ -200,7 +190,7 @@ def idt_coherent_pupil_radius_px(params: IDTParameters) -> float:
     return params.aperturesize_px / 2
 
 
-def validate_idt_sampling(params: IDTParameters) -> None:
+def _validate_idt_sampling(params: IDTParameters) -> None:
     """Validate IDT sampling quantities used in transfer-function scaling.
 
     Raises
@@ -222,7 +212,7 @@ def validate_idt_sampling(params: IDTParameters) -> None:
         raise ValueError(msg)
 
 
-def validate_idt_params(params: IDTParameters) -> None:
+def _validate_idt_params(params: IDTParameters) -> None:
     """Validate IDT parameter ranges and Fourier cropping support.
 
     Raises
@@ -246,10 +236,10 @@ def validate_idt_params(params: IDTParameters) -> None:
     if params.n_sol <= 0:
         msg = "n_sol must be positive."
         raise ValueError(msg)
-    validate_idt_sampling(params)
+    _validate_idt_sampling(params)
 
 
-def make_z_position(params: IDTParameters, idx_z: int, config: IDTConfig) -> float:
+def _make_z_position(params: IDTParameters, idx_z: int, config: IDTConfig) -> float:
     """Return the physical z position for a reconstructed slice index.
 
     The position is determined by ``config.z_centering``:
@@ -294,7 +284,7 @@ def make_z_position(params: IDTParameters, idx_z: int, config: IDTConfig) -> flo
     return z_index * params.imgpx_axial_m_per_px
 
 
-def validate_xy_image(params: IDTParameters, image_xy: Array, *, name: str) -> None:
+def _validate_xy_image(params: IDTParameters, image_xy: Array, *, name: str) -> None:
     """Validate that an IDT image is a 2D internal [x, y] array.
 
     Raises
@@ -311,7 +301,7 @@ def validate_xy_image(params: IDTParameters, image_xy: Array, *, name: str) -> N
         raise ValueError(msg)
 
 
-def relative_imag_residual(arr: Array, *, normalization_epsilon: float = _DEFAULT_NORMALIZATION_EPSILON) -> Array:
+def _relative_imag_residual(arr: Array, *, normalization_epsilon: float = _DEFAULT_NORMALIZATION_EPSILON) -> Array:
     """Return the relative imaginary residual of a complex array.
 
     Parameters
@@ -342,7 +332,7 @@ def relative_imag_residual(arr: Array, *, normalization_epsilon: float = _DEFAUL
 def _warn_if_imag_residual_large(arr: Array, *, name: str, config: IDTConfig) -> None:
     if not config.check_ifft_imag_residual:
         return
-    residual = float(relative_imag_residual(arr, normalization_epsilon=config.normalization_epsilon))
+    residual = float(_relative_imag_residual(arr, normalization_epsilon=config.normalization_epsilon))
     if residual > config.imag_residual_warn_threshold:
         warnings.warn(
             f"{name} inverse FFT imaginary residual is {residual:.3g}, "
@@ -352,7 +342,7 @@ def _warn_if_imag_residual_large(arr: Array, *, name: str, config: IDTConfig) ->
         )
 
 
-def make_frequency_grid_xy(
+def _make_frequency_grid_xy(
     params: IDTParameters,
     *,
     precision: ArrayPrecision,
@@ -367,7 +357,7 @@ def make_frequency_grid_xy(
     tuple[Array, Array]
         The ``kx`` and ``ky`` grids in internal [x, y] order.
     """
-    validate_idt_params(params)
+    _validate_idt_params(params)
     precision.validate()
     dtype = precision.float_precision()
     support_radius_px = params.intensity_support_radius_px
@@ -484,7 +474,7 @@ def fourier_transform(
     complex_dtype = precision.complex_precision()
     g_tilde_list = []
     support_radius_px = params.intensity_support_radius_px
-    kx, ky = make_frequency_grid_xy(params, precision=precision)
+    kx, ky = _make_frequency_grid_xy(params, precision=precision)
     incoherent_limit_mask = kx**2 + ky**2 <= support_radius_px**2
     ft_scaling_factor = jnp.asarray(jnp.sqrt((2 * support_radius_px + 1) / params.img_size_px), dtype=float_dtype)
     for g_l in g_list:
@@ -499,7 +489,7 @@ def fourier_transform(
     return g_tilde_list
 
 
-def make_green_func(
+def _make_green_func(
     params: IDTParameters,
     u_shift: tuple[float, float],
     z: float,
@@ -528,7 +518,7 @@ def make_green_func(
         precision = ArrayPrecision()
     precision.validate()
     complex_dtype = precision.complex_precision()
-    kx, ky = make_frequency_grid_xy(params, precision=precision)
+    kx, ky = _make_frequency_grid_xy(params, precision=precision)
     ux = kx + u_shift[0]
     uy = ky + u_shift[1]
     uz_squared = params.light_freq_px**2 - ux**2 - uy**2
@@ -548,7 +538,7 @@ def make_green_func(
     return jnp.asarray(green_func, dtype=complex_dtype)
 
 
-def make_pupil_func(
+def _make_pupil_func(
     params: IDTParameters,
     u_shift: tuple[float, float],
     *,
@@ -573,7 +563,7 @@ def make_pupil_func(
     if precision is None:
         precision = ArrayPrecision()
     precision.validate()
-    kx, ky = make_frequency_grid_xy(params, precision=precision)
+    kx, ky = _make_frequency_grid_xy(params, precision=precision)
     ux = kx + u_shift[0]
     uy = ky + u_shift[1]
     pupil_radius_px = params.coherent_pupil_radius_px
@@ -624,14 +614,14 @@ def transfer_func_re(
     precision.validate()
     u_ill_z = jnp.sqrt(jnp.maximum(u_ill_z_squared, 0.0))
     first_term = (
-        make_green_func(params, (-u_ill_x, -u_ill_y), z, precision=precision)
+        _make_green_func(params, (-u_ill_x, -u_ill_y), z, precision=precision)
         * jnp.exp(1j * u_ill_z * z * params.k_per_px)
-        * make_pupil_func(params, (-u_ill_x, -u_ill_y), precision=precision)
+        * _make_pupil_func(params, (-u_ill_x, -u_ill_y), precision=precision)
     )
     second_term = (
-        jnp.conjugate(make_green_func(params, (u_ill_x, u_ill_y), z, precision=precision))
+        jnp.conjugate(_make_green_func(params, (u_ill_x, u_ill_y), z, precision=precision))
         * jnp.exp(-1j * u_ill_z * z * params.k_per_px)
-        * jnp.conjugate(make_pupil_func(params, (u_ill_x, u_ill_y), precision=precision))
+        * jnp.conjugate(_make_pupil_func(params, (u_ill_x, u_ill_y), precision=precision))
     )
 
     slice_thickness_m = params.imgpx_axial_m_per_px
@@ -689,14 +679,14 @@ def transfer_func_im(
         raise ValueError(msg)
     u_ill_z = jnp.sqrt(jnp.maximum(u_ill_z_squared, 0.0))
     first_term = (
-        make_green_func(params, (-u_ill_x, -u_ill_y), z, precision=precision)
+        _make_green_func(params, (-u_ill_x, -u_ill_y), z, precision=precision)
         * jnp.exp(1j * u_ill_z * z * params.k_per_px)
-        * make_pupil_func(params, (-u_ill_x, -u_ill_y), precision=precision)
+        * _make_pupil_func(params, (-u_ill_x, -u_ill_y), precision=precision)
     )
     second_term = (
-        jnp.conjugate(make_green_func(params, (u_ill_x, u_ill_y), z, precision=precision))
+        jnp.conjugate(_make_green_func(params, (u_ill_x, u_ill_y), z, precision=precision))
         * jnp.exp(-1j * u_ill_z * z * params.k_per_px)
-        * jnp.conjugate(make_pupil_func(params, (u_ill_x, u_ill_y), precision=precision))
+        * jnp.conjugate(_make_pupil_func(params, (u_ill_x, u_ill_y), precision=precision))
     )
 
     slice_thickness_m = params.imgpx_axial_m_per_px
@@ -966,16 +956,16 @@ def compute_idt(  # noqa: PLR0914
         raise ValueError(msg)
     if config is None:
         config = IDTConfig()
-    validate_idt_params(params)
+    _validate_idt_params(params)
     config.precision.validate()
     float_dtype = config.precision.float_precision()
     complex_dtype = config.precision.complex_precision()
 
     # STEP 1: intensity images (input)
     for idx_image, image_xy in enumerate(intensity_images):
-        validate_xy_image(params, image_xy, name=f"intensity_images[{idx_image}]")
+        _validate_xy_image(params, image_xy, name=f"intensity_images[{idx_image}]")
     for idx_image, image_xy in enumerate(ref_intensity_images):
-        validate_xy_image(params, image_xy, name=f"ref_intensity_images[{idx_image}]")
+        _validate_xy_image(params, image_xy, name=f"ref_intensity_images[{idx_image}]")
 
     # STEP 2: compute g_l
 
@@ -1009,7 +999,7 @@ def compute_idt(  # noqa: PLR0914
     _validate_led_illumination_intensities(led_illumination_intensities)
 
     for idx_z in range(params.num_z_slices):
-        z = make_z_position(params, idx_z, config)
+        z = _make_z_position(params, idx_z, config)
         eps_re, eps_im = compute_permittivity(
             params,
             g_tilde_list,

@@ -55,15 +55,10 @@ def test_v1_public_api_exports() -> None:
             "ODTConfig",
             "ODTParameters",
             "ScatteringSpectrum",
-            "calc_refractive_index",
             "calc_scattering_potential_from_spectrums",
             "calc_scattering_spectrums",
             "calculate_odt_difference",
-            "discard_higher_axial_freq",
-            "fill_hermite_components",
             "odt",
-            "synthesize_spectrum",
-            "zeropad_higher_axial_freq",
         ],
     )
     _assert_public_api(
@@ -77,18 +72,8 @@ def test_v1_public_api_exports() -> None:
             "compute_permittivity",
             "convert_to_refractive_index",
             "fourier_transform",
-            "idt_coherent_pupil_radius_px",
-            "idt_intensity_support_radius_px",
-            "make_frequency_grid_xy",
-            "make_green_func",
-            "make_pupil_func",
-            "make_z_position",
-            "relative_imag_residual",
             "transfer_func_im",
             "transfer_func_re",
-            "validate_idt_params",
-            "validate_idt_sampling",
-            "validate_xy_image",
         ],
     )
     _assert_public_api(phasor, ["PhasorParameters", "PhasorResult", "phasor"])
@@ -108,6 +93,35 @@ def test_v1_public_api_exports() -> None:
 def test_pre_v1_legacy_api_names_are_removed() -> None:
     assert not hasattr(odt, "calc_scattering_potential")
     assert not hasattr(idt, "compute_permitivity")
+
+
+def test_idt_and_odt_helpers_are_outside_stable_public_api() -> None:
+    helper_names_by_module = {
+        idt: [
+            "_idt_coherent_pupil_radius_px",
+            "_idt_intensity_support_radius_px",
+            "_make_frequency_grid_xy",
+            "_make_green_func",
+            "_make_pupil_func",
+            "_make_z_position",
+            "_relative_imag_residual",
+            "_validate_idt_params",
+            "_validate_idt_sampling",
+            "_validate_xy_image",
+        ],
+        odt: [
+            "_calc_refractive_index",
+            "_discard_higher_axial_freq",
+            "_fill_hermite_components",
+            "_synthesize_spectrum",
+            "_zeropad_higher_axial_freq",
+        ],
+    }
+
+    for module, helper_names in helper_names_by_module.items():
+        for helper_name in helper_names:
+            assert hasattr(module, helper_name)
+            assert helper_name not in module.__all__
 
 
 def test_experimental_image_checker_has_no_stable_export_contract() -> None:

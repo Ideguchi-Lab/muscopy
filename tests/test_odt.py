@@ -18,8 +18,9 @@ from muscopy.odt import (
     calc_scattering_potential_from_spectrums,
     calc_scattering_spectrums,
     calculate_odt_difference,
-    synthesize_spectrum,
 )
+
+_synthesize_spectrum = odt_module._synthesize_spectrum  # noqa: SLF001 - Tests exercise private helpers.
 
 
 def test_odt_config_defaults_to_32_bit_precision() -> None:
@@ -45,7 +46,7 @@ def test_synthesize_spectrum_is_silent_by_default(capsys: pytest.CaptureFixture[
         na_illumination=0.1,
     )
 
-    synthesize_spectrum([], params, ODTConfig())
+    _synthesize_spectrum([], params, ODTConfig())
 
     captured = capsys.readouterr()
     assert not captured.out
@@ -64,7 +65,7 @@ def test_synthesize_spectrum_prints_when_verbose(capsys: pytest.CaptureFixture[s
     )
     config = ODTConfig(verbose=True)
 
-    synthesize_spectrum([], params, config)
+    _synthesize_spectrum([], params, config)
 
     assert "Synthesize spectrum..." in capsys.readouterr().out
 
@@ -103,8 +104,8 @@ def test_synthesize_spectrum_applies_scattering_spectrum_coefficient() -> None:
     spectrum = jnp.ones((spectrum_shape, spectrum_shape), dtype=jnp.complex64)
     coefficient = 2.0 + 0.5j
 
-    unweighted = synthesize_spectrum([ScatteringSpectrum(spectrum, (0, 0))], params, config)
-    weighted = synthesize_spectrum([ScatteringSpectrum(spectrum, (0, 0), coefficient)], params, config)
+    unweighted = _synthesize_spectrum([ScatteringSpectrum(spectrum, (0, 0))], params, config)
+    weighted = _synthesize_spectrum([ScatteringSpectrum(spectrum, (0, 0), coefficient)], params, config)
 
     assert jnp.allclose(weighted, coefficient * unweighted)
 
@@ -125,8 +126,8 @@ def test_synthesize_spectrum_keeps_coverage_count_independent_from_coefficients(
     coefficient_1 = 2.0 + 0.0j
     coefficient_2 = 6.0 + 0.0j
 
-    single = synthesize_spectrum([ScatteringSpectrum(spectrum, (0, 0))], params, config)
-    overlapped = synthesize_spectrum(
+    single = _synthesize_spectrum([ScatteringSpectrum(spectrum, (0, 0))], params, config)
+    overlapped = _synthesize_spectrum(
         [
             ScatteringSpectrum(spectrum, (0, 0), coefficient_1),
             ScatteringSpectrum(spectrum, (0, 0), coefficient_2),
@@ -153,8 +154,8 @@ def test_synthesize_spectrum_counts_zero_values_as_observed_support() -> None:
     measured_spectrum = jnp.ones((spectrum_shape, spectrum_shape), dtype=jnp.complex64)
     zero_spectrum = jnp.zeros_like(measured_spectrum)
 
-    single = synthesize_spectrum([ScatteringSpectrum(measured_spectrum, (0, 0))], params, config)
-    overlapped_with_zero = synthesize_spectrum(
+    single = _synthesize_spectrum([ScatteringSpectrum(measured_spectrum, (0, 0))], params, config)
+    overlapped_with_zero = _synthesize_spectrum(
         [
             ScatteringSpectrum(measured_spectrum, (0, 0)),
             ScatteringSpectrum(zero_spectrum, (0, 0)),
@@ -262,12 +263,12 @@ def test_synthesize_spectrum_uses_configured_ewald_embedding_mode() -> None:
     spectrum2d = jnp.zeros((spectrum_shape, spectrum_shape), dtype=jnp.complex64)
     spectrum2d = spectrum2d.at[x_index, y_index].set(1)
 
-    truncated = synthesize_spectrum(
+    truncated = _synthesize_spectrum(
         [ScatteringSpectrum(spectrum2d, illumination_vector)],
         params,
         ODTConfig(hermite_symmetry=False, ewald_embedding_mode=EwaldEmbeddingMode.TRUNCATE),
     )
-    linear = synthesize_spectrum(
+    linear = _synthesize_spectrum(
         [ScatteringSpectrum(spectrum2d, illumination_vector)],
         params,
         ODTConfig(hermite_symmetry=False, ewald_embedding_mode=EwaldEmbeddingMode.LINEAR),

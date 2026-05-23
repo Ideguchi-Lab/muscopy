@@ -16,17 +16,18 @@ from muscopy.idt import (
     compute_idt,
     compute_permittivity,
     fourier_transform,
-    idt_coherent_pupil_radius_px,
-    idt_intensity_support_radius_px,
-    make_frequency_grid_xy,
-    make_green_func,
-    make_pupil_func,
-    make_z_position,
-    relative_imag_residual,
     transfer_func_im,
     transfer_func_re,
-    validate_idt_params,
 )
+
+_idt_coherent_pupil_radius_px = idt_module._idt_coherent_pupil_radius_px  # noqa: SLF001 - Tests exercise private helpers.
+_idt_intensity_support_radius_px = idt_module._idt_intensity_support_radius_px  # noqa: SLF001 - Tests exercise private helpers.
+_make_frequency_grid_xy = idt_module._make_frequency_grid_xy  # noqa: SLF001 - Tests exercise private helpers.
+_make_green_func = idt_module._make_green_func  # noqa: SLF001 - Tests exercise private helpers.
+_make_pupil_func = idt_module._make_pupil_func  # noqa: SLF001 - Tests exercise private helpers.
+_make_z_position = idt_module._make_z_position  # noqa: SLF001 - Tests exercise private helpers.
+_relative_imag_residual = idt_module._relative_imag_residual  # noqa: SLF001 - Tests exercise private helpers.
+_validate_idt_params = idt_module._validate_idt_params  # noqa: SLF001 - Tests exercise private helpers.
 
 
 def _small_idt_params() -> IDTParameters:
@@ -79,7 +80,7 @@ def test_make_frequency_grid_xy_uses_axis_0_for_kx_and_axis_1_for_ky() -> None:
     precision = ArrayPrecision()
     coords = jnp.arange(-params.aperturesize_px, params.aperturesize_px + 1, dtype=jnp.float32)
 
-    kx, ky = make_frequency_grid_xy(params, precision=precision)
+    kx, ky = _make_frequency_grid_xy(params, precision=precision)
 
     expected_shape = (2 * params.aperturesize_px + 1, 2 * params.aperturesize_px + 1)
     assert kx.shape == expected_shape
@@ -95,8 +96,8 @@ def test_make_frequency_grid_xy_uses_axis_0_for_kx_and_axis_1_for_ky() -> None:
 def test_idt_aperture_radii_document_intensity_and_coherent_support() -> None:
     params = _small_idt_params()
 
-    assert idt_intensity_support_radius_px(params) == params.aperturesize_px
-    assert bool(jnp.allclose(idt_coherent_pupil_radius_px(params), params.aperturesize_px / 2))
+    assert _idt_intensity_support_radius_px(params) == params.aperturesize_px
+    assert bool(jnp.allclose(_idt_coherent_pupil_radius_px(params), params.aperturesize_px / 2))
     assert params.intensity_support_radius_px == params.aperturesize_px
     assert bool(jnp.allclose(params.coherent_pupil_radius_px, params.aperturesize_px / 2))
 
@@ -105,7 +106,7 @@ def test_fourier_transform_masks_to_intensity_support_radius() -> None:
     params = _small_idt_params()
     precision = ArrayPrecision()
     image_xy = jnp.arange(params.img_size_px**2, dtype=jnp.float32).reshape(params.img_size_px, params.img_size_px)
-    kx, ky = make_frequency_grid_xy(params, precision=precision)
+    kx, ky = _make_frequency_grid_xy(params, precision=precision)
     expected_support = kx**2 + ky**2 <= params.intensity_support_radius_px**2
 
     [spectrum] = fourier_transform(params, [image_xy], precision=precision)
@@ -117,9 +118,9 @@ def test_fourier_transform_masks_to_intensity_support_radius() -> None:
 def test_make_pupil_func_uses_half_radius_coherent_pupil_support() -> None:
     params = _small_idt_params()
     precision = ArrayPrecision()
-    kx, ky = make_frequency_grid_xy(params, precision=precision)
+    kx, ky = _make_frequency_grid_xy(params, precision=precision)
 
-    pupil = make_pupil_func(params, (0.0, 0.0), precision=precision)
+    pupil = _make_pupil_func(params, (0.0, 0.0), precision=precision)
 
     expected = kx**2 + ky**2 <= params.coherent_pupil_radius_px**2
     assert bool(jnp.all(pupil == expected))
@@ -136,11 +137,11 @@ def test_make_pupil_func_shifts_subpixel_support_on_requested_axis() -> None:
         num_z_slices=2,
     )
     precision = ArrayPrecision()
-    kx, ky = make_frequency_grid_xy(params, precision=precision)
+    kx, ky = _make_frequency_grid_xy(params, precision=precision)
     du = 0.5
 
-    pupil_x = make_pupil_func(params, (du, 0.0), precision=precision)
-    pupil_y = make_pupil_func(params, (0.0, du), precision=precision)
+    pupil_x = _make_pupil_func(params, (du, 0.0), precision=precision)
+    pupil_y = _make_pupil_func(params, (0.0, du), precision=precision)
 
     center_x_for_x_shift = jnp.sum(kx * pupil_x) / jnp.sum(pupil_x)
     center_y_for_x_shift = jnp.sum(ky * pupil_x) / jnp.sum(pupil_x)
@@ -156,14 +157,14 @@ def test_make_green_func_zeros_values_outside_shared_support() -> None:
     params = _small_idt_params()
     precision = ArrayPrecision()
     u_shift = (0.5, 0.0)
-    kx, ky = make_frequency_grid_xy(params, precision=precision)
+    kx, ky = _make_frequency_grid_xy(params, precision=precision)
     ux = kx + u_shift[0]
     uy = ky + u_shift[1]
     expected_support = (ux**2 + uy**2 <= (params.aperturesize_px / 2) ** 2) & (
         params.light_freq_px**2 - ux**2 - uy**2 > 0
     )
 
-    green = make_green_func(params, u_shift, z=0.0, precision=precision)
+    green = _make_green_func(params, u_shift, z=0.0, precision=precision)
 
     assert green.dtype == jnp.complex64
     assert bool(jnp.allclose(green[~expected_support], 0.0))
@@ -183,7 +184,7 @@ def test_make_z_position_defaults_to_central_slice_zero_convention() -> None:
     )
     config = IDTConfig()
 
-    z_positions = jnp.array([make_z_position(params, idx_z, config) for idx_z in range(params.num_z_slices)])
+    z_positions = jnp.array([_make_z_position(params, idx_z, config) for idx_z in range(params.num_z_slices)])
 
     expected = jnp.arange(-5, 5, dtype=jnp.float32) * params.imgpx_axial_m_per_px
     assert config.z_centering == IDTZCenteringMode.CENTRAL_SLICE_ZERO
@@ -202,7 +203,7 @@ def test_make_z_position_supports_symmetric_volume_convention() -> None:
     )
     config = IDTConfig(z_centering="symmetric_volume")
 
-    z_positions = jnp.array([make_z_position(params, idx_z, config) for idx_z in range(params.num_z_slices)])
+    z_positions = jnp.array([_make_z_position(params, idx_z, config) for idx_z in range(params.num_z_slices)])
 
     expected = (jnp.arange(10, dtype=jnp.float32) - 4.5) * params.imgpx_axial_m_per_px
     assert config.z_centering == IDTZCenteringMode.SYMMETRIC_VOLUME
@@ -290,7 +291,7 @@ def test_compute_g_list_rejects_invalid_normalization_epsilon() -> None:
 def test_relative_imag_residual_uses_configurable_normalization_epsilon() -> None:
     arr = jnp.array([1j], dtype=jnp.complex64)
 
-    residual = relative_imag_residual(arr, normalization_epsilon=0.5)
+    residual = _relative_imag_residual(arr, normalization_epsilon=0.5)
 
     assert bool(jnp.allclose(residual, 2.0))
 
@@ -566,7 +567,7 @@ def test_validate_idt_params_rejects_intensity_support_larger_than_image() -> No
     )
 
     with pytest.raises(ValueError, match=r"2 \* aperturesize_px \+ 1 must be <= img_size_px"):
-        validate_idt_params(params)
+        _validate_idt_params(params)
 
 
 def test_compute_idt_docstring_describes_coupled_inverse() -> None:

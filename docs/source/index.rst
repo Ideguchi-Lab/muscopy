@@ -12,4 +12,5 @@ Use the gallery for executable examples and the module reference for API details
    :caption: Documentation
 
    gallery/index
+   api_policy
    references

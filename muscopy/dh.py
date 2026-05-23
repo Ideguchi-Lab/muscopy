@@ -34,6 +34,22 @@ if TYPE_CHECKING:
 
     from muscopy.cfg import OffsetRegions
 
+__all__ = [
+    "MuParameters",
+    "correct_aberration",
+    "correct_gradient",
+    "correct_offset",
+    "crop_array",
+    "demultiplex_cp_arrays",
+    "get_spectrum",
+    "get_spectrums",
+    "inline_dh",
+    "make_disk",
+    "offaxis_dh",
+    "print_all_parameters",
+    "ps_idh_reconstruct",
+]
+
 
 @dataclasses.dataclass
 class MuParameters:

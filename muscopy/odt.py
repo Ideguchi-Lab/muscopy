@@ -6,21 +6,16 @@ This module provides:
 - `ODTConfig`: A class to store ODT configuration.
 - `ScatteringSpectrum`: A class to store scattering spectrum.
 - `synthesize_spectrum`: A function to synthesize scattering spectrums into 3D scattering potential.
-- `fill_hermite_components`: A function to fill the hermite conjugated spectrum for transparent sample.
 - `calc_refractive_index`: A function to calculate the refractive index from the scattering potential.
 - `calc_scattering_spectrums`: A function to calculate first-order scattering spectrums.
 - `calc_scattering_potential_from_spectrums`: A function to reconstruct scattering potential from spectrums.
-- `calc_scattering_potential`: A function to calculate the scattering potential from complex field spectrums.
 - `odt`: A function to perform ODT reconstruction.
 - `calculate_odt_difference`: A function to calculate the difference between two ODT reconstructions.
-- `discard_higher_axial_freq`: A function to discard higher axial frequency.
-- `zeropad_higher_axial_freq`: A function to zero pad the higher axial frequency.
 """
 
 from __future__ import annotations
 
 import dataclasses
-import warnings
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
@@ -37,7 +32,19 @@ if TYPE_CHECKING:
 
 
 EPSILON = 1e-8
-_ODT_DEPRECATION_REMOVAL_VERSION = "0.9.0"
+
+__all__ = [
+    "EwaldEmbeddingMode",
+    "ODTConfig",
+    "ODTParameters",
+    "ScatteringSpectrum",
+    "calc_refractive_index",
+    "calc_scattering_potential_from_spectrums",
+    "calc_scattering_spectrums",
+    "calculate_odt_difference",
+    "odt",
+    "synthesize_spectrum",
+]
 
 
 class EwaldEmbeddingMode(StrEnum):
@@ -297,7 +304,7 @@ def synthesize_spectrum(
     return synthesized_spectrum / synthesized_weight
 
 
-def fill_hermite_components(spectrum3d: Array) -> Array:
+def _fill_hermite_components(spectrum3d: Array) -> Array:
     """Fill the hermite conjugated spectrum for transparent sample.
 
     Parameters
@@ -334,45 +341,6 @@ def calc_refractive_index(scattering_potential: Array, params: ODTParameters) ->
     return params.n_sol * jnp.sqrt(
         jnp.ones_like(scattering_potential) - scattering_potential / (params.light_freq_px * params.k_per_px) ** 2
     )
-
-
-def calc_scattering_potential(
-    cp_spectrums: Sequence[Array],
-    ref_cp_spectrums: Sequence[Array],
-    params: ODTParameters,
-    config: ODTConfig,
-) -> tuple[Array, Array]:
-    r"""Calculate the scattering potential from complex field spectrums.
-
-    .. deprecated:: 0.8.0
-        Use :func:`calc_scattering_spectrums` followed by
-        :func:`calc_scattering_potential_from_spectrums` instead.
-        This wrapper is scheduled for removal in muscopy 0.9.0.
-
-    Parameters
-    ----------
-    cp_spectrums : `collections.abc.Sequence`\[`Array`\]
-        Spectrum of complex fields
-    ref_cp_spectrums : `collections.abc.Sequence`\[`Array`\]
-        Reference spectrum of complex fields
-    params : `ODTParameters`
-        ODT parameter instance
-    config : `ODTConfig`
-        ODT configuration
-
-    Returns
-    -------
-    `tuple`\[`Array`, `Array`\]
-        3D scattering potential, 3D spectrum
-    """
-    _warn_deprecated_odt_api(
-        "calc_scattering_potential() is deprecated and will be removed in "
-        f"muscopy {_ODT_DEPRECATION_REMOVAL_VERSION}. Use calc_scattering_spectrums() followed by "
-        "calc_scattering_potential_from_spectrums() instead. Pass explicit illumination_vectors to "
-        "calc_scattering_spectrums() when the illumination geometry is known."
-    )
-    scattering_spectrums = calc_scattering_spectrums(cp_spectrums, ref_cp_spectrums, params, config)
-    return calc_scattering_potential_from_spectrums(scattering_spectrums, params, config)
 
 
 def calc_scattering_spectrums(
@@ -473,7 +441,7 @@ def calc_scattering_potential_from_spectrums(
     synthesized_spectrum = synthesize_spectrum(scattering_spectrums, params, config, mode="Forward")
 
     if config.hermite_symmetry:
-        synthesized_spectrum = fill_hermite_components(synthesized_spectrum)
+        synthesized_spectrum = _fill_hermite_components(synthesized_spectrum)
 
     scattering_potential = jnp.fft.ifftn(jnp.fft.ifftshift(synthesized_spectrum), norm="ortho")
 
@@ -591,7 +559,7 @@ def calculate_odt_difference(
     return refractive_index_diff, refractive_index_1, refractive_index_2
 
 
-def discard_higher_axial_freq(array3d: Array, threshold: int) -> Array:
+def _discard_higher_axial_freq(array3d: Array, threshold: int) -> Array:
     """Discard higher axial frequency.
 
     Parameters
@@ -614,7 +582,7 @@ def discard_higher_axial_freq(array3d: Array, threshold: int) -> Array:
     return jnp.fft.ifftn(jnp.fft.ifftshift(discarded), norm="ortho")
 
 
-def zeropad_higher_axial_freq(
+def _zeropad_higher_axial_freq(
     array3d: Array,
     number: int,
 ) -> Array:
@@ -651,10 +619,6 @@ def _find_max_args(array: Array) -> tuple[int, int, float]:
     max_x = int(max_index[0])
     max_y = int(max_index[1])
     return max_x, max_y, max_value
-
-
-def _warn_deprecated_odt_api(message: str) -> None:
-    warnings.warn(message, FutureWarning, stacklevel=2)
 
 
 def _shift_dh_spectrum(

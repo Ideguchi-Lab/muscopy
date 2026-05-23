@@ -13,6 +13,8 @@ import numpy as np
 from jax import Array
 from skimage.restoration import unwrap_phase as skimage_unwrap_phase
 
+__all__ = ["unwrap_phase"]
+
 
 def unwrap_phase(
     phase_image: Array, *, roi: Array | None = None, keep_mean: bool = True, use_skimage: bool = False

@@ -17,6 +17,12 @@ from jax import Array
 
 MIN_WAVENUMBER_ELEMENTS = 2
 
+__all__ = [
+    "PhasorParameters",
+    "PhasorResult",
+    "phasor",
+]
+
 
 class PhasorResult(NamedTuple):
     r"""Phasor analysis result."""

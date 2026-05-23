@@ -13,6 +13,11 @@ from jax import Array
 
 from muscopy.dh import MuParameters, crop_array, make_disk
 
+__all__ = [
+    "calc_phase_noise",
+    "calc_visibility",
+]
+
 
 def _get_dc_ac(
     hologram: Array,

@@ -17,13 +17,35 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 # Numerical stability constants
-_EPSILON = 1e-6  # Small value to avoid division by zero
+_DEFAULT_NORMALIZATION_EPSILON = 1e-6  # Small positive value to avoid division by zero during normalization
+_GREEN_FUNC_DENOMINATOR_EPSILON = 1e-6
 _ILLUMINATION_TOL = 1e-9
 _IMAGE_NDIM = 2
 
 
 class IDTZCenteringMode(StrEnum):
-    """Axial z-grid convention for IDT reconstruction."""
+    """Axial z-grid convention for IDT reconstruction.
+
+    The mode controls how reconstructed slice indices are mapped to physical
+    axial positions before evaluating the IDT transfer functions. For
+    ``idx_z`` in ``range(num_z_slices)`` and axial spacing ``dz``:
+
+    ``CENTRAL_SLICE_ZERO``
+        Uses ``z = (idx_z - num_z_slices // 2) * dz``. This preserves the
+        historical IDT behavior and guarantees that slice
+        ``num_z_slices // 2`` is exactly at ``z = 0``. For an odd number of
+        slices the grid is symmetric around zero. For an even number of slices
+        the grid contains a zero slice but has one more negative sample than
+        positive sample, so the full volume midpoint is shifted by
+        ``-0.5 * dz``.
+
+    ``SYMMETRIC_VOLUME``
+        Uses ``z = (idx_z - (num_z_slices - 1) / 2) * dz``. This centers the
+        reconstructed volume endpoints around ``z = 0``. For an odd number of
+        slices the central slice is exactly at zero. For an even number of
+        slices there is no zero slice; the two middle slices are placed at
+        ``-0.5 * dz`` and ``+0.5 * dz``.
+    """
 
     CENTRAL_SLICE_ZERO = "central_slice_zero"
     SYMMETRIC_VOLUME = "symmetric_volume"
@@ -75,12 +97,19 @@ class IDTConfig:
         reference intensity.
     g_clip : float | None
         Optional symmetric clipping threshold for normalized intensity contrast.
+        Defaults to ``None`` so normalized contrast is not clipped unless
+        explicitly requested.
+    normalization_epsilon : float
+        Small positive floor used during normalization to avoid division by zero.
     determinant_rel_floor : float
         Relative floor for the coupled inverse determinant.
     z_centering : IDTZCenteringMode | str
-        Axial z-grid convention. ``"central_slice_zero"`` preserves the
-        existing behavior where index ``num_z_slices // 2`` is z=0.
-        ``"symmetric_volume"`` centers the full volume around z=0.
+        Axial z-grid convention used when mapping reconstruction slice
+        indices to physical z positions. ``"central_slice_zero"`` preserves
+        the historical convention where index ``num_z_slices // 2`` is
+        exactly ``z = 0``. ``"symmetric_volume"`` centers the full stack around
+        ``z = 0``; with an even number of slices, zero lies halfway between the
+        two central slices.
     check_ifft_imag_residual : bool
         Whether to warn when the spatial-domain inverse FFT has a large
         imaginary residual before taking the real part.
@@ -89,8 +118,9 @@ class IDTConfig:
     """
 
     precision: ArrayPrecision = dataclasses.field(default_factory=ArrayPrecision)
-    ref_floor_ratio: float = 0.02
-    g_clip: float | None = 5.0
+    ref_floor_ratio: float = 0.0
+    g_clip: float | None = None
+    normalization_epsilon: float = _DEFAULT_NORMALIZATION_EPSILON
     determinant_rel_floor: float = 1e-4
     z_centering: IDTZCenteringMode | str = IDTZCenteringMode.CENTRAL_SLICE_ZERO
     check_ifft_imag_residual: bool = False
@@ -110,6 +140,9 @@ class IDTConfig:
             raise ValueError(msg)
         if self.g_clip is not None and self.g_clip <= 0:
             msg = "g_clip must be positive when provided."
+            raise ValueError(msg)
+        if self.normalization_epsilon <= 0:
+            msg = "normalization_epsilon must be positive."
             raise ValueError(msg)
         if self.determinant_rel_floor < 0:
             msg = "determinant_rel_floor must be non-negative."
@@ -196,6 +229,28 @@ def validate_idt_params(params: IDTParameters) -> None:
 def make_z_position(params: IDTParameters, idx_z: int, config: IDTConfig) -> float:
     """Return the physical z position for a reconstructed slice index.
 
+    The position is determined by ``config.z_centering``:
+
+    - ``IDTZCenteringMode.CENTRAL_SLICE_ZERO`` maps slice ``num_z_slices // 2``
+      to ``z = 0`` using ``(idx_z - num_z_slices // 2) * dz``. This is useful
+      for reproducing previous reconstructions or when downstream code expects
+      a slice exactly at the focal plane even for an even number of slices.
+    - ``IDTZCenteringMode.SYMMETRIC_VOLUME`` maps the index range with
+      ``(idx_z - (num_z_slices - 1) / 2) * dz``. This is useful when the
+      reconstructed volume should be geometrically centered around the focal
+      plane; for even slice counts, the focal plane lies between the two middle
+      slices.
+
+    Parameters
+    ----------
+    params : IDTParameters
+        IDT parameters containing ``num_z_slices`` and
+        ``imgpx_axial_m_per_px``.
+    idx_z : int
+        Reconstructed slice index.
+    config : IDTConfig
+        IDT configuration containing the z-centering mode.
+
     Returns
     -------
     float
@@ -233,23 +288,38 @@ def validate_xy_image(params: IDTParameters, image_xy: Array, *, name: str) -> N
         raise ValueError(msg)
 
 
-def relative_imag_residual(arr: Array) -> Array:
+def relative_imag_residual(arr: Array, *, normalization_epsilon: float = _DEFAULT_NORMALIZATION_EPSILON) -> Array:
     """Return the relative imaginary residual of a complex array.
+
+    Parameters
+    ----------
+    arr : Array
+        Complex array to evaluate.
+    normalization_epsilon : float, optional
+        Small positive floor for the real norm denominator.
 
     Returns
     -------
     Array
         ``||imag(arr)|| / max(||real(arr)||, epsilon)``.
+
+    Raises
+    ------
+    ValueError
+        If ``normalization_epsilon`` is not positive.
     """
+    if normalization_epsilon <= 0:
+        msg = "normalization_epsilon must be positive."
+        raise ValueError(msg)
     real_norm = jnp.linalg.norm(jnp.real(arr))
     imag_norm = jnp.linalg.norm(jnp.imag(arr))
-    return jnp.asarray(imag_norm / jnp.maximum(real_norm, _EPSILON))
+    return jnp.asarray(imag_norm / jnp.maximum(real_norm, normalization_epsilon))
 
 
 def _warn_if_imag_residual_large(arr: Array, *, name: str, config: IDTConfig) -> None:
     if not config.check_ifft_imag_residual:
         return
-    residual = float(relative_imag_residual(arr))
+    residual = float(relative_imag_residual(arr, normalization_epsilon=config.normalization_epsilon))
     if residual > config.imag_residual_warn_threshold:
         warnings.warn(
             f"{name} inverse FFT imaginary residual is {residual:.3g}, "
@@ -290,8 +360,9 @@ def compute_g_list(
     normalize: bool = True,
     *,
     precision: ArrayPrecision | None = None,
-    ref_floor_ratio: float = 0.02,
-    g_clip: float | None = 5.0,
+    ref_floor_ratio: float = 0.0,
+    g_clip: float | None = None,
+    normalization_epsilon: float = _DEFAULT_NORMALIZATION_EPSILON,
 ) -> list[Array]:
     """Compute list of intensity constrasts g_l for each illumination angle.
 
@@ -308,7 +379,11 @@ def compute_g_list(
         Minimum valid reference intensity as a fraction of the mean absolute
         reference intensity.
     g_clip : float | None, optional
-        Optional symmetric clipping threshold for normalized contrast.
+        Optional symmetric clipping threshold for normalized contrast. Defaults
+        to ``None`` so normalized contrast is not clipped unless explicitly
+        requested.
+    normalization_epsilon : float, optional
+        Small positive floor used during normalization to avoid division by zero.
 
     Returns
     -------
@@ -330,6 +405,9 @@ def compute_g_list(
     if g_clip is not None and g_clip <= 0:
         msg = "g_clip must be positive when provided."
         raise ValueError(msg)
+    if normalization_epsilon <= 0:
+        msg = "normalization_epsilon must be positive."
+        raise ValueError(msg)
     if len(i_list) != len(i_reference):
         msg = "i_list and i_reference must have the same length."
         raise ValueError(msg)
@@ -340,7 +418,7 @@ def compute_g_list(
         reference_image = jnp.asarray(i_ref, dtype=float_dtype)
         if normalize:
             ref_scale = jnp.mean(jnp.abs(reference_image))
-            ref_floor = jnp.maximum(_EPSILON, ref_floor_ratio * ref_scale)
+            ref_floor = jnp.maximum(normalization_epsilon, ref_floor_ratio * ref_scale)
             valid_ref = jnp.isfinite(target_image) & jnp.isfinite(reference_image) & (reference_image > ref_floor)
             denom = jnp.where(valid_ref, reference_image, 1.0)
             g = jnp.where(valid_ref, (target_image - reference_image) / denom, 0.0)
@@ -441,7 +519,7 @@ def make_green_func(
     green_scale = 1.0 / (4.0 * jnp.pi * params.freq_per_px)
     green_func = jnp.where(
         valid,
-        green_scale * jnp.exp(-1j * uz * z * params.k_per_px) / jnp.maximum(uz, _EPSILON),
+        green_scale * jnp.exp(-1j * uz * z * params.k_per_px) / jnp.maximum(uz, _GREEN_FUNC_DENOMINATOR_EPSILON),
         0.0 + 0.0j,
     )
     return jnp.asarray(green_func, dtype=complex_dtype)
@@ -627,6 +705,7 @@ def compute_permittivity(  # noqa: PLR0914
     *,
     precision: ArrayPrecision | None = None,
     determinant_rel_floor: float = 1e-4,
+    normalization_epsilon: float = _DEFAULT_NORMALIZATION_EPSILON,
 ) -> tuple[Array, Array]:
     """Compute the permittivity changes Δε_Re and Δε_Im for each slice.
 
@@ -654,6 +733,9 @@ def compute_permittivity(  # noqa: PLR0914
         Precision configuration for the returned arrays.
     determinant_rel_floor : float, optional
         Relative floor for the coupled inverse determinant.
+    normalization_epsilon : float, optional
+        Small positive floor used during transfer-function normalization and
+        inverse stability checks.
 
     Returns
     -------
@@ -677,6 +759,9 @@ def compute_permittivity(  # noqa: PLR0914
         raise ValueError(msg)
     if determinant_rel_floor < 0:
         msg = "determinant_rel_floor must be non-negative."
+        raise ValueError(msg)
+    if normalization_epsilon <= 0:
+        msg = "normalization_epsilon must be positive."
         raise ValueError(msg)
     _validate_led_illumination_intensities(led_illumination_intensities)
     complex_dtype = precision.complex_precision()
@@ -702,7 +787,7 @@ def compute_permittivity(  # noqa: PLR0914
     # Normalize transfer functions for the linear solve, then restore the
     # solution scale below.
     h_norm_scale = jnp.maximum(jnp.max(jnp.abs(h_normalized_re)), jnp.max(jnp.abs(h_normalized_im)))
-    h_norm_scale = jnp.where(h_norm_scale < _EPSILON, 1.0, h_norm_scale)
+    h_norm_scale = jnp.where(h_norm_scale < normalization_epsilon, 1.0, h_norm_scale)
 
     h_normalized_re_scaled = h_normalized_re / h_norm_scale
     h_normalized_im_scaled = h_normalized_im / h_norm_scale
@@ -717,9 +802,9 @@ def compute_permittivity(  # noqa: PLR0914
     term1 = (sum_h_re_scaled + alpha_scaled) * (sum_h_im_scaled + beta_scaled)
     term2 = jnp.abs(jnp.sum(jnp.conjugate(h_normalized_re_scaled) * h_normalized_im_scaled, axis=-1)) ** 2
     scale_factor = jnp.maximum(jnp.real(term1 - term2), 0.0)
-    scale_factor_floor = _EPSILON + determinant_rel_floor * jnp.real(term1)
+    scale_factor_floor = normalization_epsilon + determinant_rel_floor * jnp.real(term1)
     scale_factor_safe = jnp.maximum(scale_factor, scale_factor_floor)
-    valid_support = (sum_h_re_scaled + sum_h_im_scaled) > _EPSILON
+    valid_support = (sum_h_re_scaled + sum_h_im_scaled) > normalization_epsilon
 
     # Scale the epsilon calculations accordingly
     eps_re_first_term_scaled = (sum_h_im_scaled + beta_scaled) * jnp.sum(
@@ -763,6 +848,7 @@ def compute_permitivity(
     *,
     precision: ArrayPrecision | None = None,
     determinant_rel_floor: float = 1e-4,
+    normalization_epsilon: float = _DEFAULT_NORMALIZATION_EPSILON,
 ) -> tuple[Array, Array]:
     """Backward-compatible alias for :func:`compute_permittivity`.
 
@@ -781,6 +867,7 @@ def compute_permitivity(
         beta=beta,
         precision=precision,
         determinant_rel_floor=determinant_rel_floor,
+        normalization_epsilon=normalization_epsilon,
     )
 
 
@@ -910,6 +997,7 @@ def compute_idt(  # noqa: PLR0914
         precision=config.precision,
         ref_floor_ratio=config.ref_floor_ratio,
         g_clip=config.g_clip,
+        normalization_epsilon=config.normalization_epsilon,
     )
 
     # STEP 3: Fourier Transform each image
@@ -943,6 +1031,7 @@ def compute_idt(  # noqa: PLR0914
             beta=beta,
             precision=config.precision,
             determinant_rel_floor=config.determinant_rel_floor,
+            normalization_epsilon=config.normalization_epsilon,
         )
         eps_re_xyz = eps_re_xyz.at[:, :, idx_z].set(eps_re)
         eps_im_xyz = eps_im_xyz.at[:, :, idx_z].set(eps_im)

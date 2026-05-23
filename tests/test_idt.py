@@ -23,6 +23,7 @@ from muscopy.idt import (
     make_green_func,
     make_pupil_func,
     make_z_position,
+    relative_imag_residual,
     transfer_func_im,
     transfer_func_re,
     validate_idt_params,
@@ -47,6 +48,14 @@ def test_idt_config_defaults_to_32_bit_precision() -> None:
     assert config.precision.int_precision() == "int32"
     assert config.precision.float_precision() == "float32"
     assert config.precision.complex_precision() == "complex64"
+    assert config.ref_floor_ratio == pytest.approx(0.0)
+    assert config.g_clip is None
+    assert config.normalization_epsilon == pytest.approx(1e-6)
+
+
+def test_idt_config_rejects_invalid_normalization_epsilon() -> None:
+    with pytest.raises(ValueError, match="normalization_epsilon must be positive"):
+        IDTConfig(normalization_epsilon=0.0)
 
 
 def test_compute_idt_returns_32_bit_arrays_by_default() -> None:
@@ -224,6 +233,23 @@ def test_compute_g_list_masks_zero_reference_pixels() -> None:
     assert bool(jnp.allclose(g, expected))
 
 
+def test_compute_g_list_uses_configurable_normalization_epsilon() -> None:
+    target = jnp.array([[2e-7]], dtype=jnp.float32)
+    reference = jnp.array([[1e-7]], dtype=jnp.float32)
+
+    [default_g] = compute_g_list([target], [reference], normalize=True, ref_floor_ratio=0.0)
+    [configured_g] = compute_g_list(
+        [target],
+        [reference],
+        normalize=True,
+        ref_floor_ratio=0.0,
+        normalization_epsilon=1e-8,
+    )
+
+    assert bool(jnp.allclose(default_g, 0.0))
+    assert bool(jnp.allclose(configured_g, 1.0))
+
+
 def test_compute_g_list_clips_normalized_reference_outliers() -> None:
     target = jnp.array([[11.0]], dtype=jnp.float32)
     reference = jnp.array([[1.0]], dtype=jnp.float32)
@@ -231,6 +257,15 @@ def test_compute_g_list_clips_normalized_reference_outliers() -> None:
     [g] = compute_g_list([target], [reference], normalize=True, g_clip=5.0)
 
     assert bool(jnp.allclose(g, 5.0))
+
+
+def test_compute_g_list_does_not_clip_by_default() -> None:
+    target = jnp.array([[11.0]], dtype=jnp.float32)
+    reference = jnp.array([[1.0]], dtype=jnp.float32)
+
+    [g] = compute_g_list([target], [reference], normalize=True)
+
+    assert bool(jnp.allclose(g, 10.0))
 
 
 def test_compute_g_list_rejects_mismatched_lengths() -> None:
@@ -246,6 +281,19 @@ def test_compute_g_list_rejects_invalid_ref_floor_ratio() -> None:
 def test_compute_g_list_rejects_invalid_g_clip() -> None:
     with pytest.raises(ValueError, match="g_clip must be positive"):
         compute_g_list([jnp.ones((1, 1))], [jnp.ones((1, 1))], g_clip=0.0)
+
+
+def test_compute_g_list_rejects_invalid_normalization_epsilon() -> None:
+    with pytest.raises(ValueError, match="normalization_epsilon must be positive"):
+        compute_g_list([jnp.ones((1, 1))], [jnp.ones((1, 1))], normalization_epsilon=0.0)
+
+
+def test_relative_imag_residual_uses_configurable_normalization_epsilon() -> None:
+    arr = jnp.array([1j], dtype=jnp.complex64)
+
+    residual = relative_imag_residual(arr, normalization_epsilon=0.5)
+
+    assert bool(jnp.allclose(residual, 2.0))
 
 
 def test_compute_idt_rejects_non_xy_image_shape() -> None:
@@ -264,6 +312,69 @@ def test_compute_idt_rejects_wrong_xy_image_size() -> None:
 
     with pytest.raises(ValueError, match=r"shape \(8, 8\) in \[x, y\] order"):
         compute_idt(params, [bad_image], [reference], [(0.0, 0.0)])
+
+
+def test_compute_idt_passes_configured_normalization_epsilon(monkeypatch: pytest.MonkeyPatch) -> None:
+    params = _small_idt_params()
+    intensity_images = [jnp.ones((params.img_size_px, params.img_size_px), dtype=jnp.float32)]
+    ref_intensity_images = [jnp.ones((params.img_size_px, params.img_size_px), dtype=jnp.float32)]
+    configured_epsilon = 1e-3
+    seen: dict[str, list[float]] = {"compute_g_list": [], "compute_permittivity": []}
+
+    def fake_compute_g_list(
+        i_list: Sequence[Array],
+        i_reference: Sequence[Array],
+        normalize: bool = True,
+        *,
+        precision: ArrayPrecision | None = None,
+        ref_floor_ratio: float = 0.0,
+        g_clip: float | None = None,
+        normalization_epsilon: float = 1e-6,
+    ) -> list[Array]:
+        del i_reference, normalize, precision, ref_floor_ratio, g_clip
+        seen["compute_g_list"].append(normalization_epsilon)
+        return [jnp.zeros_like(image) for image in i_list]
+
+    def fake_compute_permittivity(
+        params_arg: IDTParameters,
+        g_tilde_list: Sequence[Array],
+        u_illumination_list: Sequence[tuple[float, float]],
+        led_illumination_intensities: Sequence[float],
+        z: float = 0.0,
+        alpha: float = 1e-6,
+        beta: float = 1e-6,
+        *,
+        precision: ArrayPrecision | None = None,
+        determinant_rel_floor: float = 1e-4,
+        normalization_epsilon: float = 1e-6,
+    ) -> tuple[Array, Array]:
+        del (
+            g_tilde_list,
+            u_illumination_list,
+            led_illumination_intensities,
+            z,
+            alpha,
+            beta,
+            precision,
+            determinant_rel_floor,
+        )
+        seen["compute_permittivity"].append(normalization_epsilon)
+        spectrum_shape = (2 * params_arg.aperturesize_px + 1, 2 * params_arg.aperturesize_px + 1)
+        return jnp.zeros(spectrum_shape, dtype=jnp.complex64), jnp.zeros(spectrum_shape, dtype=jnp.complex64)
+
+    monkeypatch.setattr(idt_module, "compute_g_list", fake_compute_g_list)
+    monkeypatch.setattr(idt_module, "compute_permittivity", fake_compute_permittivity)
+
+    compute_idt(
+        params,
+        intensity_images,
+        ref_intensity_images,
+        [(0.0, 0.0)],
+        config=IDTConfig(normalization_epsilon=configured_epsilon),
+    )
+
+    assert seen["compute_g_list"] == [configured_epsilon]
+    assert seen["compute_permittivity"] == [configured_epsilon, configured_epsilon]
 
 
 def test_compute_permitivity_restores_normalized_transfer_scale(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -466,6 +577,21 @@ def test_compute_permitivity_rejects_invalid_determinant_rel_floor() -> None:
         )
 
 
+def test_compute_permitivity_rejects_invalid_normalization_epsilon() -> None:
+    params = _small_idt_params()
+    spectrum_shape = (2 * params.aperturesize_px + 1, 2 * params.aperturesize_px + 1)
+    g_tilde = jnp.zeros(spectrum_shape, dtype=jnp.complex64)
+
+    with pytest.raises(ValueError, match="normalization_epsilon must be positive"):
+        compute_permitivity(
+            params,
+            [g_tilde],
+            [(0.0, 0.0)],
+            [1.0],
+            normalization_epsilon=0.0,
+        )
+
+
 def test_validate_idt_params_rejects_intensity_support_larger_than_image() -> None:
     params = IDTParameters(
         na=1.0,
@@ -504,6 +630,7 @@ def test_compute_idt_can_warn_on_ifft_imaginary_residual(monkeypatch: pytest.Mon
         *,
         precision: ArrayPrecision | None = None,
         determinant_rel_floor: float = 1e-4,
+        normalization_epsilon: float = 1e-6,
     ) -> tuple[Array, Array]:
         del (
             params_arg,
@@ -515,6 +642,7 @@ def test_compute_idt_can_warn_on_ifft_imaginary_residual(monkeypatch: pytest.Mon
             beta,
             precision,
             determinant_rel_floor,
+            normalization_epsilon,
         )
         return jnp.ones(spectrum_shape, dtype=jnp.complex64) * 1j, jnp.zeros(spectrum_shape, dtype=jnp.complex64)
 

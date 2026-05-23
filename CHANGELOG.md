@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+---
+
+## Version 1.0.0 [2026-05-23]
+
 ### Added
 
 - Added explicit IDT aperture support helpers, z-centering configuration, sampling validation, and optional inverse-FFT imaginary residual diagnostics.

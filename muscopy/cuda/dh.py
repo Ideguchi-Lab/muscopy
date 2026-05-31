@@ -46,7 +46,7 @@ def make_disk(
 
     Returns
     -------
-    `cupy.ndarray`
+    CuPy array
         The disk mask with specified center and radius.
     """
     return _make_disk(center, radius, array_shape, highpass=highpass)
@@ -57,7 +57,7 @@ def crop_array(array: cp.ndarray, center: tuple[int, int], width: int) -> cp.nda
 
     Parameters
     ----------
-    array : `cupy.ndarray`
+    array : CuPy array
         The array to be cropped.
     center : `tuple`\[`int`, `int`\]
         The center position of the crop.
@@ -66,7 +66,7 @@ def crop_array(array: cp.ndarray, center: tuple[int, int], width: int) -> cp.nda
 
     Returns
     -------
-    `cupy.ndarray`
+    CuPy array
         The cropped array.
 
     """
@@ -85,7 +85,7 @@ def get_spectrum(
 
     Parameters
     ----------
-    ft_array : `cupy.ndarray`
+    ft_array : CuPy array
         Fourier spectrum of the hologram array.
     params : `MuParameters`
         Microscopy parameters.
@@ -99,7 +99,7 @@ def get_spectrum(
 
     Returns
     -------
-    `cupy.ndarray`
+    CuPy array
         The spectrum of complex amplitude.
     """
     return _get_spectrum(ft_array, params, offaxis_center, crop_center=crop_center, c_r=c_r)
@@ -117,7 +117,7 @@ def get_spectrums(
 
     Parameters
     ----------
-    ft_array : `cupy.ndarray`
+    ft_array : CuPy array
         Fourier transformed hologram array.
     params : `MuParameters`
         Microscopy parameters.
@@ -131,7 +131,7 @@ def get_spectrums(
 
     Returns
     -------
-    `list`\[`cupy.ndarray`\]
+    list of CuPy arrays
         The spectrums of complex amplitude.
     """
     return [
@@ -145,14 +145,14 @@ def correct_aberration(spectrum: cp.ndarray, pupil_func: cp.ndarray) -> cp.ndarr
 
     Parameters
     ----------
-    spectrum : `cupy.ndarray`
+    spectrum : CuPy array
         The input spectrum to be corrected.
-    pupil_func : `cupy.ndarray`
+    pupil_func : CuPy array
         The pupil function used for correction.
 
     Returns
     -------
-    `cupy.ndarray`
+    CuPy array
         The corrected spectrum.
 
     """
@@ -193,20 +193,20 @@ def offaxis_dh(
 
     Parameters
     ----------
-    array : `cupy.ndarray`
+    array : CuPy array
         Hologram array.
-    reference : `cupy.ndarray`
+    reference : CuPy array
         Reference hologram array.
     params : `MuParameters`
         Microscopy parameters.
     offaxis_centers : `tuple`\[`int`, `int`\] | `collections.abc.Sequence`\[`tuple`\[`int`, `int`\]\]
         The crop center or crop centers of off-axis digital holography.
-    pupil_func : `cupy.ndarray` | `None`, optional
+    pupil_func : CuPy array or `None`, optional
         Pupil function for aberration correction, by default None.
 
     Returns
     -------
-    `cupy.ndarray` | `list`\[`cupy.ndarray`\]
+    CuPy array or list of CuPy arrays
         The complex wave front. Returns a single array when ``offaxis_centers``
         is a single center tuple, or a list of arrays when it is a sequence of
         center tuples.

@@ -20,9 +20,9 @@ def unwrap_phase(
 
     Parameters
     ----------
-    phase_image : `cupy.ndarray`
+    phase_image : CuPy array
         The wrapped phase image to be unwrapped.
-    roi : `cupy.ndarray`, optional
+    roi : CuPy array, optional
         A region of interest mask where the unwrapping should be applied. If `None`,
         the entire image is considered. Default is `None`.
     keep_mean : `bool`, optional
@@ -35,7 +35,7 @@ def unwrap_phase(
 
     Returns
     -------
-    `cupy.ndarray`
+    CuPy array
         The unwrapped phase image.
     """
     if use_skimage:

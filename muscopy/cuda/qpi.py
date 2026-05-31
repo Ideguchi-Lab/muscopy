@@ -56,20 +56,20 @@ def qpi(
 
     Parameters
     ----------
-    array : `cupy.ndarray`
+    array : CuPy array
         Hologram array.
-    reference : `cupy.ndarray`
+    reference : CuPy array
         Reference hologram array.
     params : `MuParameters`
         Microscopy parameters.
     offaxis_centers : `tuple`\[`int`, `int`\] | `collections.abc.Sequence`\[`tuple`\[`int`, `int`\]\]
         The crop center or crop centers of off-axis digital holography.
-    pupil_func : `cupy.ndarray` | `None`, optional
+    pupil_func : CuPy array or `None`, optional
         Pupil function for aberration correction, by default None.
 
     Returns
     -------
-    `cupy.ndarray` | `list`\[`cupy.ndarray`\]
+    CuPy array or list of CuPy arrays
         The QPI phase image. Returns a single array when ``offaxis_centers``
         is a single center tuple, or a list of arrays when it is a sequence of
         center tuples.
@@ -96,9 +96,9 @@ def mip_qpi(
 
     Parameters
     ----------
-    array_on : `cupy.ndarray`
+    array_on : CuPy array
         MIR ON hologram array.
-    array_off : `cupy.ndarray`
+    array_off : CuPy array
         MIR OFF hologram array.
     params : `MuParameters`
         Microscopy parameters.
@@ -117,7 +117,7 @@ def mip_qpi(
 
     Returns
     -------
-    `cupy.ndarray`
+    CuPy array
         The MIP-QPI phase image computed as the angle of the MIR ON/OFF field ratio.
 
     Raises
@@ -163,14 +163,14 @@ def correct_phase_offset(
 
     Parameters
     ----------
-    phase_array : `cupy.ndarray`
+    phase_array : CuPy array
         Phase array to be corrected.
     offset_regs : `OffsetRegions`
         The regions to be used for phase offset correction.
 
     Returns
     -------
-    `cupy.ndarray`
+    CuPy array
         The phase array with the offset corrected.
     """
     if not offset_regs:

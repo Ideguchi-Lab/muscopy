@@ -32,6 +32,22 @@ Install the optional MLB simulation integration when needed.
 uv sync --extra extra
 ```
 
+Install the optional CuPy QPI implementation for CUDA 12 environments when
+needed.
+
+```sh
+uv sync --extra cupy
+```
+
+CuPy-based QPI helpers live in a separate module so the default JAX API remains
+unchanged.
+
+```python
+from muscopy.cuda.dh import offaxis_dh
+from muscopy.cuda.qpi import mip_qpi, qpi
+from muscopy.cuda.qpi_utils import unwrap_phase
+```
+
 ## Public API compatibility
 
 For v1.0, muscopy's stable import contract is submodule-based. Import stable

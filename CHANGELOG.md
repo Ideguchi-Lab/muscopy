@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- Added optional CuPy/CUDA QPI helpers under `muscopy.cuda` for Windows GPU workflows, including `offaxis_dh()`, `qpi()`, `mip_qpi()`, and `unwrap_phase()` [[#70](https://github.com/Ideguchi-Lab/muscopy/issues/70)].
+
 ---
 
 ## Version 1.0.0 [2026-05-23]

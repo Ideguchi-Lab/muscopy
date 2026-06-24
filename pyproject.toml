@@ -43,6 +43,9 @@ doc = [
 extra = [
     "muscopy-mlbsim @ git+https://github.com/Ideguchi-Lab/muscopy-mlbsim.git",
 ]
+cupy = [
+    "cupy-cuda12x>=14.1.0",
+]
 
 [tool.setuptools.package-data]
 muscopy = ["py.typed"]
@@ -120,12 +123,18 @@ markers = "slow: mark test as slow"
 strict = true
 ignore_missing_imports = true
 files = ["muscopy", "tests", "examples"]
+exclude = [
+    "muscopy/cuda/.*",
+    "tests/test_cuda_qpi.py",
+]
 
 [tool.pyright]
 include = ["muscopy", "tests", "examples"]
 reportMissingImports = "warning"
 reportMissingModuleSource = "warning"
 ignore = [
+    "muscopy/cuda",
     "examples/idt_with_mlb_simulation.py",
-    "examples/odt_with_mlb_simulation.py"
+    "examples/odt_with_mlb_simulation.py",
+    "tests/test_cuda_qpi.py"
 ]

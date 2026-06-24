@@ -41,6 +41,7 @@ autodoc_typehints = "description"
 autodoc_typehints_description_target = "documented"
 autodoc_class_signature = "separated"
 autodoc_member_order = "bysource"
+autodoc_mock_imports = ["cupy", "cupyx", "cupyx.scipy", "cupyx.scipy.fft"]
 
 
 # -- Options for HTML output -------------------------------------------------

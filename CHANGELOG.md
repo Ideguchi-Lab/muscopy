@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- Prevented NaNs in linear ODT Ewald embedding by clamping non-propagating square-root radicands before pupil masking [[#138](https://github.com/Ideguchi-Lab/muscopy/pull/138)].
+
 ---
 
 ## Version 1.0.0 [2026-05-23]

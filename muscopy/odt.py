@@ -770,9 +770,16 @@ def _calc_ewald_fz_circle(
     illumination_vector: tuple[int, int],
     mode: str,
 ) -> Array:
-    fz_circle = jnp.sqrt(
+    # Coordinates outside the propagating-wave circle are masked later, but a
+    # raw square root there produces NaNs.  In linear embedding those NaNs
+    # survive multiplication by the zero-valued pupil mask (NaN * 0 is NaN)
+    # and contaminate the complete reconstruction.  Clamp the radicands before
+    # applying the mask so every embedding mode remains finite.
+    scattered_radial_sq = (
         params.light_freq_px**2 - (xx + illumination_vector[0]) ** 2 - (yy + illumination_vector[1]) ** 2
-    ) - jnp.sqrt(params.light_freq_px**2 - illumination_vector[0] ** 2 - illumination_vector[1] ** 2)
+    )
+    illumination_radial_sq = params.light_freq_px**2 - illumination_vector[0] ** 2 - illumination_vector[1] ** 2
+    fz_circle = jnp.sqrt(jnp.maximum(scattered_radial_sq, 0)) - jnp.sqrt(jnp.maximum(illumination_radial_sq, 0))
 
     if mode == "Backward":
         return -fz_circle

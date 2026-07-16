@@ -279,6 +279,33 @@ def test_synthesize_spectrum_uses_configured_ewald_embedding_mode() -> None:
     assert jnp.allclose(linear[x_index, y_index, z_one_index], linear[x_index, y_index, z_zero_index])
 
 
+def test_linear_ewald_embedding_is_finite_outside_propagating_circle() -> None:
+    """Test that masked evanescent coordinates do not contaminate linear weights with NaNs."""
+    params = ODTParameters(
+        na=1.1,
+        wavelength_m=532e-9,
+        img_size_px=64,
+        px_size_m=3.45e-6 * 3 / 180 / 2,
+        n_sol=1.33,
+        na_illumination=1.0,
+    )
+    shape_3d = (
+        2 * params.aperturesize_px + 1,
+        2 * params.aperturesize_px + 1,
+        params.freq_axial_extent_px,
+    )
+
+    weights = odt_module._calc_ewald_embedding_weight(  # noqa: SLF001
+        shape_3d,
+        params,
+        (3, 0),
+        "Forward",
+        EwaldEmbeddingMode.LINEAR,
+    )
+
+    assert bool(jnp.all(jnp.isfinite(weights)))
+
+
 def test_odt_config_rejects_unknown_ewald_embedding_mode() -> None:
     """Test that invalid Ewald embedding modes fail explicitly at configuration time."""
     with pytest.raises(TypeError, match="ewald_embedding_mode must be an EwaldEmbeddingMode"):

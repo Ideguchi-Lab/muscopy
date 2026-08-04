@@ -347,7 +347,7 @@ def test_compute_idt_passes_configured_normalization_epsilon(monkeypatch: pytest
         solver_terms: idt_module._PermittivitySolverTerms,
     ) -> tuple[Array, Array]:
         seen["solver_terms"].append(float(solver_terms.normalization_epsilon))
-        return original_solve(
+        eps_re_zxy, eps_im_zxy = original_solve(
             g_tilde,
             grid,
             u_illumination,
@@ -356,6 +356,7 @@ def test_compute_idt_passes_configured_normalization_epsilon(monkeypatch: pytest
             z_positions,
             solver_terms,
         )
+        return jnp.asarray(eps_re_zxy), jnp.asarray(eps_im_zxy)
 
     monkeypatch.setattr(idt_module, "compute_g_list", fake_compute_g_list)
     monkeypatch.setattr(idt_module, "_solve_permittivity_z_stack", recording_solve)

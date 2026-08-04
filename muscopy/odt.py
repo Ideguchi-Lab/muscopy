@@ -17,11 +17,12 @@ from __future__ import annotations
 
 import dataclasses
 from enum import StrEnum
+from functools import partial
 from typing import TYPE_CHECKING
 
+import jax
 import jax.numpy as jnp
 from jax import Array
-from tqdm import tqdm
 
 from muscopy.cfg import ArrayPrecision, OffsetRegions
 from muscopy.dh import MuParameters, correct_gradient, correct_offset, make_disk
@@ -272,36 +273,61 @@ def synthesize_spectrum(
     `Array`
         Synthesized scattering potential
     """
-    synthesized_spectrum = jnp.zeros(
-        (
-            2 * params.aperturesize_px + 1,
-            2 * params.aperturesize_px + 1,
-            params.freq_axial_extent_px,
-        ),
-        dtype=config.precision.complex_precision(),
+    shape_3d = (
+        2 * params.aperturesize_px + 1,
+        2 * params.aperturesize_px + 1,
+        params.freq_axial_extent_px,
     )
-    synthesized_weight = jnp.zeros_like(synthesized_spectrum, dtype=config.precision.float_precision())
+    complex_dtype = config.precision.complex_precision()
+    float_dtype = config.precision.float_precision()
 
     if config.verbose:
         print("Synthesize spectrum...")  # noqa: T201
-    for scattering_spectrum in tqdm(scattering_spectrums, disable=not config.verbose):
-        kz_disk = _calc_kz_disk(
-            params, scattering_spectrum.array.shape[0], scattering_spectrum.illumination_vector, config.precision
-        )
-        scattering_potential, embedding_weight = _embed_3d_spectrum_with_weights(
-            scattering_spectrum.array * 2j * kz_disk,
-            (synthesized_spectrum.shape[0], synthesized_spectrum.shape[1], synthesized_spectrum.shape[2]),
-            params,
-            scattering_spectrum.illumination_vector,
-            mode=mode,
-            ewald_embedding_mode=config.ewald_embedding_mode,
-        )
 
-        synthesized_spectrum += scattering_spectrum.coefficient * scattering_potential
-        synthesized_weight += embedding_weight
+    spectrums = list(scattering_spectrums)
+    if not spectrums:
+        return jnp.zeros(shape_3d, dtype=complex_dtype)
+
+    arrays = jnp.asarray(
+        jnp.stack([scattering_spectrum.array for scattering_spectrum in spectrums]),
+        dtype=complex_dtype,
+    )
+    illumination_vectors = jnp.asarray(
+        [scattering_spectrum.illumination_vector for scattering_spectrum in spectrums],
+        dtype=float_dtype,
+    )
+    coefficients = jnp.asarray(
+        [scattering_spectrum.coefficient for scattering_spectrum in spectrums],
+        dtype=complex_dtype,
+    )
+    # Squared in double precision so the axial plane assignment matches the
+    # dense reference implementation bit-exactly.
+    illumination_radial_sq = jnp.asarray(
+        [
+            params.light_freq_px**2
+            - scattering_spectrum.illumination_vector[0] ** 2
+            - scattering_spectrum.illumination_vector[1] ** 2
+            for scattering_spectrum in spectrums
+        ],
+        dtype=float_dtype,
+    )
+    direction_sign = -1.0 if mode == "Backward" else 1.0
+
+    synthesized_spectrum, synthesized_weight = _scatter_embed_spectrums(
+        arrays,
+        illumination_vectors,
+        coefficients,
+        jnp.asarray(params.light_freq_px**2, dtype=float_dtype),
+        illumination_radial_sq,
+        jnp.asarray(params.k_per_px, dtype=float_dtype),
+        params.aperturesize_px // 2,
+        direction_sign,
+        axial_size=shape_3d[2],
+        ewald_embedding_mode=config.ewald_embedding_mode,
+    )
 
     synthesized_weight = jnp.where(synthesized_weight > 0, synthesized_weight, 1)
-    return synthesized_spectrum / synthesized_weight
+    return jnp.asarray(synthesized_spectrum / synthesized_weight, dtype=complex_dtype)
 
 
 def _fill_hermite_components(spectrum3d: Array) -> Array:
@@ -695,23 +721,105 @@ def _log_field(cp_field: Array, ref_cp_field: Array) -> Array:
     return amplitude + 1j * phase
 
 
-def _embed_3d_spectrum_with_weights(
-    spectrum2d: Array,
-    shape_3d: tuple[int, int, int],
-    params: ODTParameters,
-    illumination_vector: tuple[int, int],
-    mode: str,
+@partial(jax.jit, static_argnames=("axial_size", "ewald_embedding_mode"))
+def _scatter_embed_spectrums(  # noqa: PLR0914
+    arrays: Array,
+    illumination_vectors: Array,
+    coefficients: Array,
+    light_freq_squared_px: Array,
+    illumination_radial_sq: Array,
+    k_per_px: Array,
+    aperture_radius_px: int,
+    direction_sign: float,
+    *,
+    axial_size: int,
     ewald_embedding_mode: EwaldEmbeddingMode,
 ) -> tuple[Array, Array]:
-    embedding_weight = _calc_ewald_embedding_weight(
-        shape_3d,
-        params,
-        illumination_vector,
-        mode,
-        ewald_embedding_mode,
+    r"""Embed all 2D scattering spectrums into the 3D Ewald volume by scatter-add.
+
+    Each spatial frequency of a 2D spectrum lands on one axial plane
+    (or two adjacent planes in linear mode), so the embedding is a
+    scatter-add along z instead of materializing a dense
+    ``(x, y, z)`` weight volume per spectrum. Out-of-range axial planes are
+    dropped, matching the dense implementation where those samples match no
+    ``z`` plane.
+
+    Parameters
+    ----------
+    arrays : `Array`
+        Stacked 2D scattering spectrums with shape ``(num_spectrums, x, y)``.
+    illumination_vectors : `Array`
+        Illumination vectors in pixel units with shape ``(num_spectrums, 2)``.
+    coefficients : `Array`
+        Per-spectrum synthesis coefficients with shape ``(num_spectrums,)``.
+    light_freq_squared_px : `Array`
+        Squared light frequency in frequency-pixel units, squared in double
+        precision so the axial positions match the dense reference bit-exactly.
+    illumination_radial_sq : `Array`
+        ``light_freq_px**2 - v_x**2 - v_y**2`` per spectrum with shape
+        ``(num_spectrums,)``, squared in double precision for the same reason.
+    k_per_px : `Array`
+        Wave number per frequency pixel.
+    aperture_radius_px : `int`
+        Radius of the synthesis disk in frequency pixels.
+    direction_sign : `float`
+        ``1.0`` for forward diffraction, ``-1.0`` for backward.
+    axial_size : `int`
+        Number of axial frequency planes.
+    ewald_embedding_mode : `EwaldEmbeddingMode`
+        Ewald sphere embedding mode.
+
+    Returns
+    -------
+    `tuple`\[`Array`, `Array`\]
+        Accumulated 3D spectrum and accumulated embedding weight, both with
+        shape ``(x, y, axial_size)``.
+    """
+    _, size_x, size_y = arrays.shape
+    xx, yy = jnp.meshgrid(
+        jnp.arange(-size_x // 2 + 1, size_x // 2 + 1),
+        jnp.arange(-size_y // 2 + 1, size_y // 2 + 1),
+        indexing="ij",
     )
-    array_tiled = jnp.stack([spectrum2d] * shape_3d[2], axis=2)
-    return array_tiled * embedding_weight, embedding_weight
+    shifted_x = xx[jnp.newaxis] + illumination_vectors[:, 0, jnp.newaxis, jnp.newaxis]
+    shifted_y = yy[jnp.newaxis] + illumination_vectors[:, 1, jnp.newaxis, jnp.newaxis]
+    disk = shifted_x**2 + shifted_y**2
+    circle = disk <= aperture_radius_px**2
+
+    kz_disk = jnp.sqrt(jnp.maximum((light_freq_squared_px - disk) * circle, 0)) * k_per_px
+    values = coefficients[:, jnp.newaxis, jnp.newaxis] * arrays * 2j * kz_disk
+
+    fz_circle = direction_sign * (
+        jnp.sqrt(jnp.maximum(light_freq_squared_px - disk, 0))
+        - jnp.sqrt(jnp.maximum(illumination_radial_sq, 0))[:, jnp.newaxis, jnp.newaxis]
+    )
+
+    index_x = jnp.broadcast_to(jnp.arange(size_x)[jnp.newaxis, :, jnp.newaxis], arrays.shape)
+    index_y = jnp.broadcast_to(jnp.arange(size_y)[jnp.newaxis, jnp.newaxis, :], arrays.shape)
+    z_offset = (axial_size - 1) // 2
+    spectrum_3d = jnp.zeros((size_x, size_y, axial_size), dtype=values.dtype)
+    weight_3d = jnp.zeros((size_x, size_y, axial_size), dtype=fz_circle.dtype)
+
+    if ewald_embedding_mode == EwaldEmbeddingMode.LINEAR:
+        fz_floor = jnp.floor(fz_circle)
+        lower_weight = (fz_floor + 1 - fz_circle) * circle
+        upper_weight = (fz_circle - fz_floor) * circle
+        index_z_lower = fz_floor.astype(jnp.int32) + z_offset
+        index_z_upper = index_z_lower + 1
+        spectrum_3d = spectrum_3d.at[index_x, index_y, index_z_lower].add(values * lower_weight, mode="drop")
+        spectrum_3d = spectrum_3d.at[index_x, index_y, index_z_upper].add(values * upper_weight, mode="drop")
+        weight_3d = weight_3d.at[index_x, index_y, index_z_lower].add(lower_weight, mode="drop")
+        weight_3d = weight_3d.at[index_x, index_y, index_z_upper].add(upper_weight, mode="drop")
+        return spectrum_3d, weight_3d
+
+    if ewald_embedding_mode == EwaldEmbeddingMode.NEAREST:
+        index_z = _round_half_away_from_zero(fz_circle).astype(jnp.int32) + z_offset
+    else:
+        index_z = fz_circle.astype(jnp.int32) + z_offset
+    plane_weight = jnp.asarray(circle, dtype=fz_circle.dtype)
+    spectrum_3d = spectrum_3d.at[index_x, index_y, index_z].add(values * plane_weight, mode="drop")
+    weight_3d = weight_3d.at[index_x, index_y, index_z].add(plane_weight, mode="drop")
+    return spectrum_3d, weight_3d
 
 
 def _calc_ewald_embedding_weight(

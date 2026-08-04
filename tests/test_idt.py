@@ -319,7 +319,7 @@ def test_compute_idt_passes_configured_normalization_epsilon(monkeypatch: pytest
     intensity_images = [jnp.ones((params.img_size_px, params.img_size_px), dtype=jnp.float32)]
     ref_intensity_images = [jnp.ones((params.img_size_px, params.img_size_px), dtype=jnp.float32)]
     configured_epsilon = 1e-3
-    seen: dict[str, list[float]] = {"compute_g_list": [], "compute_permittivity": []}
+    seen: dict[str, list[float]] = {"compute_g_list": [], "solver_terms": []}
 
     def fake_compute_g_list(
         i_list: Sequence[Array],
@@ -335,35 +335,30 @@ def test_compute_idt_passes_configured_normalization_epsilon(monkeypatch: pytest
         seen["compute_g_list"].append(normalization_epsilon)
         return [jnp.zeros_like(image) for image in i_list]
 
-    def fake_compute_permittivity(
-        params_arg: IDTParameters,
-        g_tilde_list: Sequence[Array],
-        u_illumination_list: Sequence[tuple[float, float]],
-        led_illumination_intensities: Sequence[float],
-        z: float = 0.0,
-        alpha: float = 1e-6,
-        beta: float = 1e-6,
-        *,
-        precision: ArrayPrecision | None = None,
-        determinant_rel_floor: float = 1e-4,
-        normalization_epsilon: float = 1e-6,
+    original_solve = idt_module._solve_permittivity_z_stack  # noqa: SLF001
+
+    def recording_solve(
+        g_tilde: Array,
+        grid: idt_module._TransferGrid,
+        u_illumination: Array,
+        u_illumination_z: Array,
+        incident_intensities: Array,
+        z_positions: Array,
+        solver_terms: idt_module._PermittivitySolverTerms,
     ) -> tuple[Array, Array]:
-        del (
-            g_tilde_list,
-            u_illumination_list,
-            led_illumination_intensities,
-            z,
-            alpha,
-            beta,
-            precision,
-            determinant_rel_floor,
+        seen["solver_terms"].append(float(solver_terms.normalization_epsilon))
+        return original_solve(
+            g_tilde,
+            grid,
+            u_illumination,
+            u_illumination_z,
+            incident_intensities,
+            z_positions,
+            solver_terms,
         )
-        seen["compute_permittivity"].append(normalization_epsilon)
-        spectrum_shape = (2 * params_arg.aperturesize_px + 1, 2 * params_arg.aperturesize_px + 1)
-        return jnp.zeros(spectrum_shape, dtype=jnp.complex64), jnp.zeros(spectrum_shape, dtype=jnp.complex64)
 
     monkeypatch.setattr(idt_module, "compute_g_list", fake_compute_g_list)
-    monkeypatch.setattr(idt_module, "compute_permittivity", fake_compute_permittivity)
+    monkeypatch.setattr(idt_module, "_solve_permittivity_z_stack", recording_solve)
 
     compute_idt(
         params,
@@ -374,7 +369,7 @@ def test_compute_idt_passes_configured_normalization_epsilon(monkeypatch: pytest
     )
 
     assert seen["compute_g_list"] == [configured_epsilon]
-    assert seen["compute_permittivity"] == [configured_epsilon, configured_epsilon]
+    assert seen["solver_terms"] == [configured_epsilon]
 
 
 def test_compute_permittivity_restores_normalized_transfer_scale(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -582,34 +577,20 @@ def test_compute_idt_can_warn_on_ifft_imaginary_residual(monkeypatch: pytest.Mon
     intensity_images = [jnp.ones((params.img_size_px, params.img_size_px), dtype=jnp.float32)]
     ref_intensity_images = [jnp.ones((params.img_size_px, params.img_size_px), dtype=jnp.float32)]
 
-    def fake_compute_permittivity(
-        params_arg: IDTParameters,
-        g_tilde_list: Sequence[Array],
-        u_illumination_list: Sequence[tuple[float, float]],
-        led_illumination_intensities: Sequence[float],
-        z: float = 0.0,
-        alpha: float = 1e-6,
-        beta: float = 1e-6,
-        *,
-        precision: ArrayPrecision | None = None,
-        determinant_rel_floor: float = 1e-4,
-        normalization_epsilon: float = 1e-6,
+    def fake_solve_permittivity_z_stack(
+        g_tilde: Array,
+        grid: idt_module._TransferGrid,
+        u_illumination: Array,
+        u_illumination_z: Array,
+        incident_intensities: Array,
+        z_positions: Array,
+        solver_terms: idt_module._PermittivitySolverTerms,
     ) -> tuple[Array, Array]:
-        del (
-            params_arg,
-            g_tilde_list,
-            u_illumination_list,
-            led_illumination_intensities,
-            z,
-            alpha,
-            beta,
-            precision,
-            determinant_rel_floor,
-            normalization_epsilon,
-        )
-        return jnp.ones(spectrum_shape, dtype=jnp.complex64) * 1j, jnp.zeros(spectrum_shape, dtype=jnp.complex64)
+        del g_tilde, grid, u_illumination, u_illumination_z, incident_intensities, solver_terms
+        stack_shape = (z_positions.shape[0], *spectrum_shape)
+        return jnp.ones(stack_shape, dtype=jnp.complex64) * 1j, jnp.zeros(stack_shape, dtype=jnp.complex64)
 
-    monkeypatch.setattr(idt_module, "compute_permittivity", fake_compute_permittivity)
+    monkeypatch.setattr(idt_module, "_solve_permittivity_z_stack", fake_solve_permittivity_z_stack)
     config = IDTConfig(check_ifft_imag_residual=True, imag_residual_warn_threshold=1e-6)
 
     with pytest.warns(RuntimeWarning, match="eps_re inverse FFT imaginary residual"):

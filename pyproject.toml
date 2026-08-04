@@ -43,6 +43,9 @@ doc = [
 extra = [
     "muscopy-mlbsim @ git+https://github.com/Ideguchi-Lab/muscopy-mlbsim.git",
 ]
+cuda = [
+    "jax[cuda12]>=0.4.0",
+]
 
 [tool.setuptools.package-data]
 muscopy = ["py.typed"]

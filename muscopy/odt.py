@@ -806,6 +806,10 @@ def _scatter_embed_spectrums(  # noqa: PLR0914
         upper_weight = (fz_circle - fz_floor) * circle
         index_z_lower = fz_floor.astype(jnp.int32) + z_offset
         index_z_upper = index_z_lower + 1
+        # JAX wraps negative indices even when scatter mode is "drop". Remap
+        # them to the positive out-of-bounds sentinel so they are dropped.
+        index_z_lower = jnp.where(index_z_lower < 0, axial_size, index_z_lower)
+        index_z_upper = jnp.where(index_z_upper < 0, axial_size, index_z_upper)
         spectrum_3d = spectrum_3d.at[index_x, index_y, index_z_lower].add(values * lower_weight, mode="drop")
         spectrum_3d = spectrum_3d.at[index_x, index_y, index_z_upper].add(values * upper_weight, mode="drop")
         weight_3d = weight_3d.at[index_x, index_y, index_z_lower].add(lower_weight, mode="drop")
@@ -816,6 +820,7 @@ def _scatter_embed_spectrums(  # noqa: PLR0914
         index_z = _round_half_away_from_zero(fz_circle).astype(jnp.int32) + z_offset
     else:
         index_z = fz_circle.astype(jnp.int32) + z_offset
+    index_z = jnp.where(index_z < 0, axial_size, index_z)
     plane_weight = jnp.asarray(circle, dtype=fz_circle.dtype)
     spectrum_3d = spectrum_3d.at[index_x, index_y, index_z].add(values * plane_weight, mode="drop")
     weight_3d = weight_3d.at[index_x, index_y, index_z].add(plane_weight, mode="drop")

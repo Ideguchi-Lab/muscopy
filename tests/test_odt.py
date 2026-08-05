@@ -756,3 +756,49 @@ def test_synthesize_spectrum_scatter_matches_dense_weight_reference(
 
     assert synthesized.shape == expected.shape
     assert bool(jnp.allclose(synthesized, expected, rtol=1e-5, atol=1e-5))
+
+
+@pytest.mark.parametrize(
+    "ewald_embedding_mode",
+    [EwaldEmbeddingMode.TRUNCATE, EwaldEmbeddingMode.NEAREST, EwaldEmbeddingMode.LINEAR],
+)
+def test_synthesize_spectrum_drops_negative_out_of_range_axial_planes(
+    ewald_embedding_mode: EwaldEmbeddingMode,
+) -> None:
+    """Test that negative out-of-range axial indices do not wrap to the last plane."""
+    params = ODTParameters(
+        na=2 / 3,
+        wavelength_m=1.0,
+        img_size_px=8,
+        px_size_m=0.375,
+        n_sol=1.0,
+        na_illumination=2 / 3,
+    )
+    config = ODTConfig(hermite_symmetry=False, ewald_embedding_mode=ewald_embedding_mode)
+    spectrum_size = 2 * params.aperturesize_px + 1
+    shape_3d = (spectrum_size, spectrum_size, params.freq_axial_extent_px)
+    scattering_spectrum = ScatteringSpectrum(
+        jnp.ones((spectrum_size, spectrum_size), dtype=jnp.complex64),
+        (4, 0),
+    )
+
+    synthesized = synthesize_spectrum([scattering_spectrum], params, config, mode="Backward")
+
+    kz_disk = odt_module._calc_kz_disk(  # noqa: SLF001
+        params,
+        spectrum_size,
+        scattering_spectrum.illumination_vector,
+        config.precision,
+    )
+    embedding_weight = odt_module._calc_ewald_embedding_weight(  # noqa: SLF001
+        shape_3d,
+        params,
+        scattering_spectrum.illumination_vector,
+        "Backward",
+        ewald_embedding_mode,
+    )
+    expected_spectrum = jnp.stack([scattering_spectrum.array * 2j * kz_disk] * shape_3d[2], axis=2) * embedding_weight
+    expected = expected_spectrum / jnp.where(embedding_weight > 0, embedding_weight, 1)
+
+    assert bool(jnp.allclose(synthesized, expected, rtol=1e-5, atol=1e-5))
+    assert not bool(jnp.any(synthesized[:, :, -1]))

@@ -19,6 +19,7 @@ import dataclasses
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
+import jax
 import jax.numpy as jnp
 from jax import Array
 from tqdm import tqdm
@@ -385,14 +386,12 @@ def calc_scattering_spectrums(
         msg = "illumination_vectors must match the number of complex field spectrums."
         raise ValueError(msg)
 
+    if illumination_vectors is None:
+        illumination_vectors = _estimate_illumination_vectors(cp_spectrums, ref_cp_spectrums)
+
     scattering_spectrums = []
     for index, (cp_spectrum, ref_cp_spectrum) in enumerate(zip(cp_spectrums, ref_cp_spectrums, strict=True)):
-        if illumination_vectors is None:
-            max_x, max_y, _ = _find_max_args(jnp.abs(ref_cp_spectrum))
-            center_idx = cp_spectrum.shape[0] // 2
-            illumination_vector = (max_x - center_idx, max_y - center_idx)
-        else:
-            illumination_vector = illumination_vectors[index]
+        illumination_vector = illumination_vectors[index]
         expanded_cp_spectrum = _shift_dh_spectrum(params, cp_spectrum, illumination_vector, config.edge_size)
         expanded_cp_spectrum = jnp.asarray(expanded_cp_spectrum, dtype=config.precision.complex_precision())
         expanded_ref_cp_spectrum = _shift_dh_spectrum(params, ref_cp_spectrum, illumination_vector, config.edge_size)
@@ -613,12 +612,38 @@ def _zeropad_higher_axial_freq(
     return jnp.fft.ifftn(jnp.fft.ifftshift(ft_array3d), norm="ortho")
 
 
-def _find_max_args(array: Array) -> tuple[int, int, float]:
-    max_value = float(jnp.max(array))
-    max_index = jnp.unravel_index(jnp.argmax(array), array.shape)
-    max_x = int(max_index[0])
-    max_y = int(max_index[1])
-    return max_x, max_y, max_value
+def _estimate_illumination_vectors(
+    cp_spectrums: Sequence[Array],
+    ref_cp_spectrums: Sequence[Array],
+) -> list[tuple[int, int]]:
+    r"""Estimate illumination vectors from the reference spectrum peaks.
+
+    All reference spectra are reduced with one batched argmax and a single
+    device-to-host transfer, instead of synchronizing once per spectrum.
+    The reference spectra must share one shape.
+
+    Parameters
+    ----------
+    cp_spectrums : `collections.abc.Sequence`\[`Array`\]
+        Spectrum of complex fields. Only the shape is used for centering.
+    ref_cp_spectrums : `collections.abc.Sequence`\[`Array`\]
+        Reference spectrum of complex fields.
+
+    Returns
+    -------
+    `list`\[`tuple`\[`int`, `int`\]\]
+        Illumination vectors in pixel units.
+    """
+    ref_magnitudes = jnp.stack([jnp.abs(ref_cp_spectrum) for ref_cp_spectrum in ref_cp_spectrums])
+    flat_peak_indices = jnp.argmax(ref_magnitudes.reshape(ref_magnitudes.shape[0], -1), axis=1)
+    peak_x, peak_y = jnp.unravel_index(flat_peak_indices, ref_magnitudes.shape[1:])
+    peaks = jax.device_get(jnp.stack([peak_x, peak_y], axis=1))
+
+    illumination_vectors = []
+    for index, cp_spectrum in enumerate(cp_spectrums):
+        center_idx = cp_spectrum.shape[0] // 2
+        illumination_vectors.append((int(peaks[index, 0]) - center_idx, int(peaks[index, 1]) - center_idx))
+    return illumination_vectors
 
 
 def _shift_dh_spectrum(

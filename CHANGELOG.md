@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- Replaced dense per-angle ODT Ewald embedding with a JIT-compiled batched scatter-add, reducing synthesis runtime and temporary memory while preserving all embedding modes and out-of-range axial sample handling [[#143](https://github.com/Ideguchi-Lab/muscopy/pull/143)].
+
 ### Fixed
 
 - Prevented NaNs in linear ODT Ewald embedding by clamping non-propagating square-root radicands before pupil masking [[#138](https://github.com/Ideguchi-Lab/muscopy/pull/138)].

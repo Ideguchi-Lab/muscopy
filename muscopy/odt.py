@@ -198,6 +198,12 @@ class ODTConfig:
         Regions to be used for offset calculation.
     gradient_correction : `bool`, optional
         Whether to remove a median-estimated linear phase ramp from each scattering field.
+    use_skimage_unwrap : `bool`, optional
+        Whether to unwrap the Rytov phase with ``skimage.restoration.unwrap_phase``
+        instead of the default Poisson solver. The skimage path runs on CPU per view
+        but keeps the unwrapped phase congruent to the input modulo 2*pi,
+        which is more robust for samples with steep phase gradients. Ignored for the
+        Born approximation.
     ewald_embedding_mode : `EwaldEmbeddingMode`, optional
         Ewald sphere embedding mode. ``EwaldEmbeddingMode.TRUNCATE`` preserves the
         legacy integer truncation, ``EwaldEmbeddingMode.NEAREST`` places each sample
@@ -214,6 +220,7 @@ class ODTConfig:
     edge_size: int = 0
     offset_regions: OffsetRegions = None
     gradient_correction: bool = True
+    use_skimage_unwrap: bool = False
     ewald_embedding_mode: EwaldEmbeddingMode = EwaldEmbeddingMode.TRUNCATE
     verbose: bool = False
 
@@ -432,6 +439,7 @@ def calc_scattering_spectrums(
             config.edge_size,
             config.offset_regions,
             config.gradient_correction,
+            config.use_skimage_unwrap,
         )
         scattering_spectrum = ScatteringSpectrum(scattering_spectrum_array, illumination_vector)
         scattering_spectrums.append(scattering_spectrum)
@@ -699,6 +707,7 @@ def _calc_1st_scattering_spectrum(
     edge_size: int = 0,
     offset_regions: OffsetRegions = None,
     gradient_correction: bool = True,
+    use_skimage_unwrap: bool = False,
 ) -> Array:
     if edge_size != 0:
         cp_field = cp_field[edge_size:-edge_size, edge_size:-edge_size]
@@ -707,7 +716,7 @@ def _calc_1st_scattering_spectrum(
     if approx_type == "Born":
         scattering_field = (cp_field - ref_cp_field) / jnp.where(jnp.abs(ref_cp_field) < EPSILON, EPSILON, ref_cp_field)
     elif approx_type == "Rytov":
-        scattering_field = _log_field(cp_field, ref_cp_field)
+        scattering_field = _log_field(cp_field, ref_cp_field, use_skimage_unwrap=use_skimage_unwrap)
     else:
         msg = f"Unknown approximation type: {approx_type}"
         raise ValueError(msg)
@@ -735,12 +744,12 @@ def _calc_1st_scattering_spectrum(
     return scattering_spectrum * mask_for_synthesis
 
 
-def _log_field(cp_field: Array, ref_cp_field: Array) -> Array:
+def _log_field(cp_field: Array, ref_cp_field: Array, *, use_skimage_unwrap: bool = False) -> Array:
     field_log = jnp.log(jnp.maximum(jnp.abs(cp_field), EPSILON)) + 1j * jnp.angle(cp_field)
     ref_field_log = jnp.log(jnp.maximum(jnp.abs(ref_cp_field), EPSILON)) + 1j * jnp.angle(ref_cp_field)
 
     amplitude = jnp.real(field_log) - jnp.real(ref_field_log)
-    phase = unwrap_phase(jnp.imag(field_log) - jnp.imag(ref_field_log))
+    phase = unwrap_phase(jnp.imag(field_log) - jnp.imag(ref_field_log), use_skimage=use_skimage_unwrap)
 
     return amplitude + 1j * phase
 

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- `ODTConfig.use_skimage_unwrap` option to unwrap the Rytov scattering phase with `skimage.restoration.unwrap_phase` instead of the default Poisson solver, which is more robust for samples with steep phase gradients [[#145](https://github.com/Ideguchi-Lab/muscopy/pull/145)].
+
 ### Changed
 
 - Replaced dense per-angle ODT Ewald embedding with a JIT-compiled batched scatter-add, reducing synthesis runtime and temporary memory while preserving all embedding modes and out-of-range axial sample handling [[#143](https://github.com/Ideguchi-Lab/muscopy/pull/143)].

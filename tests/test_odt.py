@@ -30,6 +30,7 @@ def test_odt_config_defaults_to_32_bit_precision() -> None:
     assert config.precision.float_precision() == "float32"
     assert config.precision.complex_precision() == "complex64"
     assert config.gradient_correction is True
+    assert config.use_skimage_unwrap is False
     assert config.ewald_embedding_mode is EwaldEmbeddingMode.TRUNCATE
     assert config.verbose is False
 
@@ -391,6 +392,90 @@ def test_calc_scattering_spectrums_uses_configured_gradient_correction(
         illumination_vectors=[(0, 0)],
     )
     assert calls == [0]
+
+
+def test_calc_1st_scattering_spectrum_respects_skimage_unwrap_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test that the Rytov phase unwrap backend remains configurable."""
+    params = ODTParameters(
+        na=0.1,
+        wavelength_m=1.0,
+        img_size_px=8,
+        px_size_m=1.0,
+        n_sol=1.33,
+        na_illumination=0.1,
+    )
+    cp_field = jnp.ones((7, 7), dtype=jnp.complex64) * 2
+    ref_cp_field = jnp.ones_like(cp_field)
+    calls = []
+
+    def fake_unwrap_phase(phase_image: Array, **kwargs: bool) -> Array:
+        calls.append(kwargs.get("use_skimage", False))
+        return phase_image
+
+    monkeypatch.setattr(odt_module, "unwrap_phase", fake_unwrap_phase)
+
+    odt_module._calc_1st_scattering_spectrum(  # noqa: SLF001
+        cp_field,
+        ref_cp_field,
+        params,
+        "Rytov",
+        (0, 0),
+    )
+    assert calls == [False]
+
+    odt_module._calc_1st_scattering_spectrum(  # noqa: SLF001
+        cp_field,
+        ref_cp_field,
+        params,
+        "Rytov",
+        (0, 0),
+        use_skimage_unwrap=True,
+    )
+    assert calls == [False, True]
+
+
+def test_calc_scattering_spectrums_uses_configured_skimage_unwrap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test that public ODT spectrum extraction applies the unwrap backend config."""
+    params = ODTParameters(
+        na=0.1,
+        wavelength_m=1.0,
+        img_size_px=8,
+        px_size_m=1.0,
+        n_sol=1.33,
+        na_illumination=0.1,
+    )
+    spectrum_shape = params.aperturesize_px
+    cp_spectrum = jnp.ones((spectrum_shape, spectrum_shape), dtype=jnp.complex64) * 2
+    ref_cp_spectrum = jnp.ones_like(cp_spectrum)
+    calls = []
+
+    def fake_unwrap_phase(phase_image: Array, **kwargs: bool) -> Array:
+        calls.append(kwargs.get("use_skimage", False))
+        return phase_image
+
+    monkeypatch.setattr(odt_module, "unwrap_phase", fake_unwrap_phase)
+
+    calc_scattering_spectrums(
+        [cp_spectrum],
+        [ref_cp_spectrum],
+        params,
+        ODTConfig(approx_type="Rytov", use_skimage_unwrap=True),
+        illumination_vectors=[(0, 0)],
+    )
+    assert calls == [True]
+
+    calc_scattering_spectrums(
+        [cp_spectrum],
+        [ref_cp_spectrum],
+        params,
+        ODTConfig(approx_type="Rytov"),
+        illumination_vectors=[(0, 0)],
+    )
+    assert calls == [True, False]
 
 
 def test_log_field_preserves_low_amplitude_complex_phase() -> None:

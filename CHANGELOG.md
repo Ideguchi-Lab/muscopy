@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+---
+
+## Version 1.0.1 [2026-08-07]
+
 ### Added
 
 - `ODTConfig.use_skimage_unwrap` option to unwrap the Rytov scattering phase with `skimage.restoration.unwrap_phase` instead of the default Poisson solver, which is more robust for samples with steep phase gradients [[#145](https://github.com/Ideguchi-Lab/muscopy/pull/145)].

@@ -424,10 +424,15 @@ def calc_scattering_spectrums(
     scattering_spectrums = []
     for index, (cp_spectrum, ref_cp_spectrum) in enumerate(zip(cp_spectrums, ref_cp_spectrums, strict=True)):
         illumination_vector = illumination_vectors[index]
-        expanded_cp_spectrum = _shift_dh_spectrum(params, cp_spectrum, illumination_vector, config.edge_size)
-        expanded_cp_spectrum = jnp.asarray(expanded_cp_spectrum, dtype=config.precision.complex_precision())
-        expanded_ref_cp_spectrum = _shift_dh_spectrum(params, ref_cp_spectrum, illumination_vector, config.edge_size)
-        expanded_ref_cp_spectrum = jnp.asarray(expanded_ref_cp_spectrum, dtype=config.precision.complex_precision())
+        # Cast before shifting so host arrays (e.g. NumPy complex128) do not
+        # request a dtype that is unavailable without jax_enable_x64.
+        complex_dtype = config.precision.complex_precision()
+        expanded_cp_spectrum = _shift_dh_spectrum(
+            params, jnp.asarray(cp_spectrum, dtype=complex_dtype), illumination_vector, config.edge_size
+        )
+        expanded_ref_cp_spectrum = _shift_dh_spectrum(
+            params, jnp.asarray(ref_cp_spectrum, dtype=complex_dtype), illumination_vector, config.edge_size
+        )
         cp_field = jnp.fft.ifft2(jnp.fft.ifftshift(expanded_cp_spectrum), norm="ortho")
         ref_cp_field = jnp.fft.ifft2(jnp.fft.ifftshift(expanded_ref_cp_spectrum), norm="ortho")
         scattering_spectrum_array = _calc_1st_scattering_spectrum(

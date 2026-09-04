@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Fixed
+
+- Fixed `ODTConfig(use_skimage_unwrap=True)` raising `ValueError: buffer source array is read-only` under `jax_enable_x64` by copying the phase to a writable host buffer before calling `skimage.restoration.unwrap_phase`.
+- Cast complex field spectrums to the configured precision before Ewald shifting so NumPy `complex128` inputs no longer emit a JAX dtype-truncation warning without `jax_enable_x64`.
+
 ---
 
 ## Version 1.0.1 [2026-08-07]

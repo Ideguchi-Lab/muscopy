@@ -4,6 +4,27 @@
 
 ---
 
+## Version 1.0.2 [2026-09-09]
+
+### Added
+
+- PyPI publishing through GitHub Actions Trusted Publishing.
+- Separate installation instructions for the private MLB simulator, linked from both simulation examples.
+- Release artifact checks for the MIT license, type marker, and index-compatible dependencies.
+
+### Changed
+
+- Changed the license from Apache-2.0 to MIT, with copyright held by Ideguchi-Lab.
+- Listed Masato Fukushima, Kohki Horie, and Takuro Ideguchi as authors, and acknowledged contributions from Zinan Zhou and Atsuko Price.
+- Updated installation instructions for PyPI and added project metadata links.
+- Declared NumPy as a direct runtime dependency.
+
+### Removed
+
+- Removed the `extra` optional dependency containing the private simulator's Git URL so distributions can be uploaded to PyPI. Users with simulator access should follow the separate installation guide.
+
+---
+
 ## Version 1.0.1 [2026-08-07]
 
 ### Added

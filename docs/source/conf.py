@@ -16,8 +16,8 @@ sys.path.insert(0, str(Path("..", "muscopy/examples").resolve()))
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = "Muscopy"
-copyright = "2025, Masato Fukushima"  # noqa: A001
-author = "Masato Fukushima"
+copyright = "2024-2026, Ideguchi-Lab"  # noqa: A001
+author = "Masato Fukushima, Kohki Horie, Takuro Ideguchi"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

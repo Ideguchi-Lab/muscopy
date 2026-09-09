@@ -884,11 +884,12 @@ wheels = [
 
 [[package]]
 name = "muscopy"
-version = "1.0.1"
+version = "1.0.2"
 source = { editable = "." }
 dependencies = [
     { name = "jax" },
     { name = "jaxlib" },
+    { name = "numpy" },
     { name = "scikit-image" },
     { name = "tqdm" },
     { name = "types-tqdm" },
@@ -915,9 +916,6 @@ doc = [
     { name = "sphinx-gallery" },
     { name = "sphinx-rtd-theme" },
 ]
-extra = [
-    { name = "muscopy-mlbsim" },
-]
 
 [package.metadata]
 requires-dist = [
@@ -925,8 +923,8 @@ requires-dist = [
     { name = "jax", extras = ["cuda12"], marker = "extra == 'cuda'", specifier = ">=0.4.0" },
     { name = "jaxlib", specifier = ">=0.4.0" },
     { name = "matplotlib", marker = "extra == 'doc'", specifier = ">=3.5.0" },
-    { name = "muscopy-mlbsim", marker = "extra == 'extra'", git = "https://github.com/Ideguchi-Lab/muscopy-mlbsim.git" },
     { name = "mypy", marker = "extra == 'dev'", specifier = "==2.1.0" },
+    { name = "numpy", specifier = ">=1.22.0" },
     { name = "numpy", marker = "extra == 'doc'", specifier = ">=1.22.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = "==4.6.0" },
     { name = "pyright", marker = "extra == 'dev'", specifier = "==1.1.409" },
@@ -941,21 +939,7 @@ requires-dist = [
     { name = "types-tqdm" },
     { name = "typing-extensions" },
 ]
-provides-extras = ["dev", "doc", "extra", "cuda"]
-
-[[package]]
-name = "muscopy-mlbsim"
-version = "0.2.0"
-source = { git = "https://github.com/Ideguchi-Lab/muscopy-mlbsim.git#596122f052ba50c61d9ffd2072ca6e4dffe3d30a" }
-dependencies = [
-    { name = "jax" },
-    { name = "jaxlib" },
-    { name = "numpy" },
-    { name = "pyyaml" },
-    { name = "tqdm" },
-    { name = "types-tqdm" },
-    { name = "typing-extensions" },
-]
+provides-extras = ["dev", "doc", "cuda"]
 
 [[package]]
 name = "mypy"

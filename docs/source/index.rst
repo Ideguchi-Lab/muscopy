@@ -12,5 +12,6 @@ Use the gallery for executable examples and the module reference for API details
    :caption: Documentation
 
    gallery/index
+   mlb_installation
    api_policy
    references

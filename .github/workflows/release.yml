@@ -27,12 +27,19 @@ jobs:
         enable-cache: true
 
     - name: Build the package
-      run: uv run --with build==1.5.0 python -m build --installer uv
+      run: uv run --no-project --with build==1.5.0 python -m build --installer uv
 
     - name: Check built package metadata
       run: |
-        uv run --with twine==6.2.0 twine check dist/*
+        uv run --no-project --with twine==6.2.0 twine check --strict dist/*
         uv run --no-project python scripts/check_package_metadata.py
+
+    - name: Save distributions for PyPI
+      uses: actions/upload-artifact@v7
+      with:
+        name: distributions
+        path: dist/*
+        if-no-files-found: error
 
     - name: Extract release notes from CHANGELOG.md
       id: extract_changelog
@@ -52,3 +59,22 @@ jobs:
         bodyFile: ./.github/workflows/release_template.md
         draft: false
         prerelease: false
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/muscopy/
+    permissions:
+      id-token: write
+    steps:
+      - name: Download checked distributions
+        uses: actions/download-artifact@v8
+        with:
+          name: distributions
+          path: dist
+
+      - name: Publish distributions
+        uses: pypa/gh-action-pypi-publish@release/v1

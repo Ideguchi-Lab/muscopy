@@ -42,7 +42,9 @@ def unwrap_phase(
     """
     if use_skimage:
         # move CPU if necessary
-        phase_cpu = np.asarray(phase_image)
+        # np.asarray on a JAX array returns a read-only view; skimage's Cython
+        # unwrapper requires a writable buffer, so make a host-side copy.
+        phase_cpu = np.array(phase_image, copy=True)
         unwrapped_cpu = skimage_unwrap_phase(phase_cpu)  # type: ignore[no-untyped-call]
         return jnp.asarray(unwrapped_cpu)
 

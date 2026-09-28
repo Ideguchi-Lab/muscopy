@@ -212,3 +212,16 @@ class TestUnwrapPhaseRhoConsistency:
         # The sum of rho should be approximately zero
         rho_sum = float(jnp.sum(rho))
         assert abs(rho_sum) < 1e-10, f"rho sum with ROI should be ~0, but got {rho_sum}"
+
+
+def test_unwrap_phase_skimage_accepts_read_only_float64_input() -> None:
+    """Test that the skimage path copies a read-only float64 buffer before unwrapping.
+
+    ``np.asarray`` on a JAX float64 array (jax_enable_x64) yields a read-only
+    view, and skimage's Cython unwrapper rejects read-only float64 buffers.
+    """
+    phase = np.linspace(-np.pi, np.pi, 64, dtype=np.float64).reshape(8, 8)
+    phase.flags.writeable = False
+    unwrapped = unwrap_phase(phase, use_skimage=True)  # type: ignore[arg-type]
+    assert unwrapped.shape == phase.shape
+    assert np.all(np.isfinite(np.asarray(unwrapped)))

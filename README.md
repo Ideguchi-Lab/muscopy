@@ -1,5 +1,7 @@
 # muscopy
 
+[![Documentation Status](https://readthedocs.org/projects/muscopy/badge/?version=latest)](https://muscopy.readthedocs.io/en/latest/)
+
 `muscopy` is a Python library for label-free microscopy analysis, such as quantitative phase imaging (QPI), digital holography,
 optical diffraction tomography, intensity diffraction tomography, phasor analysis,
 and related workflows.
@@ -90,7 +92,9 @@ uv run pyright
 
 ## Docs
 
-You can build the documentation with the following command.
+The documentation is hosted on Read the Docs: <https://muscopy.readthedocs.io>.
+
+You can also build the documentation locally with the following command.
 
 ```sh
 uv sync --extra doc

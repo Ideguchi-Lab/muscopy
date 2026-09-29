@@ -31,6 +31,7 @@ classifiers = [
 
 [project.urls]
 Repository = "https://github.com/Ideguchi-Lab/muscopy"
+Documentation = "https://muscopy.readthedocs.io"
 Issues = "https://github.com/Ideguchi-Lab/muscopy/issues"
 Changelog = "https://github.com/Ideguchi-Lab/muscopy/blob/main/CHANGELOG.md"
 

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Added
+
+- Read the Docs configuration (`.readthedocs.yaml`) to host the documentation at <https://muscopy.readthedocs.io>.
+- Documentation link in the project metadata and README.
+
+### Changed
+
+- Sphinx configuration resolves source paths relative to `conf.py` and skips the private MLB simulation examples on Read the Docs as well as in CI.
+
 ---
 
 ## Version 1.0.2 [2026-09-09]

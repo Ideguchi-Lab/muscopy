@@ -6,10 +6,19 @@
 
 - Read the Docs configuration (`.readthedocs.yaml`) to host the documentation at <https://muscopy.readthedocs.io>.
 - Documentation link in the project metadata and README.
+- Rectangular image support for QPI and ODT. `MuParameters.img_size_px` accepts a `(rows, columns)` tuple, and the off-axis spectrum is cropped with an ellipse whose semi-axes follow the per-axis frequency sampling.
+- Per-axis `MuParameters` properties `img_shape_px`, `is_square`, `square_img_size_px`, `freq_per_px_xy`, `aperturesize_px_xy`, `aperture_radius_px_xy`, and `imgpx_m_per_px_xy`.
+- `muscopy.dh.make_ellipse` for axis-aligned elliptical masks.
+- `ODTParameters` properties `freq_axial_per_px`, `light_freq_axial_px`, `k_axial_per_px`, `lateral_scale_xy`, `lateral_extent_px_xy`, and `imgpx_lateral_m_per_px_xy` for anisotropic Ewald sphere embedding.
 
 ### Changed
 
 - Sphinx configuration resolves source paths relative to `conf.py` and skips the private MLB simulation examples on Read the Docs as well as in CI.
+- `crop_array` accepts a per-axis `(width_0, width_1)` crop width.
+- ODT synthesis, illumination vector estimation, and the scattering spectrum mask use per-axis sampling. Results for square images are unchanged.
+- `calc_visibility` and `calc_phase_noise` support rectangular holograms.
+- The type of `MuParameters.img_size_px` is widened to `int | tuple[int, int]`. Runtime behavior for `int` values is unchanged; code that does arithmetic on `params.img_size_px` should use `square_img_size_px` or `img_shape_px` to satisfy type checkers.
+- Scalar properties (`freq_per_px`, `k_per_px`, `aperturesize_px`, `light_freq_px`, `imgpx_m_per_px`, `ODTParameters.imgpx_lateral_m_per_px`) raise `ValueError` for rectangular images, and IDT rejects rectangular images explicitly.
 
 ---
 

@@ -43,27 +43,27 @@ off_axis_center = (100, 100)
 x_radius = 30
 y_radius = 100
 xx, yy = jnp.meshgrid(
-    jnp.arange(-params.img_size_px // 2, params.img_size_px // 2),
-    jnp.arange(-params.img_size_px // 2, params.img_size_px // 2),
+    jnp.arange(-params.square_img_size_px // 2, params.square_img_size_px // 2),
+    jnp.arange(-params.square_img_size_px // 2, params.square_img_size_px // 2),
     indexing="ij",
 )
 gaussian = 2 * jnp.exp(-((xx) ** 2 / (2 * (x_radius / 2) ** 2) + (yy) ** 2 / (2 * (y_radius / 2) ** 2)))
 sample_array = jnp.exp(2j * jnp.pi * gaussian)
-low_pass = make_disk(params.img_center, params.aperturesize_px // 2, params.img_size_px)
+low_pass = make_disk(params.img_center, params.aperturesize_px // 2, params.square_img_size_px)
 sample_array = jnp.fft.ifft2(jnp.fft.ifftshift(jnp.fft.fftshift(jnp.fft.fft2(sample_array)) * low_pass))
 sample_array /= jnp.sum(jnp.abs(sample_array) ** 2) ** 0.5
 
 xx, yy = jnp.meshgrid(
-    jnp.arange(params.img_size_px),
-    jnp.arange(params.img_size_px),
+    jnp.arange(params.square_img_size_px),
+    jnp.arange(params.square_img_size_px),
     indexing="ij",
 )
 ref_array = jnp.exp(
     -2j
     * jnp.pi
     * (
-        xx * (off_axis_center[0] - params.img_center[0]) / (params.img_size_px)
-        + yy * (off_axis_center[1] - params.img_center[1]) / (params.img_size_px)
+        xx * (off_axis_center[0] - params.img_center[0]) / (params.square_img_size_px)
+        + yy * (off_axis_center[1] - params.img_center[1]) / (params.square_img_size_px)
     )
 )
 ref_array /= jnp.sum(jnp.abs(ref_array) ** 2) ** 0.5

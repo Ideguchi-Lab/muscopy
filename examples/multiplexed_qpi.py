@@ -47,11 +47,11 @@ off_axis_center = (100, 100)
 radius1 = 30
 radius2 = 10
 pos2 = (100, 200)
-sample_disk1 = make_disk(params.img_center, radius1, params.img_size_px)
-sample_disk2 = make_disk(pos2, radius2, params.img_size_px)
+sample_disk1 = make_disk(params.img_center, radius1, params.square_img_size_px)
+sample_disk2 = make_disk(pos2, radius2, params.square_img_size_px)
 sample_array1 = jnp.exp(2j * jnp.pi / 3 * sample_disk1)
 sample_array2 = jnp.exp(2j * jnp.pi / 5 * sample_disk2)
-low_pass = make_disk(params.img_center, params.aperturesize_px // 2, params.img_size_px)
+low_pass = make_disk(params.img_center, params.aperturesize_px // 2, params.square_img_size_px)
 sample_array1 = jnp.fft.ifft2(jnp.fft.ifftshift(jnp.fft.fftshift(jnp.fft.fft2(sample_array1)) * low_pass))
 sample_array2 = jnp.fft.ifft2(jnp.fft.ifftshift(jnp.fft.fftshift(jnp.fft.fft2(sample_array2)) * low_pass))
 sample_array1 /= jnp.sum(jnp.abs(sample_array1) ** 2) ** 0.5
@@ -59,16 +59,16 @@ sample_array2 /= jnp.sum(jnp.abs(sample_array2) ** 2) ** 0.5
 
 
 xx, yy = jnp.meshgrid(
-    jnp.arange(params.img_size_px),
-    jnp.arange(params.img_size_px),
+    jnp.arange(params.square_img_size_px),
+    jnp.arange(params.square_img_size_px),
     indexing="ij",
 )
 ref_array = jnp.exp(
     -2j
     * jnp.pi
     * (
-        xx * (off_axis_center[0] - params.img_center[0]) / (params.img_size_px)
-        + yy * (off_axis_center[1] - params.img_center[1]) / (params.img_size_px)
+        xx * (off_axis_center[0] - params.img_center[0]) / (params.square_img_size_px)
+        + yy * (off_axis_center[1] - params.img_center[1]) / (params.square_img_size_px)
     )
 )
 ref_array /= jnp.sum(jnp.abs(ref_array) ** 2) ** 0.5

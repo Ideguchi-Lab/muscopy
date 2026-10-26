@@ -16,6 +16,7 @@ This module provides:
 from __future__ import annotations
 
 import dataclasses
+import math
 from enum import StrEnum
 from functools import partial
 from typing import TYPE_CHECKING
@@ -25,7 +26,7 @@ import jax.numpy as jnp
 from jax import Array
 
 from muscopy.cfg import ArrayPrecision, OffsetRegions
-from muscopy.dh import MuParameters, correct_gradient, correct_offset, make_disk
+from muscopy.dh import MuParameters, _inside_ellipse, correct_gradient, correct_offset, make_ellipse
 from muscopy.qpi_utils import unwrap_phase
 
 if TYPE_CHECKING:
@@ -58,7 +59,7 @@ class EwaldEmbeddingMode(StrEnum):
 
 @dataclasses.dataclass
 class ODTParameters(MuParameters):
-    """Optical Diffraction Tomography (ODT) parameters.
+    r"""Optical Diffraction Tomography (ODT) parameters.
 
     Attributes
     ----------
@@ -66,14 +67,20 @@ class ODTParameters(MuParameters):
         Numerical aperture of the objective lens
     wavelength_m : `float`
         Wavelength of the light in meters
-    img_size_px : `int`
-        Size of the image in pixels. We assume square image.
+    img_size_px : `int` | `tuple`\[`int`, `int`\]
+        Size of the image in pixels. A ``(rows, columns)`` tuple describes a
+        rectangular image whose pupil is an ellipse in frequency-pixel units.
     px_size_m : `float`
         Pixel size in meters
     n_sol : `float`
         Refractive index of the solution
     na_illumination : `float`
         Maximum illumination numerical aperture
+
+    Notes
+    -----
+    The axial frequency pitch is the finer of the two lateral pitches, so all
+    axial quantities reduce to the lateral ones for a square image.
     """
 
     na_illumination: float = 1.0
@@ -100,6 +107,63 @@ class ODTParameters(MuParameters):
             raise ValueError(msg)
 
     @property
+    def freq_axial_per_px(self) -> float:
+        """Frequency(1/meter) per pixel along the axial direction of Fourier space.
+
+        Returns
+        -------
+        `float`
+            The finer of the two lateral frequency pitches.
+        """
+        return min(self.freq_per_px_xy)
+
+    @property
+    def light_freq_axial_px(self) -> float:
+        """Get the light frequency in axial frequency-pixel unit.
+
+        Returns
+        -------
+        `float`
+            The magnitude of the light frequency divided by `freq_axial_per_px`.
+        """
+        return self.n_sol / self.wavelength_m / self.freq_axial_per_px
+
+    @property
+    def k_axial_per_px(self) -> float:
+        """Get the wave vector per axial pixel in the Fourier space.
+
+        Returns
+        -------
+        `float`
+            The wave vector per axial frequency pixel.
+        """
+        return 2 * math.pi * self.freq_axial_per_px
+
+    @property
+    def lateral_scale_xy(self) -> tuple[float, float]:
+        r"""Lateral frequency pitches in axial frequency-pixel unit.
+
+        Returns
+        -------
+        `tuple`\[`float`, `float`\]
+            ``freq_per_px_xy`` divided by `freq_axial_per_px`. Both entries are 1 for a square image.
+        """
+        freq_x, freq_y = self.freq_per_px_xy
+        return (freq_x / self.freq_axial_per_px, freq_y / self.freq_axial_per_px)
+
+    @property
+    def lateral_extent_px_xy(self) -> tuple[int, int]:
+        r"""Calculate the lateral extent of the synthesized Fourier space in pixels.
+
+        Returns
+        -------
+        `tuple`\[`int`, `int`\]
+            ``2 * aperturesize_px_xy + 1`` along axis 0 and axis 1.
+        """
+        aperture_x, aperture_y = self.aperturesize_px_xy
+        return (2 * aperture_x + 1, 2 * aperture_y + 1)
+
+    @property
     def freq_axial_extent_px(self) -> int:
         """Calculate the axial extent of Fourier space in pixels.
 
@@ -108,7 +172,20 @@ class ODTParameters(MuParameters):
         `int`
             The axial extent of Fourier space in pixels.
         """
-        return 2 * (self.aperturesize_px // 2) + 1
+        return 2 * round(self.na / self.wavelength_m / self.freq_axial_per_px) + 1
+
+    @property
+    def imgpx_lateral_m_per_px_xy(self) -> tuple[float, float]:
+        r"""Calculate the lateral pixel size in meters (ODT) for each axis.
+
+        Returns
+        -------
+        `tuple`\[`float`, `float`\]
+            The lateral pixel size in meter along axis 0 and axis 1
+        """
+        shape = self.img_shape_px
+        extent_x, extent_y = self.lateral_extent_px_xy
+        return (self.px_size_m * shape[0] / extent_x, self.px_size_m * shape[1] / extent_y)
 
     @property
     def imgpx_lateral_m_per_px(self) -> float:
@@ -119,7 +196,7 @@ class ODTParameters(MuParameters):
         `float`
             The lateral pixel size in meter
         """
-        return self.px_size_m * self.img_size_px / (2 * self.aperturesize_px + 1)
+        return self._require_square(self.imgpx_lateral_m_per_px_xy, "imgpx_lateral_m_per_px")
 
     @property
     def imgpx_axial_m_per_px(self) -> float:
@@ -130,29 +207,39 @@ class ODTParameters(MuParameters):
         `float`
             The axial pixel size in meters.
         """
-        return 1 / (self.freq_per_px * self.freq_axial_extent_px)
+        return 1 / (self.freq_axial_per_px * self.freq_axial_extent_px)
 
     @property
     def spectrum2cpfield_xy(self) -> float:
         """Lateral Fourier factor from spectrum to field.
+
+        For a rectangular image this is the geometric mean over both lateral axes,
+        so ``spectrum2cpfield_xy**2`` is the 2D factor.
 
         Returns
         -------
         `float`
             factor from spectrum to field
         """
-        return float((self.freq_per_px / self.imgpx_lateral_m_per_px) ** 0.5)
+        freq_x, freq_y = self.freq_per_px_xy
+        imgpx_x, imgpx_y = self.imgpx_lateral_m_per_px_xy
+        return self._sqrt_geometric_mean(freq_x / imgpx_x, freq_y / imgpx_y)
 
     @property
     def cpfield_xy2spectrum(self) -> float:
         """Lateral Fourier factor from field to spectrum.
+
+        For a rectangular image this is the geometric mean over both lateral axes,
+        so ``cpfield_xy2spectrum**2`` is the 2D factor.
 
         Returns
         -------
         `float`
             factor from field to spectrum
         """
-        return float((self.imgpx_lateral_m_per_px / self.freq_per_px) ** 0.5)
+        freq_x, freq_y = self.freq_per_px_xy
+        imgpx_x, imgpx_y = self.imgpx_lateral_m_per_px_xy
+        return self._sqrt_geometric_mean(imgpx_x / freq_x, imgpx_y / freq_y)
 
     @property
     def spectrum2cpfield_z(self) -> float:
@@ -163,7 +250,7 @@ class ODTParameters(MuParameters):
         `float`
             factor from spectrum to field.
         """
-        return float((self.freq_per_px / self.imgpx_axial_m_per_px) ** 0.5)
+        return float((self.freq_axial_per_px / self.imgpx_axial_m_per_px) ** 0.5)
 
     @property
     def cpfield_z2spectrum(self) -> float:
@@ -174,7 +261,7 @@ class ODTParameters(MuParameters):
         `float`
             factor from field to spectrum.
         """
-        return float((self.imgpx_axial_m_per_px / self.freq_per_px) ** 0.5)
+        return float((self.imgpx_axial_m_per_px / self.freq_axial_per_px) ** 0.5)
 
 
 @dataclasses.dataclass
@@ -280,11 +367,7 @@ def synthesize_spectrum(
     `Array`
         Synthesized scattering potential
     """
-    shape_3d = (
-        2 * params.aperturesize_px + 1,
-        2 * params.aperturesize_px + 1,
-        params.freq_axial_extent_px,
-    )
+    shape_3d = (*params.lateral_extent_px_xy, params.freq_axial_extent_px)
     complex_dtype = config.precision.complex_precision()
     float_dtype = config.precision.float_precision()
 
@@ -307,13 +390,14 @@ def synthesize_spectrum(
         [scattering_spectrum.coefficient for scattering_spectrum in spectrums],
         dtype=complex_dtype,
     )
+    scale_x, scale_y = params.lateral_scale_xy
     # Squared in double precision so the axial plane assignment matches the
     # dense reference implementation bit-exactly.
     illumination_radial_sq = jnp.asarray(
         [
-            params.light_freq_px**2
-            - scattering_spectrum.illumination_vector[0] ** 2
-            - scattering_spectrum.illumination_vector[1] ** 2
+            params.light_freq_axial_px**2
+            - (scattering_spectrum.illumination_vector[0] * scale_x) ** 2
+            - (scattering_spectrum.illumination_vector[1] * scale_y) ** 2
             for scattering_spectrum in spectrums
         ],
         dtype=float_dtype,
@@ -324,11 +408,12 @@ def synthesize_spectrum(
         arrays,
         illumination_vectors,
         coefficients,
-        jnp.asarray(params.light_freq_px**2, dtype=float_dtype),
+        jnp.asarray(params.light_freq_axial_px**2, dtype=float_dtype),
         illumination_radial_sq,
-        jnp.asarray(params.k_per_px, dtype=float_dtype),
-        params.aperturesize_px // 2,
+        jnp.asarray(params.k_axial_per_px, dtype=float_dtype),
         direction_sign,
+        aperture_radii_px=params.aperture_radius_px_xy,
+        lateral_scale=params.lateral_scale_xy,
         axial_size=shape_3d[2],
         ewald_embedding_mode=config.ewald_embedding_mode,
     )
@@ -372,7 +457,8 @@ def calc_refractive_index(scattering_potential: Array, params: ODTParameters) ->
         3D refractive index
     """
     return params.n_sol * jnp.sqrt(
-        jnp.ones_like(scattering_potential) - scattering_potential / (params.light_freq_px * params.k_per_px) ** 2
+        jnp.ones_like(scattering_potential)
+        - scattering_potential / (params.light_freq_axial_px * params.k_axial_per_px) ** 2
     )
 
 
@@ -516,7 +602,7 @@ def odt(
         config,
     )
     if config.linear_approx:
-        factor = -((params.light_freq_px * params.k_per_px) ** 2) * params.n_sol
+        factor = -((params.light_freq_axial_px * params.k_axial_per_px) ** 2) * params.n_sol
         refractive_index = params.n_sol + scattering_potential / factor
     else:
         refractive_index = calc_refractive_index(scattering_potential, params)
@@ -674,8 +760,9 @@ def _estimate_illumination_vectors(
 
     illumination_vectors = []
     for index, cp_spectrum in enumerate(cp_spectrums):
-        center_idx = cp_spectrum.shape[0] // 2
-        illumination_vectors.append((int(peaks[index, 0]) - center_idx, int(peaks[index, 1]) - center_idx))
+        center_x = cp_spectrum.shape[0] // 2
+        center_y = cp_spectrum.shape[1] // 2
+        illumination_vectors.append((int(peaks[index, 0]) - center_x, int(peaks[index, 1]) - center_y))
     return illumination_vectors
 
 
@@ -683,8 +770,9 @@ def _shift_dh_spectrum(
     params: ODTParameters, cp_spectrum: Array, illumination_vector: tuple[int, int], edge_size: int = 0
 ) -> Array:
     # TODO(@fukushima-ilab): I should treat fft factor change induced by a slight shape change here (#107)
+    extent_x, extent_y = params.lateral_extent_px_xy
     expanded_cp_spectrum = jnp.zeros(
-        (2 * params.aperturesize_px + 1 + 2 * edge_size, 2 * params.aperturesize_px + 1 + 2 * edge_size),
+        (extent_x + 2 * edge_size, extent_y + 2 * edge_size),
         dtype=cp_spectrum.dtype,
     )
     center_x = expanded_cp_spectrum.shape[0] // 2
@@ -733,13 +821,13 @@ def _calc_1st_scattering_spectrum(
         * (params.cpfield_xy2spectrum) ** 2
         * (2 * jnp.pi)
     )  # last factor is to adjust to the non-Unitary derivation in Tamamitsu's paper
-    mask_for_synthesis = make_disk(
+    mask_for_synthesis = make_ellipse(
         (
             cp_field.shape[0] // 2 - illumination_vector[0],
             cp_field.shape[1] // 2 - illumination_vector[1],
         ),
-        params.aperturesize_px // 2,
-        cp_field.shape[0],
+        params.aperture_radius_px_xy,
+        (cp_field.shape[0], cp_field.shape[1]),
     )
     return scattering_spectrum * mask_for_synthesis
 
@@ -754,7 +842,10 @@ def _log_field(cp_field: Array, ref_cp_field: Array, *, use_skimage_unwrap: bool
     return amplitude + 1j * phase
 
 
-@partial(jax.jit, static_argnames=("axial_size", "ewald_embedding_mode"))
+@partial(
+    jax.jit,
+    static_argnames=("aperture_radii_px", "lateral_scale", "axial_size", "ewald_embedding_mode"),
+)
 def _scatter_embed_spectrums(  # noqa: PLR0914
     arrays: Array,
     illumination_vectors: Array,
@@ -762,9 +853,10 @@ def _scatter_embed_spectrums(  # noqa: PLR0914
     light_freq_squared_px: Array,
     illumination_radial_sq: Array,
     k_per_px: Array,
-    aperture_radius_px: int,
     direction_sign: float,
     *,
+    aperture_radii_px: tuple[int, int],
+    lateral_scale: tuple[float, float],
     axial_size: int,
     ewald_embedding_mode: EwaldEmbeddingMode,
 ) -> tuple[Array, Array]:
@@ -786,17 +878,19 @@ def _scatter_embed_spectrums(  # noqa: PLR0914
     coefficients : `Array`
         Per-spectrum synthesis coefficients with shape ``(num_spectrums,)``.
     light_freq_squared_px : `Array`
-        Squared light frequency in frequency-pixel units, squared in double
+        Squared light frequency in axial frequency-pixel units, squared in double
         precision so the axial positions match the dense reference bit-exactly.
     illumination_radial_sq : `Array`
-        ``light_freq_px**2 - v_x**2 - v_y**2`` per spectrum with shape
+        ``light_freq_axial_px**2 - (s_x v_x)**2 - (s_y v_y)**2`` per spectrum with shape
         ``(num_spectrums,)``, squared in double precision for the same reason.
     k_per_px : `Array`
-        Wave number per frequency pixel.
-    aperture_radius_px : `int`
-        Radius of the synthesis disk in frequency pixels.
+        Wave number per axial frequency pixel.
     direction_sign : `float`
         ``1.0`` for forward diffraction, ``-1.0`` for backward.
+    aperture_radii_px : `tuple`\[`int`, `int`\]
+        Semi-axes of the synthesis ellipse in lateral frequency pixels.
+    lateral_scale : `tuple`\[`float`, `float`\]
+        Lateral frequency pitches ``(s_x, s_y)`` in axial frequency-pixel units.
     axial_size : `int`
         Number of axial frequency planes.
     ewald_embedding_mode : `EwaldEmbeddingMode`
@@ -816,8 +910,8 @@ def _scatter_embed_spectrums(  # noqa: PLR0914
     )
     shifted_x = xx[jnp.newaxis] + illumination_vectors[:, 0, jnp.newaxis, jnp.newaxis]
     shifted_y = yy[jnp.newaxis] + illumination_vectors[:, 1, jnp.newaxis, jnp.newaxis]
-    disk = shifted_x**2 + shifted_y**2
-    circle = disk <= aperture_radius_px**2
+    disk = (shifted_x * lateral_scale[0]) ** 2 + (shifted_y * lateral_scale[1]) ** 2
+    circle = _inside_ellipse(shifted_x, shifted_y, aperture_radii_px)
 
     kz_disk = jnp.sqrt(jnp.maximum((light_freq_squared_px - disk) * circle, 0)) * k_per_px
     values = coefficients[:, jnp.newaxis, jnp.newaxis] * arrays * 2j * kz_disk
@@ -868,9 +962,7 @@ def _calc_ewald_embedding_weight(
     ewald_embedding_mode: EwaldEmbeddingMode,
 ) -> Array:
     xx, yy, zz = _make_ewald_coordinate_grids(shape_3d)
-    circle = (xx + illumination_vector[0]) ** 2 + (yy + illumination_vector[1]) ** 2 <= (
-        params.aperturesize_px // 2
-    ) ** 2
+    circle = _inside_ellipse(xx + illumination_vector[0], yy + illumination_vector[1], params.aperture_radius_px_xy)
     fz_circle = _calc_ewald_fz_circle(xx, yy, params, illumination_vector, mode)
 
     if ewald_embedding_mode == EwaldEmbeddingMode.TRUNCATE:
@@ -921,10 +1013,17 @@ def _calc_ewald_fz_circle(
     # survive multiplication by the zero-valued pupil mask (NaN * 0 is NaN)
     # and contaminate the complete reconstruction.  Clamp the radicands before
     # applying the mask so every embedding mode remains finite.
+    scale_x, scale_y = params.lateral_scale_xy
     scattered_radial_sq = (
-        params.light_freq_px**2 - (xx + illumination_vector[0]) ** 2 - (yy + illumination_vector[1]) ** 2
+        params.light_freq_axial_px**2
+        - ((xx + illumination_vector[0]) * scale_x) ** 2
+        - ((yy + illumination_vector[1]) * scale_y) ** 2
     )
-    illumination_radial_sq = params.light_freq_px**2 - illumination_vector[0] ** 2 - illumination_vector[1] ** 2
+    illumination_radial_sq = (
+        params.light_freq_axial_px**2
+        - (illumination_vector[0] * scale_x) ** 2
+        - (illumination_vector[1] * scale_y) ** 2
+    )
     fz_circle = jnp.sqrt(jnp.maximum(scattered_radial_sq, 0)) - jnp.sqrt(jnp.maximum(illumination_radial_sq, 0))
 
     if mode == "Backward":
@@ -981,9 +1080,10 @@ def _calc_kz_disk(
         indexing="ij",
     )
 
-    disk = (xx + illumination_vector[0]) ** 2 + (yy + illumination_vector[1]) ** 2
-    disk_mask = disk <= (params.aperturesize_px // 2) ** 2
-    fz_disk = (params.light_freq_px**2 - disk) * disk_mask
+    scale_x, scale_y = params.lateral_scale_xy
+    disk = ((xx + illumination_vector[0]) * scale_x) ** 2 + ((yy + illumination_vector[1]) * scale_y) ** 2
+    disk_mask = _inside_ellipse(xx + illumination_vector[0], yy + illumination_vector[1], params.aperture_radius_px_xy)
+    fz_disk = (params.light_freq_axial_px**2 - disk) * disk_mask
     fz_disk = jnp.where(fz_disk < 0, 0, fz_disk)
-    kz_disk = fz_disk**0.5 * params.k_per_px
+    kz_disk = fz_disk**0.5 * params.k_axial_per_px
     return jnp.asarray(kz_disk, dtype=precision.float_precision())

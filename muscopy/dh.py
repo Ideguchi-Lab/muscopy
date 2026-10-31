@@ -5,6 +5,7 @@ This module provides:
 - `MuParameters`: A dataclass to hold Micorscopy parameters.
 - `print_all_parameters`: A function to print all parameters of `MuParameters` dataclass.
 - `make_disk`: A function to create a disk mask.
+- `make_ellipse`: A function to create an elliptical mask.
 - `crop_array`: A function to crop an array.
 - `get_spectrum`: A function to get the spectrum of the hologram array.
 - `get_spectrums`: A function to get the spectrums of the complex fields.
@@ -45,10 +46,13 @@ __all__ = [
     "get_spectrums",
     "inline_dh",
     "make_disk",
+    "make_ellipse",
     "offaxis_dh",
     "print_all_parameters",
     "ps_idh_reconstruct",
 ]
+
+_T = typing.TypeVar("_T")
 
 
 @dataclasses.dataclass
@@ -61,17 +65,27 @@ class MuParameters:
         Numerical aperture of the objective lens
     wavelength_m : `float`
         Wavelength of the light in meters
-    img_size_px : `int`
-        Size of the image in pixels. We assume square image.
+    img_size_px : `int` | `tuple`\[`int`, `int`\]
+        Size of the image in pixels. An `int` describes a square image, and a
+        ``(rows, columns)`` tuple describes a rectangular image. For a
+        rectangular image the frequency sampling differs between the axes, so
+        the circular pupil becomes an ellipse in frequency-pixel units.
     px_size_m : `float`
         Pixel size in meters
     n_sol : `float`
         Refractive index of the solution
+
+    Notes
+    -----
+    Per-axis properties with the ``_xy`` suffix are ordered as the array axes
+    ``(axis 0, axis 1)``. Scalar properties such as `freq_per_px` and
+    `aperturesize_px` are only defined for square images and raise
+    `ValueError` otherwise.
     """
 
     na: float
     wavelength_m: float
-    img_size_px: int
+    img_size_px: int | tuple[int, int]
     px_size_m: float
     n_sol: float
 
@@ -83,7 +97,7 @@ class MuParameters:
         ValueError
             1. If the NA is negative.
             2. If the wavelength is negative.
-            3. If the image size is negative.
+            3. If the image size is negative or does not have two axes.
             4. If the pixel size is negative.
             5. If the refractive index of the solution is negative.
             6. If the NA is greater than the refractive index of the solution.
@@ -94,7 +108,7 @@ class MuParameters:
         if self.wavelength_m < 0:
             msg = "Wavelength cannot be negative."
             raise ValueError(msg)
-        if self.img_size_px < 0:
+        if any(size < 0 for size in self.img_shape_px):
             msg = "Image size cannot be negative."
             raise ValueError(msg)
         if self.px_size_m < 0:
@@ -108,6 +122,51 @@ class MuParameters:
             raise ValueError(msg)
 
     @property
+    def img_shape_px(self) -> tuple[int, int]:
+        r"""Get the image shape in pixels.
+
+        Returns
+        -------
+        `tuple`\[`int`, `int`\]
+            The image shape ``(rows, columns)`` in pixels
+
+        Raises
+        ------
+        ValueError
+            If ``img_size_px`` is a sequence that does not have exactly two entries.
+        """
+        if isinstance(self.img_size_px, int):
+            return (self.img_size_px, self.img_size_px)
+        shape = tuple(int(size) for size in self.img_size_px)
+        if len(shape) != 2:  # noqa: PLR2004
+            msg = "img_size_px must be an int or a (rows, columns) pair."
+            raise ValueError(msg)
+        return (shape[0], shape[1])
+
+    @property
+    def square_img_size_px(self) -> int:
+        """Get the side length of a square image in pixels.
+
+        Returns
+        -------
+        `int`
+            The number of pixels along each axis of a square image
+        """
+        return self._require_square(self.img_shape_px, "square_img_size_px", alternative="img_shape_px")
+
+    @property
+    def is_square(self) -> bool:
+        """Whether the image is square.
+
+        Returns
+        -------
+        `bool`
+            True if both image axes have the same number of pixels
+        """
+        shape = self.img_shape_px
+        return shape[0] == shape[1]
+
+    @property
     def img_center(self) -> tuple[int, int]:
         r"""Get the center position of the image.
 
@@ -116,7 +175,20 @@ class MuParameters:
         `tuple`\[`int`, `int`\]
             The center position of the image
         """
-        return (self.img_size_px // 2, self.img_size_px // 2)
+        shape = self.img_shape_px
+        return (shape[0] // 2, shape[1] // 2)
+
+    @property
+    def freq_per_px_xy(self) -> tuple[float, float]:
+        r"""Frequency(1/meter) per pixel in the Fourier space for each axis.
+
+        Returns
+        -------
+        `tuple`\[`float`, `float`\]
+            Frequency(1/meter) per pixel along axis 0 and axis 1
+        """
+        shape = self.img_shape_px
+        return (1 / (self.px_size_m * shape[0]), 1 / (self.px_size_m * shape[1]))
 
     @property
     def freq_per_px(self) -> float:
@@ -127,7 +199,7 @@ class MuParameters:
         `float`
             Frequency(1/meter) per pixel in the Fourier space
         """
-        return 1 / (self.px_size_m * self.img_size_px)
+        return self._require_square(self.freq_per_px_xy, "freq_per_px")
 
     @property
     def k_per_px(self) -> float:
@@ -141,6 +213,33 @@ class MuParameters:
         return 2 * math.pi * self.freq_per_px
 
     @property
+    def aperturesize_px_xy(self) -> tuple[int, int]:
+        r"""Get the size of the aperture in pixel unit for each axis.
+
+        Returns
+        -------
+        `tuple`\[`int`, `int`\]
+            The odd aperture sizes along axis 0 and axis 1 in pixel unit
+        """
+        freq_x, freq_y = self.freq_per_px_xy
+        return (
+            2 * round(self.na / self.wavelength_m / freq_x) + 1,
+            2 * round(self.na / self.wavelength_m / freq_y) + 1,
+        )
+
+    @property
+    def aperture_radius_px_xy(self) -> tuple[int, int]:
+        r"""Get the semi-axes of the elliptical aperture in pixel unit.
+
+        Returns
+        -------
+        `tuple`\[`int`, `int`\]
+            The aperture radii along axis 0 and axis 1 in pixel unit
+        """
+        size_x, size_y = self.aperturesize_px_xy
+        return (size_x // 2, size_y // 2)
+
+    @property
     def aperturesize_px(self) -> int:
         """Get the size of the aperture in pixel unit.
 
@@ -149,7 +248,7 @@ class MuParameters:
         `int`
             The size of the aperture in pixel unit
         """
-        return 2 * round(self.na / self.wavelength_m / self.freq_per_px) + 1
+        return self._require_square(self.aperturesize_px_xy, "aperturesize_px")
 
     @property
     def light_freq_px(self) -> float:
@@ -163,6 +262,19 @@ class MuParameters:
         return self.n_sol / self.wavelength_m / self.freq_per_px
 
     @property
+    def imgpx_m_per_px_xy(self) -> tuple[float, float]:
+        r"""Get the size of the imaging pixel(QPI pixel) in meter unit for each axis.
+
+        Returns
+        -------
+        `tuple`\[`float`, `float`\]
+            The size of the imaging pixel(QPI pixel) along axis 0 and axis 1
+        """
+        shape = self.img_shape_px
+        aperture_x, aperture_y = self.aperturesize_px_xy
+        return (self.px_size_m * shape[0] / aperture_x, self.px_size_m * shape[1] / aperture_y)
+
+    @property
     def imgpx_m_per_px(self) -> float:
         """Get the size of the imaging pixel(QPI pixel) in meter unit.
 
@@ -171,7 +283,7 @@ class MuParameters:
         `float`
             The size of the imaging pixel(QPI pixel) in meter unit
         """
-        return self.px_size_m * self.img_size_px / self.aperturesize_px
+        return self._require_square(self.imgpx_m_per_px_xy, "imgpx_m_per_px")
 
     @property
     def hologram2spectrum(self) -> float:
@@ -182,7 +294,8 @@ class MuParameters:
         `float`
             factor from hologram to spectrum
         """
-        return float((self.px_size_m / self.freq_per_px) ** 0.5)
+        freq_x, freq_y = self.freq_per_px_xy
+        return self._sqrt_geometric_mean(self.px_size_m / freq_x, self.px_size_m / freq_y)
 
     @property
     def spectrum2cpfield(self) -> float:
@@ -193,7 +306,9 @@ class MuParameters:
         `float`
             factor from spectrum to complex field
         """
-        return float((self.freq_per_px / self.imgpx_m_per_px) ** 0.5)
+        freq_x, freq_y = self.freq_per_px_xy
+        imgpx_x, imgpx_y = self.imgpx_m_per_px_xy
+        return self._sqrt_geometric_mean(freq_x / imgpx_x, freq_y / imgpx_y)
 
     @property
     def cpfield2spectrum(self) -> float:
@@ -204,7 +319,24 @@ class MuParameters:
         `float`
             factor from complex field to spectrum
         """
-        return float((self.imgpx_m_per_px / self.freq_per_px) ** 0.5)
+        freq_x, freq_y = self.freq_per_px_xy
+        imgpx_x, imgpx_y = self.imgpx_m_per_px_xy
+        return self._sqrt_geometric_mean(imgpx_x / freq_x, imgpx_y / freq_y)
+
+    @staticmethod
+    def _sqrt_geometric_mean(value_x: float, value_y: float) -> float:
+        # sqrt of the geometric mean of per-axis factors; the square case keeps the exact 1D formula
+        if value_x == value_y:
+            return float(value_x**0.5)
+        return float((value_x * value_y) ** 0.25)
+
+    @staticmethod
+    def _require_square(values: tuple[_T, _T], name: str, *, alternative: str | None = None) -> _T:
+        if values[0] != values[1]:
+            alternative = alternative or f"{name}_xy"
+            msg = f"{name} is only defined for square images; use {alternative} for rectangular images."
+            raise ValueError(msg)
+        return values[0]
 
 
 def print_all_parameters(param: MuParameters, *, show_properties: bool = False) -> None:
@@ -235,7 +367,12 @@ def print_all_parameters(param: MuParameters, *, show_properties: bool = False) 
         for name in prop_members:
             # check if the name is not in dataclass fields
             if name not in dataclass_field_names:
-                print(f"{name}: {getattr(param, name)}")  # noqa: T201
+                try:
+                    value = getattr(param, name)
+                except ValueError:
+                    # scalar properties are undefined for rectangular images
+                    continue
+                print(f"{name}: {value}")  # noqa: T201
 
 
 def make_disk(
@@ -270,7 +407,47 @@ def make_disk(
     return circle > radius**2 if highpass else circle <= radius**2
 
 
-def crop_array(array: Array, center: tuple[int, int], width: int) -> Array:
+def make_ellipse(
+    center: tuple[float, float],
+    radii: tuple[float, float],
+    array_shape: int | tuple[int, int],
+    *,
+    highpass: bool = False,
+) -> Array:
+    r"""Make an axis-aligned elliptical mask with specified center and semi-axes.
+
+    Parameters
+    ----------
+    center : `tuple`\[`float`, `float`\]
+        The center position of the ellipse mask
+    radii : `tuple`\[`float`, `float`\]
+        The semi-axes of the ellipse along axis 0 and axis 1
+    array_shape : `int` | `tuple`\[`int`, `int`\]
+        The shape of the array. If int, it is assumed to be square.
+    highpass : `bool`, optional
+        Apply highpass mask or not, by default False
+
+    Returns
+    -------
+    `jax.Array`
+        The ellipse mask with specified center and semi-axes. Equal semi-axes
+        give the same mask as `make_disk`.
+    """
+    if isinstance(array_shape, int):
+        array_shape = (array_shape, array_shape)
+    xx, yy = jnp.meshgrid(jnp.arange(array_shape[0]), jnp.arange(array_shape[1]), indexing="ij")
+    inside = _inside_ellipse(xx - center[0], yy - center[1], radii)
+    return ~inside if highpass else inside
+
+
+def _inside_ellipse(dx: Array, dy: Array, radii: tuple[float, float]) -> Array:
+    if radii[0] == radii[1]:
+        # keep the exact integer comparison of the circular case
+        return dx**2 + dy**2 <= radii[0] ** 2
+    return (dx / radii[0]) ** 2 + (dy / radii[1]) ** 2 <= 1
+
+
+def crop_array(array: Array, center: tuple[int, int], width: int | tuple[int, int]) -> Array:
     r"""Crop the array to the specified odd width around the center.
 
     Parameters
@@ -279,8 +456,9 @@ def crop_array(array: Array, center: tuple[int, int], width: int) -> Array:
         The array to be cropped
     center : `tuple`\[`int`, `int`\]
         The center position of the crop
-    width : `int`
-        The odd width of the center-symmetric crop
+    width : `int` | `tuple`\[`int`, `int`\]
+        The odd width of the center-symmetric crop. A tuple gives the width
+        along axis 0 and axis 1 separately.
 
     Returns
     -------
@@ -292,13 +470,14 @@ def crop_array(array: Array, center: tuple[int, int], width: int) -> Array:
     ValueError
         If width is not a positive odd integer
     """
-    if width <= 0 or width % 2 == 0:
+    widths = (width, width) if isinstance(width, int) else width
+    if any(w <= 0 or w % 2 == 0 for w in widths):
         msg = "width must be a positive odd integer"
         raise ValueError(msg)
 
     return array[
-        center[0] - width // 2 : center[0] + width // 2 + 1,
-        center[1] - width // 2 : center[1] + width // 2 + 1,
+        center[0] - widths[0] // 2 : center[0] + widths[0] // 2 + 1,
+        center[1] - widths[1] // 2 : center[1] + widths[1] // 2 + 1,
     ]
 
 
@@ -330,20 +509,27 @@ def get_spectrum(
         Whether to print the illumination angle in NUMPY coordinate, by default False
         The illumination shift is calculated as [maximum_value_coordinate[0] - offaxis_center[0],
         maximum_value_coordinate[1] - offaxis_center[1]]
-        Also calculates and prints theta angle from illumination_shift = [cos(theta), sin(theta)]
+        Also calculates and prints theta angle from the physical illumination frequency
+        [shift[0] * freq_per_px_xy[0], shift[1] * freq_per_px_xy[1]] = \|f\| [cos(theta), sin(theta)]
         and the illumination NA using the formula:
-        illumination_na = \|illumination_shift\|/(params.aperturesize_px//2) * params.na
+        illumination_na = sqrt((shift[0]/radius[0])^2 + (shift[1]/radius[1])^2) * params.na,
+        where radius is `MuParameters.aperture_radius_px_xy`
 
     Returns
     -------
     `jax.Array`
-        The spectrum of complex amplitude
+        The spectrum of complex amplitude with shape `MuParameters.aperturesize_px_xy`.
+        The pupil is cropped with an ellipse for rectangular images.
+
+    Notes
+    -----
+    The ``crop_center`` high-pass mask is a disk of radius ``c_r`` pixels on both axes.
     """
-    mask = make_disk(offaxis_center, params.aperturesize_px // 2, params.img_size_px)
+    mask = make_ellipse(offaxis_center, params.aperture_radius_px_xy, params.img_shape_px)
     ft_array *= mask
 
     if crop_center:
-        mask_highpass = make_disk(offaxis_center, c_r, params.img_size_px, highpass=True)
+        mask_highpass = make_disk(offaxis_center, c_r, params.img_shape_px, highpass=True)
         ft_array *= mask_highpass
 
     if print_illumination_angle:
@@ -353,17 +539,20 @@ def get_spectrum(
         illumination_shift = [int(max_coords[0]) - offaxis_center[0], int(max_coords[1]) - offaxis_center[1]]
         print(f"Illumination shift (NUMPY coordinate): {illumination_shift}")  # noqa: T201
 
-        # Calculate theta from illumination_shift = [cos(theta), sin(theta)]
-        theta_rad = jnp.arctan2(illumination_shift[1], illumination_shift[0])
+        # Calculate theta from the physical illumination frequency = |f| [cos(theta), sin(theta)]
+        freq_x, freq_y = params.freq_per_px_xy
+        theta_rad = jnp.arctan2(illumination_shift[1] * freq_y, illumination_shift[0] * freq_x)
         theta_deg = jnp.degrees(theta_rad)
         print(f"Illumination angle theta: {theta_rad:.4f} rad ({theta_deg:.2f} deg)")  # noqa: T201
 
         # Calculate illumination NA
-        illumination_shift_magnitude = jnp.sqrt(illumination_shift[0] ** 2 + illumination_shift[1] ** 2)
-        illumination_na = illumination_shift_magnitude / (params.aperturesize_px // 2) * params.na
+        radius_x, radius_y = params.aperture_radius_px_xy
+        illumination_na = (
+            jnp.sqrt((illumination_shift[0] / radius_x) ** 2 + (illumination_shift[1] / radius_y) ** 2) * params.na
+        )
         print(f"Illumination NA: {illumination_na:.4f}")  # noqa: T201
 
-    return crop_array(ft_array, offaxis_center, params.aperturesize_px)
+    return crop_array(ft_array, offaxis_center, params.aperturesize_px_xy)
 
 
 def get_spectrums(
@@ -394,9 +583,7 @@ def get_spectrums(
         Whether to print the illumination angle in NUMPY coordinate for each spectrum, by default False
         The illumination shift is calculated as [maximum_value_coordinate[0] - shape[0] // 2,
         maximum_value_coordinate[1] - shape[1] // 2]
-        Also calculates and prints theta angle from illumination_shift = [cos(theta), sin(theta)]
-        and the illumination NA using the formula:
-        illumination_na = \|illumination_shift\|/(params.aperturesize_px//2) * params.na
+        Also calculates and prints theta angle and illumination NA as described in `get_spectrum`
 
     Returns
     -------

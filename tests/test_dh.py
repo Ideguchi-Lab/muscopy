@@ -93,6 +93,16 @@ def test_mu_parameters_scalar_properties_reject_rectangular_image(name: str) -> 
         getattr(params, name)
 
 
+@pytest.mark.parametrize("name", ["freq_per_px", "aperturesize_px", "imgpx_m_per_px"])
+def test_mu_parameters_scalar_properties_reject_rectangular_image_with_equal_apertures(name: str) -> None:
+    # The two axes round to the same aperture width, but the image itself is not square.
+    params = MuParameters(na=0.1, wavelength_m=1.0, img_size_px=(128, 129), px_size_m=1.0, n_sol=1.33)
+    assert params.aperturesize_px_xy[0] == params.aperturesize_px_xy[1]
+
+    with pytest.raises(ValueError, match="only defined for square images"):
+        getattr(params, name)
+
+
 def test_mu_parameters_square_tuple_matches_int() -> None:
     from_int = MuParameters(na=1.4, wavelength_m=550e-9, img_size_px=256, px_size_m=6.5e-6, n_sol=1.33)
     from_tuple = MuParameters(na=1.4, wavelength_m=550e-9, img_size_px=(256, 256), px_size_m=6.5e-6, n_sol=1.33)
@@ -222,6 +232,14 @@ def test_get_spectrum() -> None:
     assert spectrum_angle.shape == expected_shape
 
 
+def test_make_ellipse_zero_radius_gives_line_segment() -> None:
+    mask = make_ellipse((5, 4), (3, 0), (11, 9))
+    expected = jnp.zeros((11, 9), dtype=bool).at[2:9, 4].set(True)
+
+    assert jnp.array_equal(mask, expected)
+    assert jnp.array_equal(make_ellipse((4, 5), (0, 3), (9, 11)), expected.T)
+
+
 def test_crop_array_rectangular_width() -> None:
     arr = jnp.arange(200).reshape(20, 10)
 
@@ -244,6 +262,38 @@ def test_get_spectrum_rectangular_uses_elliptical_crop() -> None:
     assert spectrum[0, radius_y] != 0
     assert spectrum[radius_x, 0] != 0
     assert spectrum[0, 0] == 0
+
+
+def test_get_spectrum_keeps_field_with_zero_aperture_radius() -> None:
+    params = MuParameters(na=0.05, wavelength_m=1.0, img_size_px=(64, 8), px_size_m=1.0, n_sol=1.33)
+    assert params.aperture_radius_px_xy == (3, 0)
+    ft_array = jnp.ones(params.img_shape_px, dtype=float)
+
+    spectrum = get_spectrum(ft_array, params, (32, 4), print_illumination_angle=True)
+
+    assert spectrum.shape == (7, 1)
+    assert bool(jnp.all(spectrum == 1))
+
+
+def test_get_spectrum_prints_physical_illumination_na(capsys: pytest.CaptureFixture[str]) -> None:
+    # The aperture radius rounds to zero, so the NA must not be derived from it.
+    params = MuParameters(na=0.01, wavelength_m=1.0, img_size_px=32, px_size_m=1.0, n_sol=1.33)
+    assert params.aperture_radius_px_xy == (0, 0)
+    ft_array = jnp.zeros(params.img_shape_px, dtype=float).at[16, 16].set(1.0)
+
+    get_spectrum(ft_array, params, (16, 16), print_illumination_angle=True)
+
+    assert "Illumination NA: 0.0000" in capsys.readouterr().out
+
+
+def test_get_spectrum_rectangular_illumination_na(capsys: pytest.CaptureFixture[str]) -> None:
+    params = MuParameters(na=0.25, wavelength_m=1.0, img_size_px=(128, 64), px_size_m=1.0, n_sol=1.33)
+    ft_array = jnp.zeros(params.img_shape_px, dtype=float).at[70, 40].set(1.0)
+
+    get_spectrum(ft_array, params, (64, 32), print_illumination_angle=True)
+
+    # shift (6, 8) px with pitches (1/128, 1/64) -> NA = hypot(6/128, 8/64) = 0.1335
+    assert "Illumination NA: 0.1335" in capsys.readouterr().out
 
 
 def test_get_spectrums() -> None:

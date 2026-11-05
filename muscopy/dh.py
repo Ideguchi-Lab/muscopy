@@ -330,9 +330,9 @@ class MuParameters:
             return float(value_x**0.5)
         return float((value_x * value_y) ** 0.25)
 
-    @staticmethod
-    def _require_square(values: tuple[_T, _T], name: str, *, alternative: str | None = None) -> _T:
-        if values[0] != values[1]:
+    def _require_square(self, values: tuple[_T, _T], name: str, *, alternative: str | None = None) -> _T:
+        # check the image shape itself; derived per-axis values can coincide for rectangular images
+        if not self.is_square:
             alternative = alternative or f"{name}_xy"
             msg = f"{name} is only defined for square images; use {alternative} for rectangular images."
             raise ValueError(msg)
@@ -444,6 +444,11 @@ def _inside_ellipse(dx: Array, dy: Array, radii: tuple[float, float]) -> Array:
     if radii[0] == radii[1]:
         # keep the exact integer comparison of the circular case
         return dx**2 + dy**2 <= radii[0] ** 2
+    # a zero semi-axis degenerates the ellipse to a center-aligned line segment
+    if radii[0] == 0:
+        return (dx == 0) & (jnp.abs(dy) <= radii[1])
+    if radii[1] == 0:
+        return (jnp.abs(dx) <= radii[0]) & (dy == 0)
     return (dx / radii[0]) ** 2 + (dy / radii[1]) ** 2 <= 1
 
 
@@ -512,8 +517,7 @@ def get_spectrum(
         Also calculates and prints theta angle from the physical illumination frequency
         [shift[0] * freq_per_px_xy[0], shift[1] * freq_per_px_xy[1]] = \|f\| [cos(theta), sin(theta)]
         and the illumination NA using the formula:
-        illumination_na = sqrt((shift[0]/radius[0])^2 + (shift[1]/radius[1])^2) * params.na,
-        where radius is `MuParameters.aperture_radius_px_xy`
+        illumination_na = params.wavelength_m * \|f\|
 
     Returns
     -------
@@ -545,10 +549,9 @@ def get_spectrum(
         theta_deg = jnp.degrees(theta_rad)
         print(f"Illumination angle theta: {theta_rad:.4f} rad ({theta_deg:.2f} deg)")  # noqa: T201
 
-        # Calculate illumination NA
-        radius_x, radius_y = params.aperture_radius_px_xy
-        illumination_na = (
-            jnp.sqrt((illumination_shift[0] / radius_x) ** 2 + (illumination_shift[1] / radius_y) ** 2) * params.na
+        # Calculate illumination NA from the physical illumination frequency
+        illumination_na = params.wavelength_m * jnp.hypot(
+            illumination_shift[0] * freq_x, illumination_shift[1] * freq_y
         )
         print(f"Illumination NA: {illumination_na:.4f}")  # noqa: T201
 

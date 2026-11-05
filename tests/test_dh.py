@@ -12,6 +12,7 @@ from muscopy.dh import (
     get_spectrums,
     inline_dh,
     make_disk,
+    make_ellipse,
     print_all_parameters,
     ps_idh_reconstruct,
 )
@@ -63,6 +64,80 @@ def test_mu_parameters_properties() -> None:
     assert abs(params.cpfield2spectrum - expected_cpfield2spectrum) < 1e-12
 
 
+def test_mu_parameters_rectangular_properties() -> None:
+    params = MuParameters(na=0.25, wavelength_m=1.0, img_size_px=(128, 64), px_size_m=1.0, n_sol=1.33)
+
+    assert params.img_shape_px == (128, 64)
+    assert not params.is_square
+    assert params.img_center == (64, 32)
+    assert params.freq_per_px_xy == (1 / 128, 1 / 64)
+    assert params.aperturesize_px_xy == (65, 33)
+    assert params.aperture_radius_px_xy == (32, 16)
+    assert params.imgpx_m_per_px_xy == (128 / 65, 64 / 33)
+
+    freq_x, freq_y = params.freq_per_px_xy
+    imgpx_x, imgpx_y = params.imgpx_m_per_px_xy
+    assert math.isclose(params.hologram2spectrum**2, math.sqrt(params.px_size_m**2 / (freq_x * freq_y)))
+    assert math.isclose(params.spectrum2cpfield**2, math.sqrt(freq_x * freq_y / (imgpx_x * imgpx_y)))
+    assert math.isclose(params.spectrum2cpfield * params.cpfield2spectrum, 1.0)
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["freq_per_px", "k_per_px", "aperturesize_px", "light_freq_px", "imgpx_m_per_px", "square_img_size_px"],
+)
+def test_mu_parameters_scalar_properties_reject_rectangular_image(name: str) -> None:
+    params = MuParameters(na=0.25, wavelength_m=1.0, img_size_px=(128, 64), px_size_m=1.0, n_sol=1.33)
+
+    with pytest.raises(ValueError, match="only defined for square images"):
+        getattr(params, name)
+
+
+@pytest.mark.parametrize("name", ["freq_per_px", "aperturesize_px", "imgpx_m_per_px"])
+def test_mu_parameters_scalar_properties_reject_rectangular_image_with_equal_apertures(name: str) -> None:
+    # The two axes round to the same aperture width, but the image itself is not square.
+    params = MuParameters(na=0.1, wavelength_m=1.0, img_size_px=(128, 129), px_size_m=1.0, n_sol=1.33)
+    assert params.aperturesize_px_xy[0] == params.aperturesize_px_xy[1]
+
+    with pytest.raises(ValueError, match="only defined for square images"):
+        getattr(params, name)
+
+
+def test_mu_parameters_square_tuple_matches_int() -> None:
+    from_int = MuParameters(na=1.4, wavelength_m=550e-9, img_size_px=256, px_size_m=6.5e-6, n_sol=1.33)
+    from_tuple = MuParameters(na=1.4, wavelength_m=550e-9, img_size_px=(256, 256), px_size_m=6.5e-6, n_sol=1.33)
+
+    assert from_tuple.is_square
+    for name in [
+        "img_center",
+        "freq_per_px",
+        "aperturesize_px",
+        "imgpx_m_per_px",
+        "hologram2spectrum",
+        "spectrum2cpfield",
+        "cpfield2spectrum",
+        "square_img_size_px",
+    ]:
+        assert getattr(from_tuple, name) == getattr(from_int, name)
+
+
+def test_mu_parameters_rejects_malformed_img_size() -> None:
+    params = MuParameters(na=0.25, wavelength_m=1.0, img_size_px=(8, 8, 8), px_size_m=1.0, n_sol=1.33)  # type: ignore[arg-type]
+
+    with pytest.raises(ValueError, match=r"\(rows, columns\) pair"):
+        params.verify_parameters()
+
+
+def test_print_all_parameters_rectangular(capsys: pytest.CaptureFixture[str]) -> None:
+    params = MuParameters(na=0.25, wavelength_m=1.0, img_size_px=(128, 64), px_size_m=1.0, n_sol=1.33)
+
+    print_all_parameters(params, show_properties=True)
+
+    captured = capsys.readouterr().out
+    assert "aperturesize_px_xy: (65, 33)" in captured
+    assert "freq_per_px:" not in captured
+
+
 def test_print_all_parameters(capsys: pytest.CaptureFixture[str]) -> None:
     params = MuParameters(na=1.4, wavelength_m=550e-9, img_size_px=100, px_size_m=6.5e-6, n_sol=1.33)
 
@@ -97,6 +172,27 @@ def test_make_disk() -> None:
     assert mask_high.shape == array_shape
     assert not mask_high[50, 50]
     assert mask_high[0, 0]
+
+
+def test_make_ellipse_matches_disk_for_equal_radii() -> None:
+    disk = make_disk((40, 31), 12, (80, 64))
+    ellipse = make_ellipse((40, 31), (12, 12), (80, 64))
+
+    assert jnp.array_equal(disk, ellipse)
+    assert jnp.array_equal(make_disk((40, 31), 12, (80, 64), highpass=True), ~ellipse)
+
+
+def test_make_ellipse_uses_per_axis_radii() -> None:
+    mask = make_ellipse((50, 30), (20, 10), (100, 60))
+    mask_high = make_ellipse((50, 30), (20, 10), (100, 60), highpass=True)
+
+    assert mask.dtype == jnp.bool_
+    assert mask.shape == (100, 60)
+    assert mask[70, 30]
+    assert not mask[71, 30]
+    assert mask[50, 40]
+    assert not mask[50, 41]
+    assert jnp.array_equal(mask_high, ~mask)
 
 
 def test_crop_array() -> None:
@@ -134,6 +230,70 @@ def test_get_spectrum() -> None:
     # Test print_illumination_angle option
     spectrum_angle = get_spectrum(ft_array.copy(), params, offaxis_center, print_illumination_angle=True)
     assert spectrum_angle.shape == expected_shape
+
+
+def test_make_ellipse_zero_radius_gives_line_segment() -> None:
+    mask = make_ellipse((5, 4), (3, 0), (11, 9))
+    expected = jnp.zeros((11, 9), dtype=bool).at[2:9, 4].set(True)
+
+    assert jnp.array_equal(mask, expected)
+    assert jnp.array_equal(make_ellipse((4, 5), (0, 3), (9, 11)), expected.T)
+
+
+def test_crop_array_rectangular_width() -> None:
+    arr = jnp.arange(200).reshape(20, 10)
+
+    cropped = crop_array(arr, (10, 5), (7, 3))
+
+    assert jnp.array_equal(cropped, arr[7:14, 4:7])
+
+
+def test_get_spectrum_rectangular_uses_elliptical_crop() -> None:
+    params = MuParameters(na=0.25, wavelength_m=1.0, img_size_px=(128, 64), px_size_m=1.0, n_sol=1.33)
+    ft_array = jnp.ones(params.img_shape_px, dtype=float)
+
+    spectrum = get_spectrum(ft_array, params, (80, 40), print_illumination_angle=True)
+
+    radius_x, radius_y = params.aperture_radius_px_xy
+    assert spectrum.shape == params.aperturesize_px_xy
+    assert jnp.array_equal(
+        spectrum != 0, make_ellipse((radius_x, radius_y), (radius_x, radius_y), params.aperturesize_px_xy)
+    )
+    assert spectrum[0, radius_y] != 0
+    assert spectrum[radius_x, 0] != 0
+    assert spectrum[0, 0] == 0
+
+
+def test_get_spectrum_keeps_field_with_zero_aperture_radius() -> None:
+    params = MuParameters(na=0.05, wavelength_m=1.0, img_size_px=(64, 8), px_size_m=1.0, n_sol=1.33)
+    assert params.aperture_radius_px_xy == (3, 0)
+    ft_array = jnp.ones(params.img_shape_px, dtype=float)
+
+    spectrum = get_spectrum(ft_array, params, (32, 4), print_illumination_angle=True)
+
+    assert spectrum.shape == (7, 1)
+    assert bool(jnp.all(spectrum == 1))
+
+
+def test_get_spectrum_prints_physical_illumination_na(capsys: pytest.CaptureFixture[str]) -> None:
+    # The aperture radius rounds to zero, so the NA must not be derived from it.
+    params = MuParameters(na=0.01, wavelength_m=1.0, img_size_px=32, px_size_m=1.0, n_sol=1.33)
+    assert params.aperture_radius_px_xy == (0, 0)
+    ft_array = jnp.zeros(params.img_shape_px, dtype=float).at[16, 16].set(1.0)
+
+    get_spectrum(ft_array, params, (16, 16), print_illumination_angle=True)
+
+    assert "Illumination NA: 0.0000" in capsys.readouterr().out
+
+
+def test_get_spectrum_rectangular_illumination_na(capsys: pytest.CaptureFixture[str]) -> None:
+    params = MuParameters(na=0.25, wavelength_m=1.0, img_size_px=(128, 64), px_size_m=1.0, n_sol=1.33)
+    ft_array = jnp.zeros(params.img_shape_px, dtype=float).at[70, 40].set(1.0)
+
+    get_spectrum(ft_array, params, (64, 32), print_illumination_angle=True)
+
+    # shift (6, 8) px with pitches (1/128, 1/64) -> NA = hypot(6/128, 8/64) = 0.1335
+    assert "Illumination NA: 0.1335" in capsys.readouterr().out
 
 
 def test_get_spectrums() -> None:

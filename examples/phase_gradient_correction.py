@@ -40,14 +40,14 @@ params = MuParameters(
 
 # Create a simple phase pattern (circular disk)
 radius = 30
-sample_disk = make_disk(params.img_center, radius, params.img_size_px)
+sample_disk = make_disk(params.img_center, radius, params.square_img_size_px)
 # Use a larger phase shift to make the pattern more visible
 base_phase = math.pi * sample_disk.astype(float)  # 0 outside, π inside
 
 # Add linear phase gradient (tilt) - this simulates optical misalignment
 xx, yy = jnp.meshgrid(
-    jnp.arange(params.img_size_px),
-    jnp.arange(params.img_size_px),
+    jnp.arange(params.square_img_size_px),
+    jnp.arange(params.square_img_size_px),
     indexing="ij",
 )
 
@@ -72,11 +72,11 @@ complex_amplitude_gradient_corrected = correct_gradient(complex_amplitude_with_g
 # Define offset regions for constant phase correction (use corners)
 offset_regions = [
     ((5, 10), (5, 10)),  # top-left
-    ((params.img_size_px - 10, params.img_size_px - 5), (5, 10)),  # top-right
-    ((5, 10), (params.img_size_px - 10, params.img_size_px - 5)),  # bottom-left
+    ((params.square_img_size_px - 10, params.square_img_size_px - 5), (5, 10)),  # top-right
+    ((5, 10), (params.square_img_size_px - 10, params.square_img_size_px - 5)),  # bottom-left
     (
-        (params.img_size_px - 10, params.img_size_px - 5),
-        (params.img_size_px - 10, params.img_size_px - 5),
+        (params.square_img_size_px - 10, params.square_img_size_px - 5),
+        (params.square_img_size_px - 10, params.square_img_size_px - 5),
     ),  # bottom-right
 ]
 
@@ -207,7 +207,7 @@ print(f"Reconstruction success: {phase_reconstruction_error < TOLERANCE}")
 
 # Show phase values in the circle region to confirm visibility
 center_y, center_x = params.img_center
-circle_mask = make_disk(params.img_center, radius, params.img_size_px)
+circle_mask = make_disk(params.img_center, radius, params.square_img_size_px)
 
 # Use unwrapped phases for more accurate analysis
 phase_corrected_unwrapped = unwrap_phase(phase_corrected)

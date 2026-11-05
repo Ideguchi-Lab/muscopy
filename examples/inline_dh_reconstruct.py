@@ -47,10 +47,10 @@ print("Creating synthetic object field...")
 # Create a phase object (circular disk with phase step)
 center = params.img_center
 radius = 40
-phase_disk = make_disk(center, radius, params.img_size_px)
+phase_disk = make_disk(center, radius, params.square_img_size_px)
 
 # Create amplitude modulation (Gaussian)
-xx, yy = jnp.meshgrid(jnp.arange(params.img_size_px), jnp.arange(params.img_size_px), indexing="ij")
+xx, yy = jnp.meshgrid(jnp.arange(params.square_img_size_px), jnp.arange(params.square_img_size_px), indexing="ij")
 gaussian_amp = jnp.exp(-((xx - center[0]) ** 2 + (yy - center[1]) ** 2) / (2 * (radius / 2) ** 2))
 
 # Combined object field: amplitude modulation + phase step
@@ -59,7 +59,7 @@ object_field = gaussian_amp * jnp.exp(1j * phase_step * phase_disk)
 
 # apply low pass filter
 ft_object_field = jnp.fft.fftshift(jnp.fft.fft2(object_field))
-low_pass = make_disk(center, params.aperturesize_px // 2, params.img_size_px)
+low_pass = make_disk(center, params.aperturesize_px // 2, params.square_img_size_px)
 object_field = jnp.fft.ifft2(jnp.fft.ifftshift(ft_object_field * low_pass))
 
 print(f"Object field shape: {object_field.shape}")
@@ -79,7 +79,7 @@ print(f"Phase shifts: {phase_shifts} rad")
 print(f"Phase shifts (degrees): {jnp.degrees(phase_shifts)}")
 
 # Generate hologram intensity stack
-holograms = jnp.zeros((num_steps, params.img_size_px, params.img_size_px))
+holograms = jnp.zeros((num_steps, params.square_img_size_px, params.square_img_size_px))
 
 for i, delta in enumerate(phase_shifts):
     # Hologram field: object + reference wave with phase shift

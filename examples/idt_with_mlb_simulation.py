@@ -585,7 +585,7 @@ def main() -> None:
     gc.collect()
 
     print("Starting IDT computation...")
-    print(f"IDT parameters: img_size_px={idt_params.img_size_px}, num_z_slices={idt_params.num_z_slices}")
+    print(f"IDT parameters: img_size_px={idt_params.square_img_size_px}, num_z_slices={idt_params.num_z_slices}")
     print(f"Number of illumination angles: {len(u_illumination_list)}")
     print(f"Memory usage before IDT: {sum(img.nbytes for img in target_intensity_images) / 1024**2:.1f} MB")
 

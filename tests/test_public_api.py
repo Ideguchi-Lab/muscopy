@@ -41,6 +41,7 @@ def test_v1_public_api_exports() -> None:
             "get_spectrums",
             "inline_dh",
             "make_disk",
+            "make_ellipse",
             "offaxis_dh",
             "print_all_parameters",
             "ps_idh_reconstruct",

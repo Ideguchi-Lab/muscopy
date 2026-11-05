@@ -221,7 +221,10 @@ def _validate_idt_params(params: IDTParameters) -> None:
         If IDT parameters are invalid or Fourier cropping would exceed the
         image bounds.
     """
-    if params.img_size_px <= 0:
+    if not params.is_square:
+        msg = "IDT requires a square image."
+        raise ValueError(msg)
+    if params.square_img_size_px <= 0:
         msg = "img_size_px must be positive."
         raise ValueError(msg)
     if params.num_z_slices <= 0:
@@ -230,7 +233,7 @@ def _validate_idt_params(params: IDTParameters) -> None:
     if params.aperturesize_px <= 0:
         msg = "aperturesize_px must be positive."
         raise ValueError(msg)
-    if 2 * params.intensity_support_radius_px + 1 > params.img_size_px:
+    if 2 * params.intensity_support_radius_px + 1 > params.square_img_size_px:
         msg = "2 * aperturesize_px + 1 must be <= img_size_px for Fourier cropping."
         raise ValueError(msg)
     if params.n_sol <= 0:
@@ -295,7 +298,7 @@ def _validate_xy_image(params: IDTParameters, image_xy: Array, *, name: str) -> 
     if image_xy.ndim != _IMAGE_NDIM:
         msg = f"{name} must be a 2D [x, y] array."
         raise ValueError(msg)
-    expected_shape = (params.img_size_px, params.img_size_px)
+    expected_shape = params.img_shape_px
     if image_xy.shape != expected_shape:
         msg = f"{name} must have shape {expected_shape} in [x, y] order, got {image_xy.shape}."
         raise ValueError(msg)
@@ -476,13 +479,14 @@ def fourier_transform(
     support_radius_px = params.intensity_support_radius_px
     kx, ky = _make_frequency_grid_xy(params, precision=precision)
     incoherent_limit_mask = kx**2 + ky**2 <= support_radius_px**2
-    ft_scaling_factor = jnp.asarray(jnp.sqrt((2 * support_radius_px + 1) / params.img_size_px), dtype=float_dtype)
+    img_size_px = params.square_img_size_px
+    ft_scaling_factor = jnp.asarray(jnp.sqrt((2 * support_radius_px + 1) / img_size_px), dtype=float_dtype)
     for g_l in g_list:
         g_array = jnp.asarray(g_l, dtype=float_dtype)
         g_tilde = jnp.fft.fftshift(jnp.fft.fft2(g_array, norm="ortho"))  # FFT with fftshift for centered spectrum
         g_tilde_cropped = g_tilde[
-            params.img_size_px // 2 - params.aperturesize_px : params.img_size_px // 2 + params.aperturesize_px + 1,
-            params.img_size_px // 2 - params.aperturesize_px : params.img_size_px // 2 + params.aperturesize_px + 1,
+            img_size_px // 2 - params.aperturesize_px : img_size_px // 2 + params.aperturesize_px + 1,
+            img_size_px // 2 - params.aperturesize_px : img_size_px // 2 + params.aperturesize_px + 1,
         ]
         g_tilde_masked = g_tilde_cropped * incoherent_limit_mask * ft_scaling_factor**2
         g_tilde_list.append(jnp.asarray(g_tilde_masked, dtype=complex_dtype))

@@ -18,8 +18,9 @@ import math
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
+from muscopy_example_data.holograms import inline_holograms
 
-from muscopy.dh import MuParameters, inline_dh, make_disk, print_all_parameters
+from muscopy.dh import MuParameters, inline_dh, print_all_parameters
 
 # config
 SHOW_IMAGE = True
@@ -41,57 +42,11 @@ params = MuParameters(
 print_all_parameters(params, show_properties=True)
 
 # %%
-# Create synthetic object field
-print("Creating synthetic object field...")
-
-# Create a phase object (circular disk with phase step)
-center = params.img_center
-radius = 40
-phase_disk = make_disk(center, radius, params.img_size_px)
-
-# Create amplitude modulation (Gaussian)
-xx, yy = jnp.meshgrid(jnp.arange(params.img_size_px), jnp.arange(params.img_size_px), indexing="ij")
-gaussian_amp = jnp.exp(-((xx - center[0]) ** 2 + (yy - center[1]) ** 2) / (2 * (radius / 2) ** 2))
-
-# Combined object field: amplitude modulation + phase step
-phase_step = math.pi / 2  # 90 degree phase step
-object_field = gaussian_amp * jnp.exp(1j * phase_step * phase_disk)
-
-# apply low pass filter
-ft_object_field = jnp.fft.fftshift(jnp.fft.fft2(object_field))
-low_pass = make_disk(center, params.aperturesize_px // 2, params.img_size_px)
-object_field = jnp.fft.ifft2(jnp.fft.ifftshift(ft_object_field * low_pass))
-
-print(f"Object field shape: {object_field.shape}")
-print(f"Object field amplitude range: {jnp.min(jnp.abs(object_field)):.3f} - {jnp.max(jnp.abs(object_field)):.3f}")
-print(f"Object field phase range: {jnp.min(jnp.angle(object_field)):.3f} - {jnp.max(jnp.angle(object_field)):.3f} rad")
-
-# %%
-# Generate phase-shifted holograms
-print("\\nGenerating phase-shifted holograms...")
-
-# Define phase shifts for 4-step phase shifting
+# Generate four phase-shifted measurements
 num_steps = 4
 phase_shifts = jnp.linspace(0, 2 * math.pi, num_steps, endpoint=False)
 ref_amplitude = 1.0
-
-print(f"Phase shifts: {phase_shifts} rad")
-print(f"Phase shifts (degrees): {jnp.degrees(phase_shifts)}")
-
-# Generate hologram intensity stack
-holograms = jnp.zeros((num_steps, params.img_size_px, params.img_size_px))
-
-for i, delta in enumerate(phase_shifts):
-    # Hologram field: object + reference wave with phase shift
-    reference_field = ref_amplitude * jnp.exp(1j * delta)
-    hologram_field = object_field + reference_field
-
-    # Intensity measurement
-    intensity = jnp.abs(hologram_field) ** 2
-    holograms = holograms.at[i].set(intensity)
-
-print(f"Hologram stack shape: {holograms.shape}")
-print(f"Intensity range: {jnp.min(holograms):.3f} - {jnp.max(holograms):.3f}")
+holograms, object_field = inline_holograms(params, phase_shifts, ref_amplitude)
 
 # %%
 # Reconstruct using Phase-Shifting Inline Digital Holography

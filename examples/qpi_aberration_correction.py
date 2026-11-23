@@ -10,13 +10,12 @@ The example compares reconstruction with and without aberration correction.
 # %%
 # import modules
 
-import math
-
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
+from muscopy_example_data.holograms import disk_phase_object, off_axis_holograms
 
-from muscopy.dh import MuParameters, make_disk, print_all_parameters
+from muscopy.dh import MuParameters, print_all_parameters
 from muscopy.qpi import correct_phase_offset, qpi
 
 # config
@@ -73,49 +72,18 @@ pupil_function = aberration_function[
 ]
 
 # %%
-# create a hologram
+# Generate measurements with and without aberration using the same reference
 off_axis_center = (150, 150)
-
-radius = 30
-sample_disk = make_disk(params.img_center, radius, params.img_size_px)
-sample_array = jnp.exp(2j * math.pi / 3 * sample_disk)
-low_pass = make_disk(params.img_center, params.aperturesize_px // 2, params.img_size_px)
-ft_sample = jnp.fft.fftshift(jnp.fft.fft2(sample_array))
-ft_sample_aberration = ft_sample * aberration_function
-sample_array = jnp.fft.ifft2(jnp.fft.ifftshift(ft_sample))
-sample_array /= jnp.sum(jnp.abs(sample_array) ** 2) ** 0.5
-
-sample_array_aberration = jnp.fft.ifft2(jnp.fft.ifftshift(ft_sample_aberration))
-sample_array_aberration /= jnp.sum(jnp.abs(sample_array_aberration) ** 2) ** 0.5
-
-xx, yy = jnp.meshgrid(
-    jnp.arange(params.img_size_px),
-    jnp.arange(params.img_size_px),
-    indexing="ij",
+sample_field = disk_phase_object(params)
+hologram, ref_hologram = off_axis_holograms(
+    params, off_axis_center, sample_field, pupil=jnp.ones_like(aberration_function)
 )
-ref_array = jnp.exp(
-    -2j
-    * jnp.pi
-    * (
-        xx * (off_axis_center[0] - params.img_center[0]) / (params.img_size_px)
-        + yy * (off_axis_center[1] - params.img_center[1]) / (params.img_size_px)
-    )
-)
-ref_array /= jnp.sum(jnp.abs(ref_array) ** 2) ** 0.5
-
-hologram = jnp.abs(sample_array + ref_array) ** 2
-hologram_aberration = jnp.abs(sample_array_aberration + ref_array) ** 2
-
-ref_sample_array = jnp.ones_like(sample_array)
-ref_sample_array /= jnp.sum(jnp.abs(ref_sample_array) ** 2) ** 0.5
-ref_hologram = jnp.abs(ref_sample_array + ref_array) ** 2
-ref_hologram_aberration = ref_hologram  # Use same reference for both cases
-
+hologram_aberration, _ = off_axis_holograms(params, off_axis_center, sample_field, pupil=aberration_function)
 
 # %%
 
 # Reconstruct QPI phase with aberration
-phase_with_aberration = qpi(hologram_aberration, ref_hologram_aberration, params, off_axis_center)
+phase_with_aberration = qpi(hologram_aberration, ref_hologram, params, off_axis_center)
 
 # Reconstruct QPI phase without aberration
 phase_without_aberration = qpi(hologram, ref_hologram, params, off_axis_center)
@@ -123,7 +91,7 @@ phase_without_aberration = qpi(hologram, ref_hologram, params, off_axis_center)
 # %%
 
 # Correct aberration with known pupil function using the new API
-phase_corrected = qpi(hologram_aberration, ref_hologram_aberration, params, off_axis_center, pupil_func=pupil_function)
+phase_corrected = qpi(hologram_aberration, ref_hologram, params, off_axis_center, pupil_func=pupil_function)
 
 # %%
 # Apply phase offset correction to both images

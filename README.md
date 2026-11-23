@@ -41,6 +41,20 @@ Install documentation dependencies when building docs locally.
 uv sync --extra doc
 ```
 
+## Generate example holograms
+
+Run the installed command to save a synthetic off-axis hologram of a disk phase
+object and its sample-free reference.
+
+```sh
+muscopy-generate-hologram holograms.npz
+```
+
+The NumPy archive contains `hologram`, `reference_hologram`,
+`off_axis_center`, and the five `MuParameters` fields used by the QPI example.
+The examples generate their inputs in memory with the bundled
+[example data generators](examples/muscopy_example_data/).
+
 ## Optional CuPy support
 
 Install the CuPy extra for CUDA 12 environments.

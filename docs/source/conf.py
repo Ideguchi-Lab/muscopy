@@ -4,8 +4,10 @@ import os
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path("..", "muscopy").resolve()))
-sys.path.insert(0, str(Path("..", "muscopy/examples").resolve()))
+# Resolve paths relative to this file so the build works regardless of the current directory
+REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT))
+sys.path.insert(0, str(REPO_ROOT / "examples"))
 
 # Configuration file for the Sphinx documentation builder.
 #
@@ -16,8 +18,8 @@ sys.path.insert(0, str(Path("..", "muscopy/examples").resolve()))
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = "Muscopy"
-copyright = "2025, Masato Fukushima"  # noqa: A001
-author = "Masato Fukushima"
+copyright = "2024-2026, Ideguchi-Lab"  # noqa: A001
+author = "Masato Fukushima, Kohki Horie, Takuro Ideguchi"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -61,10 +63,11 @@ html_context = {
 pygments_style = "sphinx"
 pygments_dark_style = "monokai"
 
-# Configure Sphinx-Gallery ignore pattern based on environment
+# Configure Sphinx-Gallery ignore pattern based on environment.
+# GitHub Actions sets CI=true and Read the Docs sets READTHEDOCS=True.
 ignore_pattern = r"__init__\.py"
-if os.getenv("CI", "").lower() == "true":
-    # Ignore MLB simulation examples in CI environment where muscopy_mlbsim is not available
+if os.getenv("CI", "").lower() == "true" or os.getenv("READTHEDOCS", "") == "True":
+    # Ignore MLB simulation examples in hosted builds where muscopy_mlbsim is not available
     ignore_pattern = r"(__init__|odt_with_mlb_simulation|idt_with_mlb_simulation)\.py"
 
 sphinx_gallery_conf = {

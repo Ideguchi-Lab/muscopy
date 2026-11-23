@@ -13,8 +13,11 @@ The workflow includes:
 4. Visualizing and analyzing the reconstruction results
 
 Requirements:
-- muscopy_mlbsim package must be installed
+- The private muscopy_mlbsim package must be installed separately
 - GPU support (JAX) is recommended for faster computation
+
+See :ref:`mlb-installation` for repository access and installation instructions.
+Without the simulator, this example skips execution.
 """
 
 # pyright: reportPossiblyUnboundVariable=false, reportInvalidTypeForm=false
@@ -45,6 +48,10 @@ except ImportError:
     MLB_AVAILABLE = False
     print("Warning: muscopy_mlbsim is not installed. This example requires muscopy_mlbsim.")
     print("Skipping example execution.")
+    print(
+        "muscopy-mlbsim is private and requires repository access. Install it separately; see "
+        "https://github.com/Ideguchi-Lab/muscopy/blob/main/docs/source/mlb_installation.rst"
+    )
     HologramGenerator: typing.Any = None  # type: ignore[no-redef]
     MLBForward: typing.Any = None  # type: ignore[no-redef]
     MLBParameters: typing.Any = None  # type: ignore[no-redef]

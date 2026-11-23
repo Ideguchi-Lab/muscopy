@@ -30,6 +30,7 @@ def test_odt_config_defaults_to_32_bit_precision() -> None:
     assert config.precision.float_precision() == "float32"
     assert config.precision.complex_precision() == "complex64"
     assert config.gradient_correction is True
+    assert config.use_skimage_unwrap is False
     assert config.ewald_embedding_mode is EwaldEmbeddingMode.TRUNCATE
     assert config.verbose is False
 
@@ -279,6 +280,33 @@ def test_synthesize_spectrum_uses_configured_ewald_embedding_mode() -> None:
     assert jnp.allclose(linear[x_index, y_index, z_one_index], linear[x_index, y_index, z_zero_index])
 
 
+def test_linear_ewald_embedding_is_finite_outside_propagating_circle() -> None:
+    """Test that masked evanescent coordinates do not contaminate linear weights with NaNs."""
+    params = ODTParameters(
+        na=1.1,
+        wavelength_m=532e-9,
+        img_size_px=64,
+        px_size_m=3.45e-6 * 3 / 180 / 2,
+        n_sol=1.33,
+        na_illumination=1.0,
+    )
+    shape_3d = (
+        2 * params.aperturesize_px + 1,
+        2 * params.aperturesize_px + 1,
+        params.freq_axial_extent_px,
+    )
+
+    weights = odt_module._calc_ewald_embedding_weight(  # noqa: SLF001
+        shape_3d,
+        params,
+        (3, 0),
+        "Forward",
+        EwaldEmbeddingMode.LINEAR,
+    )
+
+    assert bool(jnp.all(jnp.isfinite(weights)))
+
+
 def test_odt_config_rejects_unknown_ewald_embedding_mode() -> None:
     """Test that invalid Ewald embedding modes fail explicitly at configuration time."""
     with pytest.raises(TypeError, match="ewald_embedding_mode must be an EwaldEmbeddingMode"):
@@ -364,6 +392,90 @@ def test_calc_scattering_spectrums_uses_configured_gradient_correction(
         illumination_vectors=[(0, 0)],
     )
     assert calls == [0]
+
+
+def test_calc_1st_scattering_spectrum_respects_skimage_unwrap_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test that the Rytov phase unwrap backend remains configurable."""
+    params = ODTParameters(
+        na=0.1,
+        wavelength_m=1.0,
+        img_size_px=8,
+        px_size_m=1.0,
+        n_sol=1.33,
+        na_illumination=0.1,
+    )
+    cp_field = jnp.ones((7, 7), dtype=jnp.complex64) * 2
+    ref_cp_field = jnp.ones_like(cp_field)
+    calls = []
+
+    def fake_unwrap_phase(phase_image: Array, **kwargs: bool) -> Array:
+        calls.append(kwargs.get("use_skimage", False))
+        return phase_image
+
+    monkeypatch.setattr(odt_module, "unwrap_phase", fake_unwrap_phase)
+
+    odt_module._calc_1st_scattering_spectrum(  # noqa: SLF001
+        cp_field,
+        ref_cp_field,
+        params,
+        "Rytov",
+        (0, 0),
+    )
+    assert calls == [False]
+
+    odt_module._calc_1st_scattering_spectrum(  # noqa: SLF001
+        cp_field,
+        ref_cp_field,
+        params,
+        "Rytov",
+        (0, 0),
+        use_skimage_unwrap=True,
+    )
+    assert calls == [False, True]
+
+
+def test_calc_scattering_spectrums_uses_configured_skimage_unwrap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test that public ODT spectrum extraction applies the unwrap backend config."""
+    params = ODTParameters(
+        na=0.1,
+        wavelength_m=1.0,
+        img_size_px=8,
+        px_size_m=1.0,
+        n_sol=1.33,
+        na_illumination=0.1,
+    )
+    spectrum_shape = params.aperturesize_px
+    cp_spectrum = jnp.ones((spectrum_shape, spectrum_shape), dtype=jnp.complex64) * 2
+    ref_cp_spectrum = jnp.ones_like(cp_spectrum)
+    calls = []
+
+    def fake_unwrap_phase(phase_image: Array, **kwargs: bool) -> Array:
+        calls.append(kwargs.get("use_skimage", False))
+        return phase_image
+
+    monkeypatch.setattr(odt_module, "unwrap_phase", fake_unwrap_phase)
+
+    calc_scattering_spectrums(
+        [cp_spectrum],
+        [ref_cp_spectrum],
+        params,
+        ODTConfig(approx_type="Rytov", use_skimage_unwrap=True),
+        illumination_vectors=[(0, 0)],
+    )
+    assert calls == [True]
+
+    calc_scattering_spectrums(
+        [cp_spectrum],
+        [ref_cp_spectrum],
+        params,
+        ODTConfig(approx_type="Rytov"),
+        illumination_vectors=[(0, 0)],
+    )
+    assert calls == [True, False]
 
 
 def test_log_field_preserves_low_amplitude_complex_phase() -> None:
@@ -674,3 +786,104 @@ class TestCalculateODTDifference:
         captured = capsys.readouterr().out
         assert "Reconstructing ODT from dataset 1..." in captured
         assert "Reconstructing ODT from dataset 2..." in captured
+
+
+@pytest.mark.parametrize(
+    "ewald_embedding_mode",
+    [EwaldEmbeddingMode.TRUNCATE, EwaldEmbeddingMode.NEAREST, EwaldEmbeddingMode.LINEAR],
+)
+@pytest.mark.parametrize("mode", ["Forward", "Backward"])
+def test_synthesize_spectrum_scatter_matches_dense_weight_reference(
+    ewald_embedding_mode: EwaldEmbeddingMode,
+    mode: str,
+) -> None:
+    """Test that the scatter-add embedding matches the dense-weight reference."""
+    params = ODTParameters(
+        na=0.4,
+        wavelength_m=1.0,
+        img_size_px=32,
+        px_size_m=1.0,
+        n_sol=1.33,
+        na_illumination=0.3,
+    )
+    config = ODTConfig(hermite_symmetry=False, ewald_embedding_mode=ewald_embedding_mode)
+    spectrum_size = 2 * params.aperturesize_px + 1
+    shape_3d = (spectrum_size, spectrum_size, params.freq_axial_extent_px)
+    coords = jnp.arange(spectrum_size**2, dtype=jnp.float32).reshape(spectrum_size, spectrum_size)
+    scattering_spectrums = [
+        ScatteringSpectrum(jnp.asarray(coords + 1.0, dtype=jnp.complex64), (0, 0)),
+        ScatteringSpectrum(jnp.asarray(coords * 1j, dtype=jnp.complex64), (2, -1), 0.5 + 0.25j),
+        ScatteringSpectrum(jnp.asarray(coords - 3.0, dtype=jnp.complex64), (-1, 2)),
+    ]
+
+    synthesized = synthesize_spectrum(scattering_spectrums, params, config, mode=mode)
+
+    expected_spectrum = jnp.zeros(shape_3d, dtype=jnp.complex64)
+    expected_weight = jnp.zeros(shape_3d, dtype=jnp.float32)
+    for scattering_spectrum in scattering_spectrums:
+        kz_disk = odt_module._calc_kz_disk(  # noqa: SLF001
+            params,
+            spectrum_size,
+            scattering_spectrum.illumination_vector,
+            config.precision,
+        )
+        embedding_weight = odt_module._calc_ewald_embedding_weight(  # noqa: SLF001
+            shape_3d,
+            params,
+            scattering_spectrum.illumination_vector,
+            mode,
+            ewald_embedding_mode,
+        )
+        tiled = jnp.stack([scattering_spectrum.array * 2j * kz_disk] * shape_3d[2], axis=2)
+        expected_spectrum += scattering_spectrum.coefficient * tiled * embedding_weight
+        expected_weight += embedding_weight
+    expected = expected_spectrum / jnp.where(expected_weight > 0, expected_weight, 1)
+
+    assert synthesized.shape == expected.shape
+    assert bool(jnp.allclose(synthesized, expected, rtol=1e-5, atol=1e-5))
+
+
+@pytest.mark.parametrize(
+    "ewald_embedding_mode",
+    [EwaldEmbeddingMode.TRUNCATE, EwaldEmbeddingMode.NEAREST, EwaldEmbeddingMode.LINEAR],
+)
+def test_synthesize_spectrum_drops_negative_out_of_range_axial_planes(
+    ewald_embedding_mode: EwaldEmbeddingMode,
+) -> None:
+    """Test that negative out-of-range axial indices do not wrap to the last plane."""
+    params = ODTParameters(
+        na=2 / 3,
+        wavelength_m=1.0,
+        img_size_px=8,
+        px_size_m=0.375,
+        n_sol=1.0,
+        na_illumination=2 / 3,
+    )
+    config = ODTConfig(hermite_symmetry=False, ewald_embedding_mode=ewald_embedding_mode)
+    spectrum_size = 2 * params.aperturesize_px + 1
+    shape_3d = (spectrum_size, spectrum_size, params.freq_axial_extent_px)
+    scattering_spectrum = ScatteringSpectrum(
+        jnp.ones((spectrum_size, spectrum_size), dtype=jnp.complex64),
+        (4, 0),
+    )
+
+    synthesized = synthesize_spectrum([scattering_spectrum], params, config, mode="Backward")
+
+    kz_disk = odt_module._calc_kz_disk(  # noqa: SLF001
+        params,
+        spectrum_size,
+        scattering_spectrum.illumination_vector,
+        config.precision,
+    )
+    embedding_weight = odt_module._calc_ewald_embedding_weight(  # noqa: SLF001
+        shape_3d,
+        params,
+        scattering_spectrum.illumination_vector,
+        "Backward",
+        ewald_embedding_mode,
+    )
+    expected_spectrum = jnp.stack([scattering_spectrum.array * 2j * kz_disk] * shape_3d[2], axis=2) * embedding_weight
+    expected = expected_spectrum / jnp.where(embedding_weight > 0, embedding_weight, 1)
+
+    assert bool(jnp.allclose(synthesized, expected, rtol=1e-5, atol=1e-5))
+    assert not bool(jnp.any(synthesized[:, :, -1]))

@@ -4,6 +4,10 @@ IDT with MLB Simulation Example
 
 This example demonstrates how to use Intensity Diffraction Tomography (IDT)
 with Multi-layer Born (MLB) simulation for microscopy analysis.
+
+The private muscopy_mlbsim package must be installed separately.
+See :ref:`mlb-installation` for repository access and installation instructions.
+Without the simulator, this example skips execution.
 """
 
 # pyright: reportPossiblyUnboundVariable=false, reportInvalidTypeForm=false
@@ -37,6 +41,10 @@ except ImportError:
     MLB_AVAILABLE = False
     print("Warning: muscopy_mlbsim is not installed. This example requires muscopy_mlbsim.")
     print("Skipping example execution.")
+    print(
+        "muscopy-mlbsim is private and requires repository access. Install it separately; see "
+        "https://github.com/Ideguchi-Lab/muscopy/blob/main/docs/source/mlb_installation.rst"
+    )
     MLBForward: typing.Any = None  # type: ignore[no-redef]
     MLBParameters: typing.Any = None  # type: ignore[no-redef]
     get_oblique_wave_fft: typing.Any = None  # type: ignore[no-redef]

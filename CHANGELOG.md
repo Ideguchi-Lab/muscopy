@@ -5,6 +5,49 @@
 ### Added
 
 - Added optional CuPy/CUDA QPI helpers under `muscopy.cuda` for Windows GPU workflows, including `offaxis_dh()`, `qpi()`, `mip_qpi()`, and `unwrap_phase()` [[#70](https://github.com/Ideguchi-Lab/muscopy/issues/70)].
+- Read the Docs configuration (`.readthedocs.yaml`) to host the documentation at <https://muscopy.readthedocs.io>.
+- Documentation link in the project metadata and README.
+
+### Changed
+
+- Sphinx configuration resolves source paths relative to `conf.py` and skips the private MLB simulation examples on Read the Docs as well as in CI.
+
+---
+
+## Version 1.0.2 [2026-09-09]
+
+### Added
+
+- PyPI publishing through GitHub Actions Trusted Publishing.
+- Separate installation instructions for the private MLB simulator, linked from both simulation examples.
+- Release artifact checks for the MIT license, type marker, and index-compatible dependencies.
+
+### Changed
+
+- Changed the license from Apache-2.0 to MIT, with copyright held by Ideguchi-Lab.
+- Listed Masato Fukushima, Kohki Horie, and Takuro Ideguchi as authors, and acknowledged contributions from Zinan Zhou and Atsuko Price.
+- Updated installation instructions for PyPI and added project metadata links.
+- Declared NumPy as a direct runtime dependency.
+
+### Removed
+
+- Removed the `extra` optional dependency containing the private simulator's Git URL so distributions can be uploaded to PyPI. Users with simulator access should follow the separate installation guide.
+
+---
+
+## Version 1.0.1 [2026-08-07]
+
+### Added
+
+- `ODTConfig.use_skimage_unwrap` option to unwrap the Rytov scattering phase with `skimage.restoration.unwrap_phase` instead of the default Poisson solver, which is more robust for samples with steep phase gradients [[#145](https://github.com/Ideguchi-Lab/muscopy/pull/145)].
+
+### Changed
+
+- Replaced dense per-angle ODT Ewald embedding with a JIT-compiled batched scatter-add, reducing synthesis runtime and temporary memory while preserving all embedding modes and out-of-range axial sample handling [[#143](https://github.com/Ideguchi-Lab/muscopy/pull/143)].
+
+### Fixed
+
+- Prevented NaNs in linear ODT Ewald embedding by clamping non-propagating square-root radicands before pupil masking [[#138](https://github.com/Ideguchi-Lab/muscopy/pull/138)].
 
 ---
 

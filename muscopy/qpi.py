@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from muscopy.cfg import OffsetRegions, Region
-    from muscopy.dh import MuParameters
+    from muscopy.dh import MuParameters, _ImageSize
 
 __all__ = [
     "correct_phase_offset",
@@ -34,7 +34,7 @@ __all__ = [
 def qpi(
     array: Array,
     reference: Array,
-    params: MuParameters,
+    params: MuParameters[_ImageSize],
     offaxis_centers: tuple[int, int],
     *,
     pupil_func: Array | None = None,
@@ -45,7 +45,7 @@ def qpi(
 def qpi(
     array: Array,
     reference: Array,
-    params: MuParameters,
+    params: MuParameters[_ImageSize],
     offaxis_centers: Sequence[tuple[int, int]],
     *,
     pupil_func: Array | None = None,
@@ -55,7 +55,7 @@ def qpi(
 def qpi(
     array: Array,
     reference: Array,
-    params: MuParameters,
+    params: MuParameters[_ImageSize],
     offaxis_centers: tuple[int, int] | Sequence[tuple[int, int]],
     *,
     pupil_func: Array | None = None,
@@ -93,7 +93,7 @@ def qpi(
 def mip_qpi(
     array_on: Array,
     array_off: Array,
-    params: MuParameters,
+    params: MuParameters[_ImageSize],
     offaxis_center: tuple[int, int],
     *,
     crop_center: bool = False,

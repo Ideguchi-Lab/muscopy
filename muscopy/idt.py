@@ -11,6 +11,7 @@ import jax.numpy as jnp
 from jax import Array
 
 from muscopy.cfg import ArrayPrecision
+from muscopy.dh import _ImageSize
 from muscopy.odt import ODTParameters
 
 if TYPE_CHECKING:
@@ -65,7 +66,7 @@ class IDTZCenteringMode(StrEnum):
 
 
 @dataclasses.dataclass
-class IDTParameters(ODTParameters):
+class IDTParameters(ODTParameters[_ImageSize]):
     """IDT Parameters.
 
     Attributes
@@ -165,7 +166,7 @@ class IDTConfig:
             raise ValueError(msg)
 
 
-def _idt_intensity_support_radius_px(params: IDTParameters) -> float:
+def _idt_intensity_support_radius_px(params: IDTParameters[_ImageSize]) -> float:
     """Radius of the cropped IDT intensity spectrum support.
 
     Returns
@@ -176,7 +177,7 @@ def _idt_intensity_support_radius_px(params: IDTParameters) -> float:
     return params.aperturesize_px
 
 
-def _idt_coherent_pupil_radius_px(params: IDTParameters) -> float:
+def _idt_coherent_pupil_radius_px(params: IDTParameters[_ImageSize]) -> float:
     """Radius of the coherent pupil support.
 
     In IDT, the intensity spectrum support is approximately twice the
@@ -190,7 +191,7 @@ def _idt_coherent_pupil_radius_px(params: IDTParameters) -> float:
     return params.aperturesize_px / 2
 
 
-def _validate_idt_sampling(params: IDTParameters) -> None:
+def _validate_idt_sampling(params: IDTParameters[_ImageSize]) -> None:
     """Validate IDT sampling quantities used in transfer-function scaling.
 
     Raises
@@ -212,7 +213,7 @@ def _validate_idt_sampling(params: IDTParameters) -> None:
         raise ValueError(msg)
 
 
-def _validate_idt_params(params: IDTParameters) -> None:
+def _validate_idt_params(params: IDTParameters[_ImageSize]) -> None:
     """Validate IDT parameter ranges and Fourier cropping support.
 
     Raises
@@ -242,7 +243,7 @@ def _validate_idt_params(params: IDTParameters) -> None:
     _validate_idt_sampling(params)
 
 
-def _make_z_position(params: IDTParameters, idx_z: int, config: IDTConfig) -> float:
+def _make_z_position(params: IDTParameters[_ImageSize], idx_z: int, config: IDTConfig) -> float:
     """Return the physical z position for a reconstructed slice index.
 
     The position is determined by ``config.z_centering``:
@@ -287,7 +288,7 @@ def _make_z_position(params: IDTParameters, idx_z: int, config: IDTConfig) -> fl
     return z_index * params.imgpx_axial_m_per_px
 
 
-def _validate_xy_image(params: IDTParameters, image_xy: Array, *, name: str) -> None:
+def _validate_xy_image(params: IDTParameters[_ImageSize], image_xy: Array, *, name: str) -> None:
     """Validate that an IDT image is a 2D internal [x, y] array.
 
     Raises
@@ -346,7 +347,7 @@ def _warn_if_imag_residual_large(arr: Array, *, name: str, config: IDTConfig) ->
 
 
 def _make_frequency_grid_xy(
-    params: IDTParameters,
+    params: IDTParameters[_ImageSize],
     *,
     precision: ArrayPrecision,
 ) -> tuple[Array, Array]:
@@ -448,7 +449,7 @@ def compute_g_list(
 
 
 def fourier_transform(
-    params: IDTParameters,
+    params: IDTParameters[_ImageSize],
     g_list: Sequence[Array],
     *,
     precision: ArrayPrecision | None = None,
@@ -494,7 +495,7 @@ def fourier_transform(
 
 
 def _make_green_func(
-    params: IDTParameters,
+    params: IDTParameters[_ImageSize],
     u_shift: tuple[float, float],
     z: float,
     *,
@@ -543,7 +544,7 @@ def _make_green_func(
 
 
 def _make_pupil_func(
-    params: IDTParameters,
+    params: IDTParameters[_ImageSize],
     u_shift: tuple[float, float],
     *,
     precision: ArrayPrecision | None = None,
@@ -576,7 +577,7 @@ def _make_pupil_func(
 
 
 def transfer_func_re(
-    params: IDTParameters,
+    params: IDTParameters[_ImageSize],
     u_illumination: tuple[float, float],
     z: float,
     incident_intensity: float,
@@ -641,7 +642,7 @@ def transfer_func_re(
 
 
 def transfer_func_im(
-    params: IDTParameters,
+    params: IDTParameters[_ImageSize],
     u_illumination: tuple[float, float],
     z: float,
     incident_intensity: float,
@@ -712,7 +713,7 @@ def _validate_led_illumination_intensities(led_illumination_intensities: Sequenc
 
 
 def compute_permittivity(  # noqa: PLR0914
-    params: IDTParameters,
+    params: IDTParameters[_ImageSize],
     g_tilde_list: Sequence[Array],
     u_illumination_list: Sequence[tuple[float, float]],
     led_illumination_intensities: Sequence[float],
@@ -885,7 +886,7 @@ def convert_to_refractive_index(eps_re: Array, eps_im: Array, n_sol: float) -> t
 
 
 def compute_idt(  # noqa: PLR0914
-    params: IDTParameters,
+    params: IDTParameters[_ImageSize],
     intensity_images: Sequence[Array],
     ref_intensity_images: Sequence[Array],
     u_illumination_list: Sequence[tuple[float, float]],

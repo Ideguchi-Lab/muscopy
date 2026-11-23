@@ -4,7 +4,7 @@ import jax.numpy as jnp
 import pytest
 from jax import Array
 
-from muscopy.dh import MuParameters
+from muscopy.dh import MuParameters, _ImageSize
 from muscopy.qpi import mip_qpi, qpi
 
 # The aperture radius is 1/8 of each image axis and the off-axis carrier sits at 3/16 of it,
@@ -12,17 +12,17 @@ from muscopy.qpi import mip_qpi, qpi
 NA = 0.125
 
 
-def _make_params(img_size_px: int | tuple[int, int]) -> MuParameters:
+def _make_params(img_size_px: _ImageSize) -> MuParameters[_ImageSize]:
     return MuParameters(na=NA, wavelength_m=1.0, img_size_px=img_size_px, px_size_m=1.0, n_sol=1.33)
 
 
-def _sample_phase(params: MuParameters, xx: Array, yy: Array) -> Array:
+def _sample_phase(params: MuParameters[_ImageSize], xx: Array, yy: Array) -> Array:
     # Two cosine cycles along each axis keep every Jacobi-Anger harmonic that matters inside the pupil.
     height, width = params.img_shape_px
     return 0.5 * jnp.cos(2 * jnp.pi * (2 * xx / height + 2 * yy / width))
 
 
-def _make_holograms(params: MuParameters, phase_scale: float = 1.0) -> tuple[Array, Array, tuple[int, int]]:
+def _make_holograms(params: MuParameters[_ImageSize], phase_scale: float = 1.0) -> tuple[Array, Array, tuple[int, int]]:
     height, width = params.img_shape_px
     xx, yy = jnp.meshgrid(jnp.arange(height), jnp.arange(width), indexing="ij")
     shift = (3 * height // 16, 3 * width // 16)
@@ -34,7 +34,7 @@ def _make_holograms(params: MuParameters, phase_scale: float = 1.0) -> tuple[Arr
     return hologram, reference_hologram, offaxis_center
 
 
-def _expected_phase(params: MuParameters) -> Array:
+def _expected_phase(params: MuParameters[_ImageSize]) -> Array:
     # The cropped spectrum resamples the band-limited field on a grid of aperturesize_px_xy points.
     height, width = params.img_shape_px
     size_x, size_y = params.aperturesize_px_xy

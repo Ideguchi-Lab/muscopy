@@ -4,11 +4,11 @@ import jax.numpy as jnp
 import pytest
 from jax import Array
 
-from muscopy.dh import MuParameters
+from muscopy.dh import MuParameters, _ImageSize
 from muscopy.phase_noise import calc_phase_noise, calc_visibility
 
 
-def _make_hologram(params: MuParameters) -> tuple[Array, tuple[int, int]]:
+def _make_hologram(params: MuParameters[_ImageSize]) -> tuple[Array, tuple[int, int]]:
     height, width = params.img_shape_px
     xx, yy = jnp.meshgrid(jnp.arange(height), jnp.arange(width), indexing="ij")
     shift = (3 * height // 16, 3 * width // 16)

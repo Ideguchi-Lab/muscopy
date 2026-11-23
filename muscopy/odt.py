@@ -26,7 +26,7 @@ import jax.numpy as jnp
 from jax import Array
 
 from muscopy.cfg import ArrayPrecision, OffsetRegions
-from muscopy.dh import MuParameters, _inside_ellipse, correct_gradient, correct_offset, make_ellipse
+from muscopy.dh import MuParameters, _ImageSize, _inside_ellipse, correct_gradient, correct_offset, make_ellipse
 from muscopy.qpi_utils import unwrap_phase
 
 if TYPE_CHECKING:
@@ -58,7 +58,7 @@ class EwaldEmbeddingMode(StrEnum):
 
 
 @dataclasses.dataclass
-class ODTParameters(MuParameters):
+class ODTParameters(MuParameters[_ImageSize]):
     r"""Optical Diffraction Tomography (ODT) parameters.
 
     Attributes
@@ -345,7 +345,7 @@ class ScatteringSpectrum:
 
 def synthesize_spectrum(
     scattering_spectrums: Iterable[ScatteringSpectrum],
-    params: ODTParameters,
+    params: ODTParameters[_ImageSize],
     config: ODTConfig,
     mode: str = "Forward",
 ) -> Array:
@@ -441,7 +441,7 @@ def _fill_hermite_components(spectrum3d: Array) -> Array:
     return jnp.where(overlap_region, spectrum3d / 2, spectrum3d)
 
 
-def calc_refractive_index(scattering_potential: Array, params: ODTParameters) -> Array:
+def calc_refractive_index(scattering_potential: Array, params: ODTParameters[_ImageSize]) -> Array:
     """Calculate the refractive index from the scattering potential.
 
     Parameters
@@ -465,7 +465,7 @@ def calc_refractive_index(scattering_potential: Array, params: ODTParameters) ->
 def calc_scattering_spectrums(
     cp_spectrums: Sequence[Array],
     ref_cp_spectrums: Sequence[Array],
-    params: ODTParameters,
+    params: ODTParameters[_ImageSize],
     config: ODTConfig,
     illumination_vectors: Sequence[tuple[int, int]] | None = None,
 ) -> list[ScatteringSpectrum]:
@@ -535,7 +535,7 @@ def calc_scattering_spectrums(
 
 def calc_scattering_potential_from_spectrums(
     scattering_spectrums: Iterable[ScatteringSpectrum],
-    params: ODTParameters,
+    params: ODTParameters[_ImageSize],
     config: ODTConfig,
 ) -> tuple[Array, Array]:
     r"""Calculate scattering potential from first-order scattering spectrums.
@@ -574,7 +574,7 @@ def calc_scattering_potential_from_spectrums(
 def odt(
     cp_spectrums: Sequence[Array],
     ref_cp_spectrums: Sequence[Array],
-    params: ODTParameters,
+    params: ODTParameters[_ImageSize],
     config: ODTConfig,
 ) -> tuple[Array, Array]:
     r"""Optical Diffraction Tomography (ODT) reconstruction.
@@ -614,7 +614,7 @@ def calculate_odt_difference(
     ref_cp_spectrums_1: Sequence[Array],
     cp_spectrums_2: Sequence[Array],
     ref_cp_spectrums_2: Sequence[Array],
-    params: ODTParameters,
+    params: ODTParameters[_ImageSize],
     config: ODTConfig,
 ) -> tuple[Array, Array, Array]:
     r"""Calculate the difference between two ODT reconstructions with same parameters.
@@ -767,7 +767,7 @@ def _estimate_illumination_vectors(
 
 
 def _shift_dh_spectrum(
-    params: ODTParameters, cp_spectrum: Array, illumination_vector: tuple[int, int], edge_size: int = 0
+    params: ODTParameters[_ImageSize], cp_spectrum: Array, illumination_vector: tuple[int, int], edge_size: int = 0
 ) -> Array:
     # TODO(@fukushima-ilab): I should treat fft factor change induced by a slight shape change here (#107)
     extent_x, extent_y = params.lateral_extent_px_xy
@@ -789,7 +789,7 @@ def _shift_dh_spectrum(
 def _calc_1st_scattering_spectrum(
     cp_field: Array,
     ref_cp_field: Array,
-    params: ODTParameters,
+    params: ODTParameters[_ImageSize],
     approx_type: str,
     illumination_vector: tuple[int, int],
     edge_size: int = 0,
@@ -956,7 +956,7 @@ def _scatter_embed_spectrums(  # noqa: PLR0914
 
 def _calc_ewald_embedding_weight(
     shape_3d: tuple[int, int, int],
-    params: ODTParameters,
+    params: ODTParameters[_ImageSize],
     illumination_vector: tuple[int, int],
     mode: str,
     ewald_embedding_mode: EwaldEmbeddingMode,
@@ -1004,7 +1004,7 @@ def _make_ewald_coordinate_grids(shape_3d: tuple[int, int, int]) -> tuple[Array,
 def _calc_ewald_fz_circle(
     xx: Array,
     yy: Array,
-    params: ODTParameters,
+    params: ODTParameters[_ImageSize],
     illumination_vector: tuple[int, int],
     mode: str,
 ) -> Array:
@@ -1067,7 +1067,7 @@ def _round_half_away_from_zero(array: Array) -> Array:
 
 
 def _calc_kz_disk(
-    params: ODTParameters,
+    params: ODTParameters[_ImageSize],
     shape: int | tuple[int, int],
     illumination_vector: tuple[int, int],
     precision: ArrayPrecision,

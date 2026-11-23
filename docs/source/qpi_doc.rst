@@ -22,6 +22,14 @@ image has the shape ``MuParameters.aperturesize_px_xy``.
 Scalar properties such as ``aperturesize_px`` and ``freq_per_px`` are only
 defined for square images; use the per-axis ``*_xy`` properties instead.
 
+Integer image sizes keep the existing behavior and type: arithmetic on
+``params.img_size_px`` remains valid, including with a plain ``MuParameters``
+annotation. The constructor infers tuple sizes for rectangular images. To
+annotate rectangular parameters explicitly, use
+``MuParameters[tuple[int, int]]`` (or ``ODTParameters[tuple[int, int]]`` for ODT).
+NumPy and JAX integer scalars are also accepted as square image sizes and
+scalar ``crop_array`` widths.
+
 QPI Calculator
 ++++++++++++++++++++++++++++++++
 

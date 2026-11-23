@@ -1,7 +1,9 @@
 import math
 from dataclasses import fields
+from typing import SupportsIndex
 
 import jax.numpy as jnp
+import numpy as np
 import pytest
 
 from muscopy.dh import (
@@ -122,10 +124,26 @@ def test_mu_parameters_square_tuple_matches_int() -> None:
 
 
 def test_mu_parameters_rejects_malformed_img_size() -> None:
-    params = MuParameters(na=0.25, wavelength_m=1.0, img_size_px=(8, 8, 8), px_size_m=1.0, n_sol=1.33)  # type: ignore[arg-type]
+    params = MuParameters(na=0.25, wavelength_m=1.0, img_size_px=(8, 8, 8), px_size_m=1.0, n_sol=1.33)  # type: ignore[type-var]
 
     with pytest.raises(ValueError, match=r"\(rows, columns\) pair"):
         params.verify_parameters()
+
+
+@pytest.mark.parametrize("img_size_px", [16, np.int32(16), np.int64(16), jnp.array(16)])
+def test_mu_parameters_accepts_integer_scalars(img_size_px: SupportsIndex) -> None:
+    params = MuParameters(na=0.125, wavelength_m=1.0, img_size_px=img_size_px, px_size_m=1.0, n_sol=1.33)
+
+    params.verify_parameters()
+    spectrum = get_spectrum(jnp.ones((16, 16)), params, (8, 8))
+    field = inline_dh(jnp.ones((3, 16, 16)), jnp.array([0.0, 2.0, 4.0]), params)
+
+    assert params.img_shape_px == (16, 16)
+    assert params.img_center == (8, 8)
+    assert params.freq_per_px == pytest.approx(1 / 16)
+    assert spectrum.shape == (5, 5)
+    assert field.shape == (16, 16)
+    assert bool(jnp.all(jnp.isfinite(field)))
 
 
 def test_print_all_parameters_rectangular(capsys: pytest.CaptureFixture[str]) -> None:
@@ -204,6 +222,15 @@ def test_crop_array() -> None:
     assert cropped.shape == (width, width)
     expected = arr[5 - width // 2 : 5 + width // 2 + 1, 5 - width // 2 : 5 + width // 2 + 1]
     assert jnp.array_equal(cropped, expected)
+
+
+@pytest.mark.parametrize("width", [5, np.int32(5), np.int64(5), jnp.array(5)])
+def test_crop_array_accepts_integer_scalars(width: SupportsIndex) -> None:
+    array = jnp.arange(100).reshape(10, 10)
+
+    cropped = crop_array(array, (5, 5), width)
+
+    assert jnp.array_equal(cropped, array[3:8, 3:8])
 
 
 @pytest.mark.parametrize("width", [0, -1, 4])

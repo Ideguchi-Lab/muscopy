@@ -11,7 +11,7 @@ import math
 import jax.numpy as jnp
 from jax import Array
 
-from muscopy.dh import MuParameters, crop_array, make_ellipse
+from muscopy.dh import MuParameters, _ImageSize, crop_array, make_ellipse
 
 __all__ = [
     "calc_phase_noise",
@@ -21,7 +21,7 @@ __all__ = [
 
 def _get_dc_ac(
     hologram: Array,
-    params: MuParameters,
+    params: MuParameters[_ImageSize],
     offaxis_center: tuple[int, int],
 ) -> tuple[Array, Array]:
     aperture_x, aperture_y = params.aperturesize_px_xy
@@ -69,7 +69,7 @@ def _get_phase_noise(
 
 def calc_visibility(
     hologram: Array,
-    params: MuParameters,
+    params: MuParameters[_ImageSize],
     offaxis_center: tuple[int, int],
 ) -> Array:
     r"""Calculate the visibility of a hologram.
@@ -94,7 +94,7 @@ def calc_visibility(
 
 def calc_phase_noise(
     hologram: Array,
-    params: MuParameters,
+    params: MuParameters[_ImageSize],
     offaxis_center: tuple[int, int],
     fullwell: int,
     bit_depth: int,

@@ -17,7 +17,8 @@
 - `crop_array` accepts a per-axis `(width_0, width_1)` crop width.
 - ODT synthesis, illumination vector estimation, and the scattering spectrum mask use per-axis sampling. Results for square images are unchanged.
 - `calc_visibility` and `calc_phase_noise` support rectangular holograms.
-- The type of `MuParameters.img_size_px` is widened to `int | tuple[int, int]`. Runtime behavior for `int` values is unchanged; code that does arithmetic on `params.img_size_px` should use `square_img_size_px` or `img_shape_px` to satisfy type checkers.
+- `MuParameters`, `ODTParameters`, and `IDTParameters` preserve the input type of `img_size_px`. Integer inputs and existing parameter annotations retain the `int` type, so arithmetic on `params.img_size_px` continues to pass type checking. Rectangular tuple inputs retain their tuple type.
+- Image sizes and `crop_array` widths accept integer scalars from NumPy and JAX as well as Python integers.
 - `get_spectrum(..., print_illumination_angle=True)` reports the illumination NA from the physical illumination frequency (`wavelength_m * |f|`) instead of the rounded aperture radius, so it no longer fails when the radius rounds to zero.
 - Scalar properties (`freq_per_px`, `k_per_px`, `aperturesize_px`, `light_freq_px`, `imgpx_m_per_px`, `ODTParameters.imgpx_lateral_m_per_px`) raise `ValueError` for rectangular images, and IDT rejects rectangular images explicitly.
 

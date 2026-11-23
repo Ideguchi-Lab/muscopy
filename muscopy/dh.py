@@ -24,11 +24,13 @@ import cmath
 import dataclasses
 import inspect
 import math
+import operator
 import typing
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, SupportsIndex
 
 import jax.numpy as jnp
 from jax import Array
+from typing_extensions import TypeVar
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -52,11 +54,12 @@ __all__ = [
     "ps_idh_reconstruct",
 ]
 
-_T = typing.TypeVar("_T")
+_T = TypeVar("_T")
+_ImageSize = TypeVar("_ImageSize", bound=SupportsIndex | tuple[int, int], default=int)
 
 
 @dataclasses.dataclass
-class MuParameters:
+class MuParameters(typing.Generic[_ImageSize]):
     r"""Microscopy parameters.
 
     Parameters
@@ -65,9 +68,9 @@ class MuParameters:
         Numerical aperture of the objective lens
     wavelength_m : `float`
         Wavelength of the light in meters
-    img_size_px : `int` | `tuple`\[`int`, `int`\]
-        Size of the image in pixels. An `int` describes a square image, and a
-        ``(rows, columns)`` tuple describes a rectangular image. For a
+    img_size_px : ``typing.SupportsIndex`` | `tuple`\[`int`, `int`\]
+        Size of the image in pixels. An integer scalar describes a square image,
+        and a ``(rows, columns)`` tuple describes a rectangular image. For a
         rectangular image the frequency sampling differs between the axes, so
         the circular pupil becomes an ellipse in frequency-pixel units.
     px_size_m : `float`
@@ -85,7 +88,7 @@ class MuParameters:
 
     na: float
     wavelength_m: float
-    img_size_px: int | tuple[int, int]
+    img_size_px: _ImageSize
     px_size_m: float
     n_sol: float
 
@@ -133,11 +136,12 @@ class MuParameters:
         Raises
         ------
         ValueError
-            If ``img_size_px`` is a sequence that does not have exactly two entries.
+            If ``img_size_px`` is a tuple that does not have exactly two entries.
         """
-        if isinstance(self.img_size_px, int):
-            return (self.img_size_px, self.img_size_px)
-        shape = tuple(int(size) for size in self.img_size_px)
+        if not isinstance(self.img_size_px, tuple):
+            size = operator.index(self.img_size_px)
+            return (size, size)
+        shape = tuple(operator.index(size) for size in self.img_size_px)
         if len(shape) != 2:  # noqa: PLR2004
             msg = "img_size_px must be an int or a (rows, columns) pair."
             raise ValueError(msg)
@@ -339,7 +343,7 @@ class MuParameters:
         return values[0]
 
 
-def print_all_parameters(param: MuParameters, *, show_properties: bool = False) -> None:
+def print_all_parameters(param: MuParameters[_ImageSize], *, show_properties: bool = False) -> None:
     """Print all parameters of MuParameters dataclass.
 
     Parameters
@@ -452,7 +456,7 @@ def _inside_ellipse(dx: Array, dy: Array, radii: tuple[float, float]) -> Array:
     return (dx / radii[0]) ** 2 + (dy / radii[1]) ** 2 <= 1
 
 
-def crop_array(array: Array, center: tuple[int, int], width: int | tuple[int, int]) -> Array:
+def crop_array(array: Array, center: tuple[int, int], width: SupportsIndex | tuple[int, int]) -> Array:
     r"""Crop the array to the specified odd width around the center.
 
     Parameters
@@ -461,7 +465,7 @@ def crop_array(array: Array, center: tuple[int, int], width: int | tuple[int, in
         The array to be cropped
     center : `tuple`\[`int`, `int`\]
         The center position of the crop
-    width : `int` | `tuple`\[`int`, `int`\]
+    width : ``typing.SupportsIndex`` | `tuple`\[`int`, `int`\]
         The odd width of the center-symmetric crop. A tuple gives the width
         along axis 0 and axis 1 separately.
 
@@ -475,7 +479,11 @@ def crop_array(array: Array, center: tuple[int, int], width: int | tuple[int, in
     ValueError
         If width is not a positive odd integer
     """
-    widths = (width, width) if isinstance(width, int) else width
+    if isinstance(width, tuple):
+        widths = width
+    else:
+        scalar_width = operator.index(width)
+        widths = (scalar_width, scalar_width)
     if any(w <= 0 or w % 2 == 0 for w in widths):
         msg = "width must be a positive odd integer"
         raise ValueError(msg)
@@ -488,7 +496,7 @@ def crop_array(array: Array, center: tuple[int, int], width: int | tuple[int, in
 
 def get_spectrum(
     ft_array: Array,
-    params: MuParameters,
+    params: MuParameters[_ImageSize],
     offaxis_center: tuple[int, int],
     *,
     crop_center: bool = False,
@@ -560,7 +568,7 @@ def get_spectrum(
 
 def get_spectrums(
     ft_array: Array,
-    params: MuParameters,
+    params: MuParameters[_ImageSize],
     offaxis_centers: Iterable[tuple[int, int]],
     *,
     crop_center: bool = False,
@@ -735,7 +743,7 @@ def correct_aberration(spectrum: Array, pupil_func: Array) -> Array:
 def offaxis_dh(
     array: Array,
     reference: Array,
-    params: MuParameters,
+    params: MuParameters[_ImageSize],
     offaxis_centers: tuple[int, int],
     *,
     pupil_func: Array | None = None,
@@ -746,7 +754,7 @@ def offaxis_dh(
 def offaxis_dh(
     array: Array,
     reference: Array,
-    params: MuParameters,
+    params: MuParameters[_ImageSize],
     offaxis_centers: Sequence[tuple[int, int]],
     *,
     pupil_func: Array | None = None,
@@ -756,7 +764,7 @@ def offaxis_dh(
 def offaxis_dh(
     array: Array,
     reference: Array,
-    params: MuParameters,
+    params: MuParameters[_ImageSize],
     offaxis_centers: tuple[int, int] | Sequence[tuple[int, int]],
     *,
     pupil_func: Array | None = None,
@@ -919,7 +927,7 @@ def ps_idh_reconstruct(i_stack: Array, deltas: Array, ref_amp: float = 1.0) -> A
 def inline_dh(
     i_stack: Array,
     deltas: Array,
-    params: MuParameters,
+    params: MuParameters[_ImageSize],
     *,
     ref_amp: float = 1.0,
     blind_reconstruction: bool = False,
@@ -930,7 +938,7 @@ def inline_dh(
 def inline_dh(
     i_stack: Array,
     deltas: None,
-    params: MuParameters,
+    params: MuParameters[_ImageSize],
     *,
     ref_amp: float = 1.0,
     blind_reconstruction: bool = False,
@@ -940,7 +948,7 @@ def inline_dh(
 def inline_dh(
     i_stack: Array,
     deltas: Array | None,
-    params: MuParameters,
+    params: MuParameters[_ImageSize],
     *,
     ref_amp: float = 1.0,
     blind_reconstruction: bool = False,

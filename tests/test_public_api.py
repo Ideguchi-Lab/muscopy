@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, assert_type
 
 from muscopy import cfg, dh, dir_parser, idt, image_checker, odt, phase_noise, phasor, qpi, qpi_utils
 
@@ -96,6 +96,21 @@ def test_v1_public_api_exports() -> None:
 def test_pre_v1_legacy_api_names_are_removed() -> None:
     assert not hasattr(odt, "calc_scattering_potential")
     assert not hasattr(idt, "compute_permitivity")
+
+
+def test_integer_image_sizes_keep_legacy_type_contract() -> None:
+    inferred = dh.MuParameters(na=0.1, wavelength_m=1.0, img_size_px=64, px_size_m=1.0, n_sol=1.33)
+    annotated: dh.MuParameters = inferred
+    odt_params = odt.ODTParameters(na=0.1, wavelength_m=1.0, img_size_px=64, px_size_m=1.0, n_sol=1.33)
+    idt_params = idt.IDTParameters(na=0.1, wavelength_m=1.0, img_size_px=64, px_size_m=1.0, n_sol=1.33)
+
+    assert_type(inferred.img_size_px, int)
+    assert_type(annotated.img_size_px, int)
+    assert_type(odt_params.img_size_px, int)
+    assert_type(idt_params.img_size_px, int)
+    assert annotated.img_size_px**2 == 4096
+    assert odt_params.img_size_px // 2 == 32
+    assert idt_params.img_size_px - 1 == 63
 
 
 def test_idt_and_odt_helpers_are_outside_stable_public_api() -> None:

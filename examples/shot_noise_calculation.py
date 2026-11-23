@@ -11,7 +11,8 @@ import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 
-from muscopy.dh import MuParameters, make_disk, print_all_parameters
+from muscopy.dh import MuParameters, print_all_parameters
+from muscopy.example_holograms import off_axis_holograms
 from muscopy.phase_noise import calc_phase_noise, calc_visibility
 
 # %%
@@ -24,7 +25,7 @@ bit_depth = 12  # bit depth of the camera
 sensor_noise = 10  # sensor noise (e-)
 
 # %%
-# generate a hologram
+# Set microscopy parameters
 
 params = MuParameters(
     na=0.8,
@@ -36,35 +37,10 @@ params = MuParameters(
 print_all_parameters(params, show_properties=True)
 
 # %%
-# create a hologram
+# Generate synthetic measurements
 off_axis_center = (100, 100)
-
-radius = 30
-sample_disk = make_disk(params.img_center, radius, params.img_size_px)
-sample_array = jnp.exp(2j * jnp.pi / 3 * sample_disk)
-low_pass = make_disk(params.img_center, params.aperturesize_px // 2, params.img_size_px)
-sample_array = jnp.fft.ifft2(jnp.fft.ifftshift(jnp.fft.fftshift(jnp.fft.fft2(sample_array)) * low_pass))
-sample_array /= jnp.sum(jnp.abs(sample_array) ** 2) ** 0.5
-
-xx, yy = jnp.meshgrid(
-    jnp.arange(params.img_size_px),
-    jnp.arange(params.img_size_px),
-    indexing="ij",
-)
-ref_array = jnp.exp(
-    -2j
-    * jnp.pi
-    * (
-        xx * (off_axis_center[0] - params.img_center[0]) / (params.img_size_px)
-        + yy * (off_axis_center[1] - params.img_center[1]) / (params.img_size_px)
-    )
-)
-ref_array /= jnp.sum(jnp.abs(ref_array) ** 2) ** 0.5
-
-hologram = jnp.abs(sample_array + ref_array) ** 2
-# normalize
-hologram /= jnp.max(hologram)  # normalize to 1
-hologram *= 2**bit_depth
+hologram, _ = off_axis_holograms(params, off_axis_center)
+hologram = hologram / jnp.max(hologram) * 2**bit_depth
 
 # %%
 # calculate visibility and phase noise

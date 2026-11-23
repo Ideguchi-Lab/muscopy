@@ -20,272 +20,17 @@ See :ref:`mlb-installation` for repository access and installation instructions.
 Without the simulator, this example skips execution.
 """
 
-# pyright: reportPossiblyUnboundVariable=false, reportInvalidTypeForm=false
-
-import typing
+from importlib.util import find_spec
 
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 from jax import Array
-from tqdm import tqdm
 
 from muscopy.cfg import ArrayPrecision
 from muscopy.dh import get_spectrum
+from muscopy.example_mlb import simulate_mlb_measurements
 from muscopy.odt import ODTConfig, ODTParameters, odt
-
-try:
-    from muscopy_mlbsim import (  # pyright: ignore[reportMissingImports]
-        HologramGenerator,
-        MLBForward,
-        MLBParameters,
-        get_oblique_wave_fft,
-        get_scatter_potential,
-    )
-
-    MLB_AVAILABLE = True
-except ImportError:
-    MLB_AVAILABLE = False
-    print("Warning: muscopy_mlbsim is not installed. This example requires muscopy_mlbsim.")
-    print("Skipping example execution.")
-    print(
-        "muscopy-mlbsim is private and requires repository access. Install it separately; see "
-        "https://github.com/Ideguchi-Lab/muscopy/blob/main/docs/source/mlb_installation.rst"
-    )
-    HologramGenerator: typing.Any = None  # type: ignore[no-redef]
-    MLBForward: typing.Any = None  # type: ignore[no-redef]
-    MLBParameters: typing.Any = None  # type: ignore[no-redef]
-    get_oblique_wave_fft: typing.Any = None  # type: ignore[no-redef]
-    get_scatter_potential: typing.Any = None  # type: ignore[no-redef]
-
-
-class HologramSetGenerator:
-    """Generate hologram sets using MLB simulation and muscopy_mlbsim.HologramGenerator."""
-
-    def __init__(
-        self,
-        odt_params: ODTParameters,
-        mlb_params: MLBParameters,
-        offaxis_center: tuple[int, int],
-        precision: ArrayPrecision,
-    ) -> None:
-        if not MLB_AVAILABLE:
-            msg = "muscopy_mlbsim is required but not available"
-            raise ImportError(msg)
-
-        self.odt_params = odt_params
-        self.mlb_params = mlb_params
-        self.precision = precision
-        self.offaxis_center = offaxis_center
-
-        # Initialize MLB forward simulator and hologram generator
-        self.mlb_forward = MLBForward(mlb_params)
-        self.hologram_generator = HologramGenerator(mlb_params)
-
-        # Configure off-axis position
-        self.hologram_generator.set_offaxis_position(offaxis_center[0], offaxis_center[1])
-
-        # Store illumination angles
-        self.angles: np.ndarray[typing.Any, np.dtype[np.floating[typing.Any]]] | None = None
-
-    def set_illumination_angles(self, num_angles: int, angle_offset: float = 0) -> None:
-        """Set illumination angles for tomographic acquisition."""
-        self.num_angles = num_angles
-        self.angle_offset = angle_offset
-        self.angles = np.linspace(0, 2 * np.pi, num_angles, endpoint=False) + angle_offset
-
-    def generate_hologram_set(
-        self,
-        scattering_potential: Array,
-        amplitude_ref: float = 1.0,
-    ) -> tuple[list[Array], list[Array]]:
-        r"""Generate hologram set with different illumination angles.
-
-        Parameters
-        ----------
-        scattering_potential : Array
-            3D scattering potential array
-        amplitude_ref : float, optional
-            Reference beam amplitude, by default 1.0
-
-        Returns
-        -------
-        tuple[list[Array], list[Array]]
-            Target holograms and reference holograms
-
-        Raises
-        ------
-        ValueError
-            If illumination angles are not set
-        """
-        if self.angles is None:
-            msg = "Illumination angles not set. Call set_illumination_angles() first."
-            raise ValueError(msg)
-
-        target_holograms = []
-        reference_holograms = []
-        hologram_shape = (self.odt_params.img_size_px, self.odt_params.img_size_px)
-
-        print("Generating holograms...")
-        for angle in tqdm(self.angles):
-            # Calculate illumination wave vector components
-            kx_ill = (
-                self.odt_params.light_freq_px
-                * self.odt_params.na_illumination
-                / self.odt_params.n_sol
-                * self.odt_params.k_per_px
-                * np.cos(angle)
-            )
-            ky_ill = (
-                self.odt_params.light_freq_px
-                * self.odt_params.na_illumination
-                / self.odt_params.n_sol
-                * self.odt_params.k_per_px
-                * np.sin(angle)
-            )
-
-            # Generate oblique illumination wave
-            input_field_fft = get_oblique_wave_fft(
-                self.mlb_params,
-                float(kx_ill),
-                float(ky_ill),
-            )
-
-            # Simulate the forward-scattered field at the detector plane
-            output_field = self.mlb_forward.simulate_forward_detector_field(input_field_fft, scattering_potential)
-
-            # Generate hologram using muscopy_mlbsim.HologramGenerator
-            self.hologram_generator.set_target_field(output_field)
-            hologram = self.hologram_generator.generate_hologram(
-                hologram_shape=hologram_shape,
-                reference_amplitude=amplitude_ref,
-                bit_depth=16,
-                output_dtype="float32",  # Keep as float for processing
-            )
-            target_holograms.append(hologram)
-
-            # Generate reference hologram (no scattering)
-            ref_field = self.mlb_forward.propagate_forward_to_detector(input_field_fft)
-            self.hologram_generator.set_target_field(ref_field)
-            ref_hologram = self.hologram_generator.generate_hologram(
-                hologram_shape=hologram_shape,
-                reference_amplitude=amplitude_ref,
-                bit_depth=16,
-                output_dtype="float32",
-            )
-            reference_holograms.append(ref_hologram)
-
-        return target_holograms, reference_holograms
-
-
-def generate_sphere_potential(
-    mlb_params: MLBParameters,
-    radius_um: float,
-    delta_n: float,
-    center_offset: tuple[int, int, int] = (0, 0, 0),
-    precision: ArrayPrecision | None = None,
-) -> Array:
-    """Generate spherical scattering potential.
-
-    Returns
-    -------
-    Array
-        3D scattering potential array
-    """
-    if precision is None:
-        precision = ArrayPrecision()
-
-    # Convert radius from micrometers to pixels
-    radius_px = int(radius_um * 1e-6 / mlb_params.dxy_m)
-
-    # Create coordinate grids
-    z, y, x = jnp.meshgrid(
-        jnp.arange(mlb_params.num_layers),
-        jnp.arange(mlb_params.xy_shape[0]),
-        jnp.arange(mlb_params.xy_shape[1]),
-        indexing="ij",
-    )
-
-    # Sphere center
-    center_z = mlb_params.num_layers // 2 + center_offset[0]
-    center_y = mlb_params.xy_shape[0] // 2 + center_offset[1]
-    center_x = mlb_params.xy_shape[1] // 2 + center_offset[2]
-
-    # Create sphere mask
-    sphere_mask = ((z - center_z) ** 2 + (y - center_y) ** 2 + (x - center_x) ** 2) < radius_px**2
-
-    # Create refractive index distribution
-    n_background = mlb_params.n_medium
-    n_sphere = n_background + delta_n
-
-    refractive_index = jnp.full(
-        (mlb_params.num_layers, mlb_params.xy_shape[0], mlb_params.xy_shape[1]),
-        n_background,
-        dtype=precision.float_precision(),
-    )
-    refractive_index = jnp.where(sphere_mask, n_sphere, refractive_index)
-
-    # Convert to scattering potential
-    return typing.cast("Array", get_scatter_potential(mlb_params, refractive_index))
-
-
-def _setup_parameters() -> tuple[ODTParameters, MLBParameters, ArrayPrecision]:
-    r"""Set up ODT and MLB simulation parameters.
-
-    Returns
-    -------
-    tuple[ODTParameters, MLBParameters, ArrayPrecision]
-        ODT parameters, MLB parameters, and array precision settings
-    """
-    # The default precision is int32, float32, and complex64.
-    precision = ArrayPrecision()
-
-    # ODT parameters
-    print("Setting ODT parameters...")
-    odt_params = ODTParameters(
-        na=1.1,
-        wavelength_m=532e-9,
-        img_size_px=512,  # Smaller for faster computation
-        px_size_m=3.45e-6 * 3 / 180 / 2,
-        n_sol=1.33,
-        na_illumination=1.0,
-    )
-
-    # MLB simulation parameters
-    print("Setting MLB simulation parameters...")
-    mlb_params = MLBParameters(
-        wavelength_m=odt_params.wavelength_m,
-        numerical_aperture=odt_params.na,
-        n_medium=odt_params.n_sol,
-        xy_shape=(2 * odt_params.aperturesize_px, 2 * odt_params.aperturesize_px),
-        num_layers=odt_params.freq_axial_extent_px,
-        dxy_m=odt_params.imgpx_lateral_m_per_px,
-        dz_m=odt_params.imgpx_axial_m_per_px,
-    )
-
-    return odt_params, mlb_params, precision
-
-
-def _generate_holograms(
-    odt_params: ODTParameters,
-    mlb_params: MLBParameters,
-    scattering_potential: Array,
-    offaxis_center: tuple[int, int],
-    precision: ArrayPrecision,
-    num_angles: int = 60,
-) -> tuple[list[Array], list[Array]]:
-    r"""Generate hologram sets.
-
-    Returns
-    -------
-    tuple[list[Array], list[Array]]
-        Target holograms and reference holograms
-    """
-    print("Setting up hologram generator...")
-    hol_gen = HologramSetGenerator(odt_params, mlb_params, offaxis_center, precision)
-    hol_gen.set_illumination_angles(num_angles)  # Fewer angles for faster computation
-
-    return hol_gen.generate_hologram_set(scattering_potential)
 
 
 def _extract_spectra(
@@ -486,53 +231,28 @@ def visualize_synthetic_spectra_profiles(synthetic_spectra: Array) -> None:  # n
 
 # %%
 # Main execution
-def main() -> None:  # noqa: PLR0914
+def main() -> None:
     """Demonstrate ODT with MLB simulation."""
-    if not MLB_AVAILABLE:
-        print("Skipping ODT with MLB simulation demo - muscopy_mlbsim not available.")
-        # Create a simple placeholder plot for documentation
-        _, ax = plt.subplots(figsize=(8, 6))
-        message = (
-            "muscopy_mlbsim Required\n\n"
-            "This example requires the muscopy_mlbsim package.\n"
-            "Please install or upgrade muscopy_mlbsim before running this example."
+    if find_spec("muscopy_mlbsim") is None:
+        print(
+            "Skipping ODT demo because muscopy-mlbsim is unavailable. See "
+            "https://muscopy.readthedocs.io/en/latest/mlb_installation.html for installation instructions."
         )
-        ax.text(
-            0.5,
-            0.5,
-            message,
-            ha="center",
-            va="center",
-            fontsize=12,
-            bbox={"boxstyle": "round,pad=0.3", "facecolor": "lightgray"},
-        )
-        ax.set_xlim(0, 1)
-        ax.set_ylim(0, 1)
-        ax.axis("off")
-        plt.title("ODT with MLB Simulation Example")
-        plt.tight_layout()
-        plt.savefig("odt_mlb_simulation_placeholder.png", dpi=150, bbox_inches="tight")
-        plt.show()
         return
 
-    # Setup parameters
-    odt_params, mlb_params, precision = _setup_parameters()
+    odt_params = ODTParameters(
+        na=1.1,
+        wavelength_m=532e-9,
+        img_size_px=512,
+        px_size_m=3.45e-6 * 3 / 180 / 2,
+        n_sol=1.33,
+        na_illumination=1.0,
+    )
     offaxis_center = (200, 200)
     opposite_offaxis_center = (odt_params.img_size_px - offaxis_center[0], odt_params.img_size_px - offaxis_center[1])
-    num_angles = 10  # Number of illumination angles for tomographic acquisition
-
-    # Generate sample (sphere)
-    print("Generating spherical sample...")
-    radius_um = 2.0
     delta_n = 0.02
-    scattering_potential = generate_sphere_potential(mlb_params, radius_um, delta_n, precision=precision)
-
-    print(f"Sample size: {scattering_potential.shape}")
-    print(f"Memory usage: {scattering_potential.nbytes / 1024**2:.1f} MB")
-
-    # Generate holograms
-    target_holograms, ref_holograms = _generate_holograms(
-        odt_params, mlb_params, scattering_potential, offaxis_center, precision, num_angles
+    target_holograms, ref_holograms, _ = simulate_mlb_measurements(
+        odt_params, radius_um=2.0, delta_n=delta_n, num_angles=10, off_axis_center=offaxis_center
     )
 
     # Extract complex field spectra
@@ -545,7 +265,7 @@ def main() -> None:  # noqa: PLR0914
     odt_config = ODTConfig(
         approx_type="Rytov",
         hermite_symmetry=True,
-        precision=precision,
+        precision=ArrayPrecision(),
         edge_size=8,
     )
 

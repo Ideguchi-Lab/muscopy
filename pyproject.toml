@@ -35,6 +35,9 @@ Documentation = "https://muscopy.readthedocs.io"
 Issues = "https://github.com/Ideguchi-Lab/muscopy/issues"
 Changelog = "https://github.com/Ideguchi-Lab/muscopy/blob/main/CHANGELOG.md"
 
+[project.scripts]
+muscopy-generate-hologram = "muscopy.example_holograms:main"
+
 [project.optional-dependencies]
 dev = [
     "mypy==2.1.0",

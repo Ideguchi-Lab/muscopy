@@ -1,0 +1,28 @@
+name: CuPy parity reminder
+
+on:
+  workflow_run:
+    workflows: [pytest]
+    types: [completed]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  remind:
+    if: github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: cupy-parity-${{ github.event.workflow_run.head_repository.id }}-${{ github.event.workflow_run.head_branch }}
+      cancel-in-progress: false
+    steps:
+      # Only the repository's default branch supplies executable code to this job.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check JAX and CuPy changes and update the PR comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/check_cupy_parity.py

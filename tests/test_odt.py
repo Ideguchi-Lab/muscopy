@@ -10,6 +10,7 @@ from jax import Array
 
 from muscopy import odt as odt_module
 from muscopy.cfg import ArrayPrecision
+from muscopy.dh import get_spectrum
 from muscopy.odt import (
     EwaldEmbeddingMode,
     ODTConfig,
@@ -18,6 +19,7 @@ from muscopy.odt import (
     calc_scattering_potential_from_spectrums,
     calc_scattering_spectrums,
     calculate_odt_difference,
+    odt,
     synthesize_spectrum,
 )
 
@@ -793,23 +795,25 @@ class TestCalculateODTDifference:
     [EwaldEmbeddingMode.TRUNCATE, EwaldEmbeddingMode.NEAREST, EwaldEmbeddingMode.LINEAR],
 )
 @pytest.mark.parametrize("mode", ["Forward", "Backward"])
+@pytest.mark.parametrize("img_size_px", [32, (32, 24), (24, 32)])
 def test_synthesize_spectrum_scatter_matches_dense_weight_reference(
     ewald_embedding_mode: EwaldEmbeddingMode,
     mode: str,
+    img_size_px: int | tuple[int, int],
 ) -> None:
     """Test that the scatter-add embedding matches the dense-weight reference."""
     params = ODTParameters(
         na=0.4,
         wavelength_m=1.0,
-        img_size_px=32,
+        img_size_px=img_size_px,
         px_size_m=1.0,
         n_sol=1.33,
         na_illumination=0.3,
     )
     config = ODTConfig(hermite_symmetry=False, ewald_embedding_mode=ewald_embedding_mode)
-    spectrum_size = 2 * params.aperturesize_px + 1
-    shape_3d = (spectrum_size, spectrum_size, params.freq_axial_extent_px)
-    coords = jnp.arange(spectrum_size**2, dtype=jnp.float32).reshape(spectrum_size, spectrum_size)
+    spectrum_size = params.lateral_extent_px_xy
+    shape_3d = (*spectrum_size, params.freq_axial_extent_px)
+    coords = jnp.arange(spectrum_size[0] * spectrum_size[1], dtype=jnp.float32).reshape(spectrum_size)
     scattering_spectrums = [
         ScatteringSpectrum(jnp.asarray(coords + 1.0, dtype=jnp.complex64), (0, 0)),
         ScatteringSpectrum(jnp.asarray(coords * 1j, dtype=jnp.complex64), (2, -1), 0.5 + 0.25j),
@@ -887,3 +891,150 @@ def test_synthesize_spectrum_drops_negative_out_of_range_axial_planes(
 
     assert bool(jnp.allclose(synthesized, expected, rtol=1e-5, atol=1e-5))
     assert not bool(jnp.any(synthesized[:, :, -1]))
+
+
+def test_odt_parameters_rectangular_properties() -> None:
+    """Test per-axis ODT sampling for a rectangular image."""
+    params = ODTParameters(
+        na=0.25,
+        wavelength_m=1.0,
+        img_size_px=(64, 32),
+        px_size_m=1.0,
+        n_sol=1.33,
+        na_illumination=0.2,
+    )
+
+    assert params.aperture_radius_px_xy == (16, 8)
+    assert params.lateral_extent_px_xy == (67, 35)
+    assert params.freq_axial_per_px == pytest.approx(1 / 64)
+    assert params.lateral_scale_xy == pytest.approx((1.0, 2.0))
+    assert params.freq_axial_extent_px == 33
+    assert params.light_freq_axial_px == pytest.approx(1.33 * 64)
+    assert params.imgpx_lateral_m_per_px_xy == pytest.approx((64 / 67, 32 / 35))
+    with pytest.raises(ValueError, match="only defined for square images"):
+        _ = params.imgpx_lateral_m_per_px
+
+
+def test_odt_parameters_square_tuple_matches_int() -> None:
+    """Test that a square tuple image size keeps the scalar ODT sampling."""
+    kwargs = {"na": 1.1, "wavelength_m": 532e-9, "px_size_m": 3.45e-6 / 60, "n_sol": 1.33, "na_illumination": 1.0}
+    from_int = ODTParameters(img_size_px=128, **kwargs)
+    from_tuple = ODTParameters(img_size_px=(128, 128), **kwargs)
+
+    assert from_tuple.lateral_scale_xy == (1.0, 1.0)
+    for name in [
+        "freq_axial_per_px",
+        "light_freq_axial_px",
+        "k_axial_per_px",
+        "freq_axial_extent_px",
+        "imgpx_lateral_m_per_px",
+        "imgpx_axial_m_per_px",
+        "spectrum2cpfield_xy",
+        "cpfield_xy2spectrum",
+        "spectrum2cpfield_z",
+        "cpfield_z2spectrum",
+    ]:
+        assert getattr(from_tuple, name) == getattr(from_int, name)
+    assert from_int.freq_axial_per_px == from_int.freq_per_px
+    assert from_int.light_freq_axial_px == from_int.light_freq_px
+    assert from_int.k_axial_per_px == from_int.k_per_px
+
+
+def test_synthesize_spectrum_rectangular_places_samples_on_physical_ewald_sphere() -> None:
+    """Test that lateral pixels are scaled per axis before computing the axial frequency."""
+    params = ODTParameters(
+        na=0.6,
+        wavelength_m=1.0,
+        img_size_px=(32, 16),
+        px_size_m=1.0,
+        n_sol=1.0,
+        na_illumination=0.5,
+    )
+    extent_x, extent_y = params.lateral_extent_px_xy
+    coord_x, coord_y = 3, 6
+    x_index = coord_x - (-extent_x // 2 + 1)
+    y_index = coord_y - (-extent_y // 2 + 1)
+    spectrum2d = jnp.zeros((extent_x, extent_y), dtype=jnp.complex64).at[x_index, y_index].set(1)
+    freq_x, freq_y = params.freq_per_px_xy
+    light_freq = params.n_sol / params.wavelength_m
+    fz = math.sqrt(light_freq**2 - (coord_x * freq_x) ** 2 - (coord_y * freq_y) ** 2) - light_freq
+    z_index = int(fz / params.freq_axial_per_px) - (-params.freq_axial_extent_px // 2 + 1)
+
+    synthesized = synthesize_spectrum(
+        [ScatteringSpectrum(spectrum2d, (0, 0))],
+        params,
+        ODTConfig(hermite_symmetry=False),
+    )
+
+    assert int(fz / params.freq_axial_per_px) != int(fz / freq_y)
+    nonzero = jnp.argwhere(synthesized != 0)
+    assert nonzero.tolist() == [[x_index, y_index, z_index]]
+
+
+def test_estimate_illumination_vectors_uses_per_axis_center() -> None:
+    """Test that illumination vectors are measured from the center of each spectrum axis."""
+    ref_spectrum = jnp.zeros((33, 17), dtype=jnp.complex64).at[18, 6].set(1)
+
+    vectors = odt_module._estimate_illumination_vectors([ref_spectrum], [ref_spectrum])  # noqa: SLF001
+
+    assert vectors == [(2, -2)]
+
+
+@pytest.mark.parametrize("approx_type", ["Born", "Rytov"])
+@pytest.mark.parametrize(
+    "ewald_embedding_mode",
+    [EwaldEmbeddingMode.TRUNCATE, EwaldEmbeddingMode.NEAREST, EwaldEmbeddingMode.LINEAR],
+)
+def test_odt_rectangular_image_matches_periodically_extended_square_image(
+    approx_type: str,
+    ewald_embedding_mode: EwaldEmbeddingMode,
+) -> None:
+    """Test that a rectangular ODT matches the square ODT of the same object repeated along axis 1.
+
+    Both images share the axis-0 sampling, and repeating the rectangular field twice along axis 1
+    makes the square spectrum the rectangular spectrum on every other axis-1 frequency. The
+    reconstructions therefore agree on the shared axis-1 origin plane.
+    """
+    rect_size, square_size = (64, 32), 64
+    tilts_rect = [(0, 0), (3, 2), (-2, -3)]
+    tilts_square = [(0, 0), (3, 4), (-2, -6)]
+    config = ODTConfig(
+        approx_type=approx_type,
+        linear_approx=True,
+        gradient_correction=False,
+        ewald_embedding_mode=ewald_embedding_mode,
+    )
+
+    def reconstruct(img_size_px: int | tuple[int, int], tilts: Sequence[tuple[int, int]]) -> Array:
+        params = ODTParameters(
+            na=0.25,
+            wavelength_m=1.0,
+            img_size_px=img_size_px,
+            px_size_m=1.0,
+            n_sol=1.33,
+            na_illumination=0.2,
+        )
+        height, width = params.img_shape_px
+        xx, yy = jnp.meshgrid(jnp.arange(height), jnp.arange(width), indexing="ij")
+        dist_x = jnp.minimum(xx, height - xx)
+        dist_y = jnp.minimum(yy % rect_size[1], rect_size[1] - yy % rect_size[1])
+        phase = 0.05 * jnp.exp(-(dist_x**2 + dist_y**2) / (2 * 3.0**2))
+        cp_spectrums = []
+        ref_cp_spectrums = []
+        for tilt in tilts:
+            illumination = jnp.exp(2j * jnp.pi * (tilt[0] * xx / height + tilt[1] * yy / width))
+            ft_field = jnp.fft.fftshift(jnp.fft.fft2(jnp.exp(1j * phase) * illumination))
+            ft_reference = jnp.fft.fftshift(jnp.fft.fft2(illumination))
+            cp_spectrums.append(get_spectrum(ft_field, params, params.img_center))
+            ref_cp_spectrums.append(get_spectrum(ft_reference, params, params.img_center))
+        refractive_index, _ = odt(cp_spectrums, ref_cp_spectrums, params, config)
+        return refractive_index
+
+    rect = reconstruct(rect_size, tilts_rect)
+    square = reconstruct(square_size, tilts_square)
+
+    assert rect.shape == (67, 35, 33)
+    assert square.shape == (67, 67, 33)
+    signal = jnp.max(jnp.abs(jnp.real(square[:, 0, :]) - 1.33))
+    assert signal > 1e-5
+    assert bool(jnp.allclose(rect[:, 0, :], square[:, 0, :], rtol=0, atol=1e-6))

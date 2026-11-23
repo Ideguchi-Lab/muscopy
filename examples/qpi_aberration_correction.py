@@ -43,8 +43,8 @@ print_all_parameters(params, show_properties=True)
 
 # Create coordinate grids for the full image
 xx_full, yy_full = jnp.meshgrid(
-    jnp.arange(params.img_size_px) - params.img_center[0],
-    jnp.arange(params.img_size_px) - params.img_center[1],
+    jnp.arange(params.square_img_size_px) - params.img_center[0],
+    jnp.arange(params.square_img_size_px) - params.img_center[1],
     indexing="ij",
 )
 
@@ -77,9 +77,9 @@ pupil_function = aberration_function[
 off_axis_center = (150, 150)
 
 radius = 30
-sample_disk = make_disk(params.img_center, radius, params.img_size_px)
+sample_disk = make_disk(params.img_center, radius, params.square_img_size_px)
 sample_array = jnp.exp(2j * math.pi / 3 * sample_disk)
-low_pass = make_disk(params.img_center, params.aperturesize_px // 2, params.img_size_px)
+low_pass = make_disk(params.img_center, params.aperturesize_px // 2, params.square_img_size_px)
 ft_sample = jnp.fft.fftshift(jnp.fft.fft2(sample_array))
 ft_sample_aberration = ft_sample * aberration_function
 sample_array = jnp.fft.ifft2(jnp.fft.ifftshift(ft_sample))
@@ -89,16 +89,16 @@ sample_array_aberration = jnp.fft.ifft2(jnp.fft.ifftshift(ft_sample_aberration))
 sample_array_aberration /= jnp.sum(jnp.abs(sample_array_aberration) ** 2) ** 0.5
 
 xx, yy = jnp.meshgrid(
-    jnp.arange(params.img_size_px),
-    jnp.arange(params.img_size_px),
+    jnp.arange(params.square_img_size_px),
+    jnp.arange(params.square_img_size_px),
     indexing="ij",
 )
 ref_array = jnp.exp(
     -2j
     * jnp.pi
     * (
-        xx * (off_axis_center[0] - params.img_center[0]) / (params.img_size_px)
-        + yy * (off_axis_center[1] - params.img_center[1]) / (params.img_size_px)
+        xx * (off_axis_center[0] - params.img_center[0]) / (params.square_img_size_px)
+        + yy * (off_axis_center[1] - params.img_center[1]) / (params.square_img_size_px)
     )
 )
 ref_array /= jnp.sum(jnp.abs(ref_array) ** 2) ** 0.5

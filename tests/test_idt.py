@@ -105,7 +105,9 @@ def test_idt_aperture_radii_document_intensity_and_coherent_support() -> None:
 def test_fourier_transform_masks_to_intensity_support_radius() -> None:
     params = _small_idt_params()
     precision = ArrayPrecision()
-    image_xy = jnp.arange(params.img_size_px**2, dtype=jnp.float32).reshape(params.img_size_px, params.img_size_px)
+    image_xy = jnp.arange(params.square_img_size_px**2, dtype=jnp.float32).reshape(
+        params.square_img_size_px, params.square_img_size_px
+    )
     kx, ky = _make_frequency_grid_xy(params, precision=precision)
     expected_support = kx**2 + ky**2 <= params.intensity_support_radius_px**2
 
@@ -307,8 +309,8 @@ def test_compute_idt_rejects_non_xy_image_shape() -> None:
 
 def test_compute_idt_rejects_wrong_xy_image_size() -> None:
     params = _small_idt_params()
-    bad_image = jnp.ones((params.img_size_px - 1, params.img_size_px), dtype=jnp.float32)
-    reference = jnp.ones((params.img_size_px, params.img_size_px), dtype=jnp.float32)
+    bad_image = jnp.ones((params.square_img_size_px - 1, params.square_img_size_px), dtype=jnp.float32)
+    reference = jnp.ones((params.square_img_size_px, params.square_img_size_px), dtype=jnp.float32)
 
     with pytest.raises(ValueError, match=r"shape \(8, 8\) in \[x, y\] order"):
         compute_idt(params, [bad_image], [reference], [(0.0, 0.0)])
@@ -625,3 +627,18 @@ def test_compute_idt_rejects_mutated_64_bit_precision(monkeypatch: pytest.Monkey
 
     with pytest.raises(ValueError, match="64-bit precision requires JAX x64 support"):
         compute_idt(params, [], [], [], config=config)
+
+
+def test_validate_idt_params_rejects_rectangular_image() -> None:
+    params = IDTParameters(
+        na=0.1,
+        wavelength_m=1.0,
+        img_size_px=(8, 16),
+        px_size_m=1.0,
+        n_sol=1.33,
+        na_illumination=0.1,
+        num_z_slices=2,
+    )
+
+    with pytest.raises(ValueError, match="IDT requires a square image"):
+        _validate_idt_params(params)

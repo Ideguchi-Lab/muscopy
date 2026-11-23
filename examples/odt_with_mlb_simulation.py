@@ -124,7 +124,7 @@ class HologramSetGenerator:
 
         target_holograms = []
         reference_holograms = []
-        hologram_shape = (self.odt_params.img_size_px, self.odt_params.img_size_px)
+        hologram_shape = (self.odt_params.square_img_size_px, self.odt_params.square_img_size_px)
 
         print("Generating holograms...")
         for angle in tqdm(self.angles):
@@ -518,7 +518,10 @@ def main() -> None:  # noqa: PLR0914
     # Setup parameters
     odt_params, mlb_params, precision = _setup_parameters()
     offaxis_center = (200, 200)
-    opposite_offaxis_center = (odt_params.img_size_px - offaxis_center[0], odt_params.img_size_px - offaxis_center[1])
+    opposite_offaxis_center = (
+        odt_params.square_img_size_px - offaxis_center[0],
+        odt_params.square_img_size_px - offaxis_center[1],
+    )
     num_angles = 10  # Number of illumination angles for tomographic acquisition
 
     # Generate sample (sphere)

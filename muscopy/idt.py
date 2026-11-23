@@ -5,10 +5,11 @@ from __future__ import annotations
 import dataclasses
 import warnings
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
+import jax
 import jax.numpy as jnp
-from jax import Array
+from jax import Array, lax
 
 from muscopy.cfg import ArrayPrecision
 from muscopy.odt import ODTParameters
@@ -489,6 +490,141 @@ def fourier_transform(
     return g_tilde_list
 
 
+class _TransferGrid(NamedTuple):
+    """Frequency grids and sampling scalars for IDT transfer functions.
+
+    A jax pytree whose leaves are all traced, so a single jit compilation is
+    reused across parameter values that share the same array shapes.
+    """
+
+    kx: Array
+    ky: Array
+    light_freq_px: Array
+    k_per_px: Array
+    freq_per_px: Array
+    pupil_radius_px: Array
+    slice_thickness_m: Array
+
+
+def _make_transfer_grid(params: IDTParameters, precision: ArrayPrecision) -> _TransferGrid:
+    """Build the transfer-function grid pytree from IDT parameters.
+
+    Returns
+    -------
+    _TransferGrid
+        Frequency grids and sampling scalars as arrays of the configured
+        float precision.
+    """
+    kx, ky = _make_frequency_grid_xy(params, precision=precision)
+    dtype = precision.float_precision()
+    return _TransferGrid(
+        kx=kx,
+        ky=ky,
+        light_freq_px=jnp.asarray(params.light_freq_px, dtype=dtype),
+        k_per_px=jnp.asarray(params.k_per_px, dtype=dtype),
+        freq_per_px=jnp.asarray(params.freq_per_px, dtype=dtype),
+        pupil_radius_px=jnp.asarray(params.coherent_pupil_radius_px, dtype=dtype),
+        slice_thickness_m=jnp.asarray(params.imgpx_axial_m_per_px, dtype=dtype),
+    )
+
+
+def _batched_green_func(grid: _TransferGrid, u_shifts: Array, z: float | Array) -> Array:
+    """Green's functions of all illumination shifts as one [x, y, angle] stack.
+
+    Parameters
+    ----------
+    grid : _TransferGrid
+        Frequency grids and sampling scalars.
+    u_shifts : Array
+        Illumination shifts in frequency-pixel units with shape ``(N, 2)``.
+    z : float | Array
+        The axial position in meters. May be a traced scalar.
+
+    Returns
+    -------
+    Array
+        Green's function stack with shape ``(x, y, N)``.
+    """
+    ux = grid.kx[..., jnp.newaxis] + u_shifts[:, 0]
+    uy = grid.ky[..., jnp.newaxis] + u_shifts[:, 1]
+    uz_squared = grid.light_freq_px**2 - ux**2 - uy**2
+
+    in_shifted_pupil = ux**2 + uy**2 <= grid.pupil_radius_px**2
+    propagating = uz_squared > 0
+    valid = in_shifted_pupil & propagating
+
+    uz = jnp.sqrt(jnp.maximum(uz_squared, 0.0))
+    green_scale = 1.0 / (4.0 * jnp.pi * grid.freq_per_px)
+    return jnp.where(
+        valid,
+        green_scale * jnp.exp(-1j * uz * z * grid.k_per_px) / jnp.maximum(uz, _GREEN_FUNC_DENOMINATOR_EPSILON),
+        0.0 + 0.0j,
+    )
+
+
+def _batched_pupil_func(grid: _TransferGrid, u_shifts: Array) -> Array:
+    """Pupil functions of all illumination shifts as one [x, y, angle] stack.
+
+    Parameters
+    ----------
+    grid : _TransferGrid
+        Frequency grids and sampling scalars.
+    u_shifts : Array
+        Illumination shifts in frequency-pixel units with shape ``(N, 2)``.
+
+    Returns
+    -------
+    Array
+        Pupil function stack with shape ``(x, y, N)``.
+    """
+    ux = grid.kx[..., jnp.newaxis] + u_shifts[:, 0]
+    uy = grid.ky[..., jnp.newaxis] + u_shifts[:, 1]
+    return ux**2 + uy**2 <= grid.pupil_radius_px**2
+
+
+def _batched_transfer_funcs(
+    grid: _TransferGrid,
+    u_illumination: Array,
+    u_illumination_z: Array,
+    z: float | Array,
+    incident_intensities: Array,
+) -> tuple[Array, Array]:
+    """Real and imaginary transfer functions of all angles at one axial position.
+
+    Parameters
+    ----------
+    grid : _TransferGrid
+        Frequency grids and sampling scalars.
+    u_illumination : Array
+        Illumination angles in frequency-pixel units with shape ``(N, 2)``.
+    u_illumination_z : Array
+        Axial illumination components with shape ``(N,)``.
+    z : float | Array
+        The axial position in meters. May be a traced scalar.
+    incident_intensities : Array
+        Incident intensities with shape ``(N,)``.
+
+    Returns
+    -------
+    tuple[Array, Array]
+        Real-part and imaginary-part transfer function stacks with shape
+        ``(x, y, N)``.
+    """
+    green_minus = _batched_green_func(grid, -u_illumination, z)
+    pupil_minus = _batched_pupil_func(grid, -u_illumination)
+    green_plus = _batched_green_func(grid, u_illumination, z)
+    pupil_plus = _batched_pupil_func(grid, u_illumination)
+
+    axial_phase = jnp.exp(1j * u_illumination_z * z * grid.k_per_px)
+    first_term = green_minus * axial_phase * pupil_minus
+    second_term = jnp.conjugate(green_plus) * jnp.conjugate(axial_phase) * pupil_plus
+
+    common_factor = (grid.k_per_px * grid.light_freq_px) ** 2 / 2 * grid.slice_thickness_m * incident_intensities
+    transfer_re = 1j * common_factor * (first_term - second_term)
+    transfer_im = -common_factor * (first_term + second_term)
+    return transfer_re, transfer_im
+
+
 def _make_green_func(
     params: IDTParameters,
     u_shift: tuple[float, float],
@@ -517,25 +653,10 @@ def _make_green_func(
     if precision is None:
         precision = ArrayPrecision()
     precision.validate()
-    complex_dtype = precision.complex_precision()
-    kx, ky = _make_frequency_grid_xy(params, precision=precision)
-    ux = kx + u_shift[0]
-    uy = ky + u_shift[1]
-    uz_squared = params.light_freq_px**2 - ux**2 - uy**2
-
-    pupil_radius_px = params.coherent_pupil_radius_px
-    in_shifted_pupil = ux**2 + uy**2 <= pupil_radius_px**2
-    propagating = uz_squared > 0
-    valid = in_shifted_pupil & propagating
-
-    uz = jnp.sqrt(jnp.maximum(uz_squared, 0.0))
-    green_scale = 1.0 / (4.0 * jnp.pi * params.freq_per_px)
-    green_func = jnp.where(
-        valid,
-        green_scale * jnp.exp(-1j * uz * z * params.k_per_px) / jnp.maximum(uz, _GREEN_FUNC_DENOMINATOR_EPSILON),
-        0.0 + 0.0j,
-    )
-    return jnp.asarray(green_func, dtype=complex_dtype)
+    grid = _make_transfer_grid(params, precision)
+    u_shifts = jnp.asarray([u_shift], dtype=precision.float_precision())
+    green_func = _batched_green_func(grid, u_shifts, z)[..., 0]
+    return jnp.asarray(green_func, dtype=precision.complex_precision())
 
 
 def _make_pupil_func(
@@ -563,12 +684,194 @@ def _make_pupil_func(
     if precision is None:
         precision = ArrayPrecision()
     precision.validate()
-    kx, ky = _make_frequency_grid_xy(params, precision=precision)
-    ux = kx + u_shift[0]
-    uy = ky + u_shift[1]
-    pupil_radius_px = params.coherent_pupil_radius_px
-    pupil = ux**2 + uy**2 <= pupil_radius_px**2
+    grid = _make_transfer_grid(params, precision)
+    u_shifts = jnp.asarray([u_shift], dtype=precision.float_precision())
+    pupil = _batched_pupil_func(grid, u_shifts)[..., 0]
     return jnp.asarray(pupil, dtype=precision.float_precision())
+
+
+def _validate_illumination_angle(params: IDTParameters, u_illumination: tuple[float, float]) -> None:
+    """Validate that an illumination angle propagates within tolerance.
+
+    Raises
+    ------
+    ValueError
+        If the illumination angle results in an invalid z-component.
+    """
+    u_ill_x, u_ill_y = u_illumination
+    u_ill_z_squared = params.light_freq_px**2 - u_ill_x**2 - u_ill_y**2
+    if u_ill_z_squared < -_ILLUMINATION_TOL:
+        msg = f"Invalid illumination angle {u_illumination}: u_ill_z_squared must be non-negative."
+        raise ValueError(msg)
+
+
+def _make_illumination_arrays(
+    params: IDTParameters,
+    u_illumination_list: Sequence[tuple[float, float]],
+    precision: ArrayPrecision,
+) -> tuple[Array, Array]:
+    """Build the illumination angle and axial-component arrays.
+
+    The axial components are squared in double precision before conversion so
+    the values match the scalar `transfer_func_re` / `transfer_func_im` path.
+
+    Returns
+    -------
+    tuple[Array, Array]
+        Illumination angles with shape ``(N, 2)`` and axial components with
+        shape ``(N,)``.
+    """
+    dtype = precision.float_precision()
+    u_ill = jnp.asarray(u_illumination_list, dtype=dtype).reshape(-1, 2)
+    u_ill_z_squared = jnp.asarray(
+        [params.light_freq_px**2 - u_x**2 - u_y**2 for u_x, u_y in u_illumination_list],
+        dtype=dtype,
+    )
+    u_ill_z = jnp.sqrt(jnp.maximum(u_ill_z_squared, 0.0))
+    return u_ill, u_ill_z
+
+
+def _solve_coupled_permittivity(  # noqa: PLR0914
+    g_tilde: Array,
+    h_normalized_re: Array,
+    h_normalized_im: Array,
+    solver_terms: _PermittivitySolverTerms,
+) -> tuple[Array, Array]:
+    """Solve the regularized 2x2 normal equation at each spatial frequency.
+
+    Parameters
+    ----------
+    g_tilde : Array
+        Fourier-transformed intensity contrast stack with shape ``(x, y, N)``.
+    h_normalized_re : Array
+        Intensity-normalized real-part transfer functions, shape ``(x, y, N)``.
+    h_normalized_im : Array
+        Intensity-normalized imaginary-part transfer functions, shape ``(x, y, N)``.
+    solver_terms : _PermittivitySolverTerms
+        Regularization and stability terms.
+
+    Returns
+    -------
+    tuple[Array, Array]
+        The permittivity changes Δε_Re and Δε_Im of one slice.
+    """
+    alpha = solver_terms.alpha
+    beta = solver_terms.beta
+    normalization_epsilon = solver_terms.normalization_epsilon
+
+    # Normalize transfer functions for the linear solve, then restore the
+    # solution scale below.
+    h_norm_scale = jnp.maximum(jnp.max(jnp.abs(h_normalized_re)), jnp.max(jnp.abs(h_normalized_im)))
+    h_norm_scale = jnp.where(h_norm_scale < normalization_epsilon, 1.0, h_norm_scale)
+
+    h_normalized_re_scaled = h_normalized_re / h_norm_scale
+    h_normalized_im_scaled = h_normalized_im / h_norm_scale
+
+    sum_h_re_scaled = jnp.sum(jnp.abs(h_normalized_re_scaled) ** 2, axis=-1)
+    sum_h_im_scaled = jnp.sum(jnp.abs(h_normalized_im_scaled) ** 2, axis=-1)
+
+    # Scale regularization parameters accordingly
+    alpha_scaled = alpha / (h_norm_scale**2)
+    beta_scaled = beta / (h_norm_scale**2)
+
+    term1 = (sum_h_re_scaled + alpha_scaled) * (sum_h_im_scaled + beta_scaled)
+    term2 = jnp.abs(jnp.sum(jnp.conjugate(h_normalized_re_scaled) * h_normalized_im_scaled, axis=-1)) ** 2
+    scale_factor = jnp.maximum(jnp.real(term1 - term2), 0.0)
+    scale_factor_floor = normalization_epsilon + solver_terms.determinant_rel_floor * jnp.real(term1)
+    scale_factor_safe = jnp.maximum(scale_factor, scale_factor_floor)
+    valid_support = (sum_h_re_scaled + sum_h_im_scaled) > normalization_epsilon
+
+    # Scale the epsilon calculations accordingly
+    eps_re_first_term_scaled = (sum_h_im_scaled + beta_scaled) * jnp.sum(
+        jnp.conjugate(h_normalized_re_scaled) * g_tilde, axis=-1
+    )
+    eps_re_second_term_scaled = jnp.sum(
+        jnp.conjugate(h_normalized_re_scaled) * h_normalized_im_scaled, axis=-1
+    ) * jnp.sum(jnp.conjugate(h_normalized_im_scaled) * g_tilde, axis=-1)
+    eps_im_first_term_scaled = (sum_h_re_scaled + alpha_scaled) * jnp.sum(
+        jnp.conjugate(h_normalized_im_scaled) * g_tilde, axis=-1
+    )
+    eps_im_second_term_scaled = jnp.sum(
+        jnp.conjugate(h_normalized_im_scaled) * h_normalized_re_scaled, axis=-1
+    ) * jnp.sum(jnp.conjugate(h_normalized_re_scaled) * g_tilde, axis=-1)
+
+    eps_re_scaled = jnp.where(
+        valid_support,
+        (eps_re_first_term_scaled - eps_re_second_term_scaled) / scale_factor_safe,
+        0.0 + 0.0j,
+    )
+    eps_im_scaled = jnp.where(
+        valid_support,
+        (eps_im_first_term_scaled - eps_im_second_term_scaled) / scale_factor_safe,
+        0.0 + 0.0j,
+    )
+
+    return eps_re_scaled / h_norm_scale, eps_im_scaled / h_norm_scale
+
+
+class _PermittivitySolverTerms(NamedTuple):
+    """Regularization and stability terms of the permittivity solver. A jax pytree."""
+
+    alpha: float | Array
+    beta: float | Array
+    determinant_rel_floor: float | Array
+    normalization_epsilon: float | Array
+
+
+@jax.jit
+def _solve_permittivity_z_stack(
+    g_tilde: Array,
+    grid: _TransferGrid,
+    u_illumination: Array,
+    u_illumination_z: Array,
+    incident_intensities: Array,
+    z_positions: Array,
+    solver_terms: _PermittivitySolverTerms,
+) -> tuple[Array, Array]:
+    """Solve the coupled permittivity inverse for every axial slice.
+
+    The z loop runs as `jax.lax.map` inside one jit compilation, so the
+    transfer-function construction and the 2x2 solves of all slices execute
+    without per-slice dispatch overhead.
+
+    Parameters
+    ----------
+    g_tilde : Array
+        Fourier-transformed intensity contrast stack with shape ``(x, y, N)``.
+    grid : _TransferGrid
+        Frequency grids and sampling scalars.
+    u_illumination : Array
+        Illumination angles in frequency-pixel units with shape ``(N, 2)``.
+    u_illumination_z : Array
+        Axial illumination components with shape ``(N,)``.
+    incident_intensities : Array
+        Incident intensities with shape ``(N,)``.
+    z_positions : Array
+        Axial positions in meters with shape ``(num_z_slices,)``.
+    solver_terms : _PermittivitySolverTerms
+        Regularization and stability terms.
+
+    Returns
+    -------
+    tuple[Array, Array]
+        The permittivity changes Δε_Re and Δε_Im with shape
+        ``(num_z_slices, x, y)``.
+    """
+
+    def solve_one_z(z: Array) -> tuple[Array, Array]:
+        transfer_re, transfer_im = _batched_transfer_funcs(
+            grid,
+            u_illumination,
+            u_illumination_z,
+            z,
+            incident_intensities,
+        )
+        h_normalized_re = transfer_re / incident_intensities
+        h_normalized_im = transfer_im / incident_intensities
+        return _solve_coupled_permittivity(g_tilde, h_normalized_re, h_normalized_im, solver_terms)
+
+    eps_re_zxy, eps_im_zxy = lax.map(solve_one_z, z_positions)
+    return jnp.asarray(eps_re_zxy), jnp.asarray(eps_im_zxy)
 
 
 def transfer_func_re(
@@ -612,28 +915,11 @@ def transfer_func_re(
     if precision is None:
         precision = ArrayPrecision()
     precision.validate()
-    u_ill_z = jnp.sqrt(jnp.maximum(u_ill_z_squared, 0.0))
-    first_term = (
-        _make_green_func(params, (-u_ill_x, -u_ill_y), z, precision=precision)
-        * jnp.exp(1j * u_ill_z * z * params.k_per_px)
-        * _make_pupil_func(params, (-u_ill_x, -u_ill_y), precision=precision)
-    )
-    second_term = (
-        jnp.conjugate(_make_green_func(params, (u_ill_x, u_ill_y), z, precision=precision))
-        * jnp.exp(-1j * u_ill_z * z * params.k_per_px)
-        * jnp.conjugate(_make_pupil_func(params, (u_ill_x, u_ill_y), precision=precision))
-    )
-
-    slice_thickness_m = params.imgpx_axial_m_per_px
-    transfer_func = (
-        1j
-        * (params.k_per_px * params.light_freq_px) ** 2
-        / 2
-        * slice_thickness_m
-        * incident_intensity
-        * (first_term - second_term)
-    )
-    return jnp.asarray(transfer_func, dtype=precision.complex_precision())
+    grid = _make_transfer_grid(params, precision)
+    u_ill, u_ill_z = _make_illumination_arrays(params, [u_illumination], precision)
+    intensities = jnp.asarray([incident_intensity], dtype=precision.float_precision())
+    transfer_re, _ = _batched_transfer_funcs(grid, u_ill, u_ill_z, z, intensities)
+    return jnp.asarray(transfer_re[..., 0], dtype=precision.complex_precision())
 
 
 def transfer_func_im(
@@ -669,35 +955,19 @@ def transfer_func_im(
     ValueError
         If illumination angle results in invalid z-component.
     """
-    if precision is None:
-        precision = ArrayPrecision()
-    precision.validate()
     u_ill_x, u_ill_y = u_illumination
     u_ill_z_squared = params.light_freq_px**2 - u_ill_x**2 - u_ill_y**2
     if u_ill_z_squared < -_ILLUMINATION_TOL:
         msg = f"Invalid illumination angle {u_illumination}: u_ill_z_squared must be non-negative."
         raise ValueError(msg)
-    u_ill_z = jnp.sqrt(jnp.maximum(u_ill_z_squared, 0.0))
-    first_term = (
-        _make_green_func(params, (-u_ill_x, -u_ill_y), z, precision=precision)
-        * jnp.exp(1j * u_ill_z * z * params.k_per_px)
-        * _make_pupil_func(params, (-u_ill_x, -u_ill_y), precision=precision)
-    )
-    second_term = (
-        jnp.conjugate(_make_green_func(params, (u_ill_x, u_ill_y), z, precision=precision))
-        * jnp.exp(-1j * u_ill_z * z * params.k_per_px)
-        * jnp.conjugate(_make_pupil_func(params, (u_ill_x, u_ill_y), precision=precision))
-    )
-
-    slice_thickness_m = params.imgpx_axial_m_per_px
-    transfer_func = (
-        -((params.light_freq_px * params.k_per_px) ** 2)
-        / 2
-        * slice_thickness_m
-        * incident_intensity
-        * (first_term + second_term)
-    )
-    return jnp.asarray(transfer_func, dtype=precision.complex_precision())
+    if precision is None:
+        precision = ArrayPrecision()
+    precision.validate()
+    grid = _make_transfer_grid(params, precision)
+    u_ill, u_ill_z = _make_illumination_arrays(params, [u_illumination], precision)
+    intensities = jnp.asarray([incident_intensity], dtype=precision.float_precision())
+    _, transfer_im = _batched_transfer_funcs(grid, u_ill, u_ill_z, z, intensities)
+    return jnp.asarray(transfer_im[..., 0], dtype=precision.complex_precision())
 
 
 def _validate_led_illumination_intensities(led_illumination_intensities: Sequence[float]) -> None:
@@ -707,7 +977,7 @@ def _validate_led_illumination_intensities(led_illumination_intensities: Sequenc
             raise ValueError(msg)
 
 
-def compute_permittivity(  # noqa: PLR0914
+def compute_permittivity(
     params: IDTParameters,
     g_tilde_list: Sequence[Array],
     u_illumination_list: Sequence[tuple[float, float]],
@@ -797,55 +1067,13 @@ def compute_permittivity(  # noqa: PLR0914
 
     g_tilde = jnp.asarray(jnp.stack(g_tilde_list, axis=-1), dtype=complex_dtype)
 
-    # Normalize transfer functions for the linear solve, then restore the
-    # solution scale below.
-    h_norm_scale = jnp.maximum(jnp.max(jnp.abs(h_normalized_re)), jnp.max(jnp.abs(h_normalized_im)))
-    h_norm_scale = jnp.where(h_norm_scale < normalization_epsilon, 1.0, h_norm_scale)
-
-    h_normalized_re_scaled = h_normalized_re / h_norm_scale
-    h_normalized_im_scaled = h_normalized_im / h_norm_scale
-
-    sum_h_re_scaled = jnp.sum(jnp.abs(h_normalized_re_scaled) ** 2, axis=-1)
-    sum_h_im_scaled = jnp.sum(jnp.abs(h_normalized_im_scaled) ** 2, axis=-1)
-
-    # Scale regularization parameters accordingly
-    alpha_scaled = alpha / (h_norm_scale**2)
-    beta_scaled = beta / (h_norm_scale**2)
-
-    term1 = (sum_h_re_scaled + alpha_scaled) * (sum_h_im_scaled + beta_scaled)
-    term2 = jnp.abs(jnp.sum(jnp.conjugate(h_normalized_re_scaled) * h_normalized_im_scaled, axis=-1)) ** 2
-    scale_factor = jnp.maximum(jnp.real(term1 - term2), 0.0)
-    scale_factor_floor = normalization_epsilon + determinant_rel_floor * jnp.real(term1)
-    scale_factor_safe = jnp.maximum(scale_factor, scale_factor_floor)
-    valid_support = (sum_h_re_scaled + sum_h_im_scaled) > normalization_epsilon
-
-    # Scale the epsilon calculations accordingly
-    eps_re_first_term_scaled = (sum_h_im_scaled + beta_scaled) * jnp.sum(
-        jnp.conjugate(h_normalized_re_scaled) * g_tilde, axis=-1
+    solver_terms = _PermittivitySolverTerms(
+        alpha=alpha,
+        beta=beta,
+        determinant_rel_floor=determinant_rel_floor,
+        normalization_epsilon=normalization_epsilon,
     )
-    eps_re_second_term_scaled = jnp.sum(
-        jnp.conjugate(h_normalized_re_scaled) * h_normalized_im_scaled, axis=-1
-    ) * jnp.sum(jnp.conjugate(h_normalized_im_scaled) * g_tilde, axis=-1)
-    eps_im_first_term_scaled = (sum_h_re_scaled + alpha_scaled) * jnp.sum(
-        jnp.conjugate(h_normalized_im_scaled) * g_tilde, axis=-1
-    )
-    eps_im_second_term_scaled = jnp.sum(
-        jnp.conjugate(h_normalized_im_scaled) * h_normalized_re_scaled, axis=-1
-    ) * jnp.sum(jnp.conjugate(h_normalized_re_scaled) * g_tilde, axis=-1)
-
-    eps_re_scaled = jnp.where(
-        valid_support,
-        (eps_re_first_term_scaled - eps_re_second_term_scaled) / scale_factor_safe,
-        0.0 + 0.0j,
-    )
-    eps_im_scaled = jnp.where(
-        valid_support,
-        (eps_im_first_term_scaled - eps_im_second_term_scaled) / scale_factor_safe,
-        0.0 + 0.0j,
-    )
-
-    eps_re = eps_re_scaled / h_norm_scale
-    eps_im = eps_im_scaled / h_norm_scale
+    eps_re, eps_im = _solve_coupled_permittivity(g_tilde, h_normalized_re, h_normalized_im, solver_terms)
 
     return jnp.asarray(eps_re, dtype=complex_dtype), jnp.asarray(eps_im, dtype=complex_dtype)
 
@@ -989,31 +1217,45 @@ def compute_idt(  # noqa: PLR0914
 
     # STEP 5: Solve inverse problem
 
-    aperture_size = 2 * params.aperturesize_px + 1
-    eps_re_xyz = jnp.zeros((aperture_size, aperture_size, params.num_z_slices), dtype=complex_dtype)
-    eps_im_xyz = jnp.zeros((aperture_size, aperture_size, params.num_z_slices), dtype=complex_dtype)
+    for u_illumination in u_illumination_list:
+        _validate_illumination_angle(params, u_illumination)
 
-    led_illumination_intensities = [
-        float(jnp.mean(ref_image)) for ref_image in ref_intensity_images
-    ]  # Assuming uniform intensity for simplicity
+    # Assuming uniform intensity for simplicity. The per-image means are
+    # reduced with one batched mean and one device-to-host transfer.
+    intensity_values = jax.device_get(jnp.mean(jnp.stack(ref_intensity_images), axis=(1, 2)))
+    led_illumination_intensities = [float(intensity) for intensity in intensity_values]
     _validate_led_illumination_intensities(led_illumination_intensities)
 
-    for idx_z in range(params.num_z_slices):
-        z = _make_z_position(params, idx_z, config)
-        eps_re, eps_im = compute_permittivity(
-            params,
-            g_tilde_list,
-            u_illumination_list,
-            led_illumination_intensities,
-            z=z,
-            alpha=alpha,
-            beta=beta,
-            precision=config.precision,
-            determinant_rel_floor=config.determinant_rel_floor,
-            normalization_epsilon=config.normalization_epsilon,
-        )
-        eps_re_xyz = eps_re_xyz.at[:, :, idx_z].set(eps_re)
-        eps_im_xyz = eps_im_xyz.at[:, :, idx_z].set(eps_im)
+    grid = _make_transfer_grid(params, config.precision)
+    u_illumination_array, u_illumination_z = _make_illumination_arrays(
+        params,
+        u_illumination_list,
+        config.precision,
+    )
+    incident_intensities = jnp.asarray(led_illumination_intensities, dtype=float_dtype)
+    z_positions = jnp.asarray(
+        [_make_z_position(params, idx_z, config) for idx_z in range(params.num_z_slices)],
+        dtype=float_dtype,
+    )
+    g_tilde = jnp.asarray(jnp.stack(g_tilde_list, axis=-1), dtype=complex_dtype)
+    solver_terms = _PermittivitySolverTerms(
+        alpha=alpha,
+        beta=beta,
+        determinant_rel_floor=config.determinant_rel_floor,
+        normalization_epsilon=config.normalization_epsilon,
+    )
+
+    eps_re_zxy, eps_im_zxy = _solve_permittivity_z_stack(
+        g_tilde,
+        grid,
+        u_illumination_array,
+        u_illumination_z,
+        incident_intensities,
+        z_positions,
+        solver_terms,
+    )
+    eps_re_xyz = jnp.asarray(jnp.moveaxis(eps_re_zxy, 0, -1), dtype=complex_dtype)
+    eps_im_xyz = jnp.asarray(jnp.moveaxis(eps_im_zxy, 0, -1), dtype=complex_dtype)
 
     eps_re_xyz_spatial_complex = jnp.fft.ifft2(
         jnp.fft.ifftshift(eps_re_xyz, axes=(0, 1)),

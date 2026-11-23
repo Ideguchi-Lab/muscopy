@@ -41,6 +41,23 @@ Install documentation dependencies when building docs locally.
 uv sync --extra doc
 ```
 
+## Optional CuPy support
+
+Install the CuPy extra for CUDA 12 environments.
+
+```sh
+uv sync --extra cupy
+```
+
+Import CuPy helpers from `muscopy.cuda` submodules.
+
+```python
+from muscopy.cuda.dh import offaxis_dh
+from muscopy.cuda.phase_noise import calc_visibility
+from muscopy.cuda.qpi import mip_qpi, qpi
+from muscopy.cuda.qpi_utils import unwrap_phase
+```
+
 ## Optional MLB simulation examples
 
 `examples/odt_with_mlb_simulation.py` and

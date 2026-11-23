@@ -10,11 +10,11 @@ Demonstrate the unwrap phase functionality of the muscopy library.
 import jax
 import matplotlib.pyplot as plt
 import numpy as np
+from muscopy_example_data.holograms import gaussian_phase_object, off_axis_holograms
 from numpy.typing import NDArray
 from skimage.restoration import unwrap_phase as skimage_unwrap_phase
 
 from muscopy.dh import MuParameters, print_all_parameters
-from muscopy.example_holograms import gaussian_phase_object, off_axis_holograms
 from muscopy.qpi import qpi
 from muscopy.qpi_utils import unwrap_phase as mus_unwrap_phase
 

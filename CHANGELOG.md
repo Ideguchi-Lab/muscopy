@@ -13,7 +13,7 @@
 
 ### Changed
 
-- Shared synthetic hologram and intensity generation across the reconstruction examples. The IDT example now passes simulated images directly to reconstruction in memory.
+- Shared synthetic hologram and intensity generation across the reconstruction examples via `examples/muscopy_example_data/`. The IDT example now passes simulated images directly to reconstruction in memory.
 - Sphinx configuration resolves source paths relative to `conf.py` and skips the private MLB simulation examples on Read the Docs as well as in CI.
 
 ### Fixed

@@ -52,8 +52,8 @@ muscopy-generate-hologram holograms.npz
 
 The NumPy archive contains `hologram`, `reference_hologram`,
 `off_axis_center`, and the five `MuParameters` fields used by the QPI example.
-The examples call the bundled `muscopy.example_holograms` helpers directly to
-generate inputs in memory. These helpers are intended for examples.
+The examples generate their inputs in memory with the bundled
+[example data generators](examples/muscopy_example_data/).
 
 ## Optional CuPy support
 

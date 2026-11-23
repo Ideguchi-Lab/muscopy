@@ -10,9 +10,9 @@ Demonstration of the shot noise calculation from a hologram
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
+from muscopy_example_data.holograms import off_axis_holograms
 
 from muscopy.dh import MuParameters, print_all_parameters
-from muscopy.example_holograms import off_axis_holograms
 from muscopy.phase_noise import calc_phase_noise, calc_visibility
 
 # %%

@@ -11,9 +11,9 @@ sample from an off-axis hologram of a disk-shaped phase object.
 
 import jax
 import matplotlib.pyplot as plt
+from muscopy_example_data.holograms import off_axis_holograms
 
 from muscopy.dh import MuParameters, print_all_parameters
-from muscopy.example_holograms import off_axis_holograms
 from muscopy.qpi import correct_phase_offset, qpi
 
 # config

@@ -20,8 +20,8 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 from jax import Array
+from muscopy_example_data.mlb import simulate_mlb_measurements
 
-from muscopy.example_mlb import simulate_mlb_measurements
 from muscopy.idt import IDTConfig, IDTParameters, compute_g_list, compute_idt, transfer_func_im, transfer_func_re
 
 # Suppress JAX warnings about dtype conversion that can interfere with execution

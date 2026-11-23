@@ -11,9 +11,9 @@ complex fields obtained from multiplexed QPI. A two-channel multiplexing matrix 
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
+from muscopy_example_data.holograms import disk_phase_object, off_axis_holograms
 
 from muscopy.dh import MuParameters, demultiplex_cp_arrays, offaxis_dh, print_all_parameters
-from muscopy.example_holograms import disk_phase_object, off_axis_holograms
 
 # config
 SHOW_IMAGE = True

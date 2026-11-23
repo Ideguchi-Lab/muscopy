@@ -18,9 +18,9 @@ import math
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
+from muscopy_example_data.holograms import inline_holograms
 
 from muscopy.dh import MuParameters, inline_dh, print_all_parameters
-from muscopy.example_holograms import inline_holograms
 
 # config
 SHOW_IMAGE = True

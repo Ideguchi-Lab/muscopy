@@ -13,9 +13,9 @@ The example compares reconstruction with and without aberration correction.
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
+from muscopy_example_data.holograms import disk_phase_object, off_axis_holograms
 
 from muscopy.dh import MuParameters, print_all_parameters
-from muscopy.example_holograms import disk_phase_object, off_axis_holograms
 from muscopy.qpi import correct_phase_offset, qpi
 
 # config

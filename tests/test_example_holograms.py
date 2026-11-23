@@ -7,10 +7,10 @@ from typing import TYPE_CHECKING
 
 import jax.numpy as jnp
 import numpy as np
+from muscopy_example_data.holograms import inline_holograms, main, off_axis_holograms
 from numpy.testing import assert_allclose
 
 from muscopy.dh import MuParameters, inline_dh
-from muscopy.example_holograms import inline_holograms, main, off_axis_holograms
 from muscopy.qpi import qpi
 
 if TYPE_CHECKING:

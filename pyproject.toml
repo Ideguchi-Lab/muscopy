@@ -36,7 +36,7 @@ Issues = "https://github.com/Ideguchi-Lab/muscopy/issues"
 Changelog = "https://github.com/Ideguchi-Lab/muscopy/blob/main/CHANGELOG.md"
 
 [project.scripts]
-muscopy-generate-hologram = "muscopy.example_holograms:main"
+muscopy-generate-hologram = "muscopy_example_data.holograms:main"
 
 [project.optional-dependencies]
 dev = [
@@ -63,6 +63,11 @@ cupy = [
 
 [tool.setuptools.package-data]
 muscopy = ["py.typed"]
+
+[tool.setuptools.packages.find]
+where = [".", "examples"]
+include = ["muscopy", "muscopy.*", "muscopy_example_data", "muscopy_example_data.*"]
+namespaces = false
 
 [tool.ruff]
 target-version = "py311"
@@ -128,7 +133,7 @@ docstring-code-format = true
 ]
 
 [tool.pytest.ini_options]
-pythonpath = ["muscopy"]
+pythonpath = ["muscopy", "examples"]
 testpaths = ["tests"]
 filterwarnings = "ignore::DeprecationWarning"
 markers = "slow: mark test as slow"
@@ -137,6 +142,8 @@ markers = "slow: mark test as slow"
 strict = true
 ignore_missing_imports = true
 files = ["muscopy", "tests", "examples"]
+mypy_path = ["examples"]
+explicit_package_bases = true
 exclude = [
     "muscopy/cuda/.*",
     "tests/test_cuda_qpi.py",
@@ -144,6 +151,7 @@ exclude = [
 
 [tool.pyright]
 include = ["muscopy", "tests", "examples"]
+extraPaths = ["examples"]
 reportMissingImports = "warning"
 reportMissingModuleSource = "warning"
 ignore = [

@@ -26,10 +26,10 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 from jax import Array
+from muscopy_example_data.mlb import simulate_mlb_measurements
 
 from muscopy.cfg import ArrayPrecision
 from muscopy.dh import get_spectrum
-from muscopy.example_mlb import simulate_mlb_measurements
 from muscopy.odt import ODTConfig, ODTParameters, odt
 
 

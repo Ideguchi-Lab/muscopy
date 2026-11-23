@@ -298,15 +298,17 @@ def _make_disk(
     return circle > radius**2 if highpass else circle <= radius**2
 
 
-def _crop_array(array: cp.ndarray, center: tuple[int, int], width: int) -> cp.ndarray:
+def _crop_slices(center: tuple[int, int], width: int) -> tuple[slice, slice]:
     if width <= 0 or width % 2 == 0:
         msg = "width must be a positive odd integer"
         raise ValueError(msg)
 
-    return array[
-        center[0] - width // 2 : center[0] + width // 2 + 1,
-        center[1] - width // 2 : center[1] + width // 2 + 1,
-    ]
+    radius = width // 2
+    return slice(center[0] - radius, center[0] + radius + 1), slice(center[1] - radius, center[1] + radius + 1)
+
+
+def _crop_array(array: cp.ndarray, center: tuple[int, int], width: int) -> cp.ndarray:
+    return array[_crop_slices(center, width)]
 
 
 def _get_spectrum(
@@ -317,14 +319,20 @@ def _get_spectrum(
     crop_center: bool = False,
     c_r: int = 5,
 ) -> cp.ndarray:
-    mask = _make_disk(offaxis_center, params.aperturesize_px // 2, params.img_size_px)
-    masked_ft_array = ft_array * mask
+    width = params.aperturesize_px
+    size = params.img_size_px
+    row_slice, col_slice = _crop_slices(offaxis_center, width)
+    cropped = cp.broadcast_to(ft_array, (size, size))[row_slice, col_slice]
+    crop_center_coords = (
+        offaxis_center[0] - row_slice.indices(size)[0],
+        offaxis_center[1] - col_slice.indices(size)[0],
+    )
+    spectrum = cropped * _make_disk(crop_center_coords, width // 2, cropped.shape)
 
     if crop_center:
-        mask_highpass = _make_disk(offaxis_center, c_r, params.img_size_px, highpass=True)
-        masked_ft_array *= mask_highpass
+        spectrum *= _make_disk(crop_center_coords, c_r, cropped.shape, highpass=True)
 
-    return _crop_array(masked_ft_array, offaxis_center, params.aperturesize_px)
+    return spectrum
 
 
 def _correct_aberration(spectrum: cp.ndarray, pupil_func: cp.ndarray) -> cp.ndarray:

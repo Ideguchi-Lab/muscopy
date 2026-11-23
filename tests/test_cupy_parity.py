@@ -20,7 +20,12 @@ if TYPE_CHECKING:
                 "muscopy/dh.py": "def crop_array(): return 2\n",
                 "muscopy/cuda/dh.py": "def _crop_array(): return 1\ndef make_disk(): return 2\n",
             },
-            ["- `muscopy/dh.py` `crop_array()` → `muscopy/cuda/dh.py` `crop_array()`, `_crop_array()`"],
+            [
+                (
+                    "- `muscopy/dh.py` `crop_array()` → `muscopy/cuda/dh.py` "
+                    "`crop_array()`, `_crop_array()`, `_crop_slices()`"
+                )
+            ],
         ),
         (
             {

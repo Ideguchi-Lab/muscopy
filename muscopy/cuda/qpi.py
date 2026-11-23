@@ -149,8 +149,7 @@ def mip_qpi(
                 ],
             ),
         )
-        if float(center_phase) < 0:
-            array_div = 1 / array_div
+        array_div = cp.where(center_phase < 0, 1 / array_div, array_div)
 
     return cp.angle(array_div)
 

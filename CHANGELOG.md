@@ -14,6 +14,11 @@
 
 - Sphinx configuration resolves source paths relative to `conf.py` and skips the private MLB simulation examples on Read the Docs as well as in CI.
 
+### Fixed
+
+- Crop CuPy hologram spectra before masking to avoid retaining full-size FFT buffers.
+- Select the CuPy MIP-QPI phase inversion on the GPU to avoid synchronizing the central phase with the host.
+
 ---
 
 ## Version 1.0.2 [2026-09-09]

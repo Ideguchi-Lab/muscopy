@@ -14,6 +14,7 @@ import scipy.fft
 from numpy.testing import assert_allclose
 
 from muscopy.dh import MuParameters
+from muscopy.dh import get_spectrum as jax_get_spectrum
 from muscopy.dh import offaxis_dh as jax_offaxis_dh
 from muscopy.phase_noise import calc_visibility as jax_calc_visibility
 from muscopy.qpi import correct_phase_offset as jax_correct_phase_offset
@@ -37,6 +38,7 @@ class _FakeCupy(types.ModuleType):
     array: AnyFunc
     asnumpy: AnyFunc
     arange: AnyFunc
+    broadcast_to: AnyFunc
     meshgrid: AnyFunc
     ones: AnyFunc
     ones_like: AnyFunc
@@ -64,6 +66,7 @@ def _install_fake_cupy() -> None:
     cupy_module.array = np.array
     cupy_module.asnumpy = np.asarray
     cupy_module.arange = np.arange
+    cupy_module.broadcast_to = np.broadcast_to
     cupy_module.meshgrid = np.meshgrid
     cupy_module.ones = np.ones
     cupy_module.ones_like = np.ones_like
@@ -117,6 +120,18 @@ def _qpi_fixture() -> tuple[MuParameters, jnp.ndarray, jnp.ndarray, tuple[int, i
     return params, sample, reference, offaxis_center
 
 
+def _offaxis_phase_fixture(phase: float) -> tuple[MuParameters, jnp.ndarray, jnp.ndarray, tuple[int, int]]:
+    size = 64
+    params = MuParameters(na=0.03, wavelength_m=500e-9, img_size_px=size, px_size_m=1e-6, n_sol=1.33)
+    row_offset, col_offset = 7, 16
+    rows, cols = np.ogrid[:size, :size]
+    carrier = 2 * np.pi * (row_offset * rows + col_offset * cols) / size
+    sample = jnp.asarray(2 + np.cos(carrier + phase))
+    reference = jnp.asarray(2 + np.cos(carrier))
+    center = (params.img_center[0] + row_offset, params.img_center[1] + col_offset)
+    return params, sample, reference, center
+
+
 def test_cuda_imports_with_cupy_available() -> None:
     assert cupy_dh.__all__ == [
         "correct_aberration",
@@ -128,6 +143,22 @@ def test_cuda_imports_with_cupy_available() -> None:
     ]
     assert cupy_qpi.__all__ == ["correct_phase_offset", "mip_qpi", "qpi"]
     assert cupy_qpi_utils.__all__ == ["unwrap_phase"]
+
+
+@pytest.mark.parametrize(
+    ("center", "crop_center"),
+    [((10, 7), False), ((14, 13), True), ((0, 2), False)],
+    ids=["interior", "clipped-highpass", "empty"],
+)
+def test_get_spectrum_cupy_owns_cropped_storage(center: tuple[int, int], *, crop_center: bool) -> None:
+    params = MuParameters(na=0.1, wavelength_m=500e-9, img_size_px=16, px_size_m=1e-6, n_sol=1.33)
+    spectrum = np.arange(256, dtype=np.float32).reshape(16, 16) + 1j
+    expected = jax_get_spectrum(jnp.asarray(spectrum), params, center, crop_center=crop_center, c_r=1)
+
+    observed = _np_array(cupy_dh.get_spectrum(_cp_array(spectrum), params, center, crop_center=crop_center, c_r=1))
+
+    assert observed.flags.owndata
+    assert_allclose(observed, np.asarray(expected))
 
 
 def test_offaxis_dh_cupy_matches_jax_single_center() -> None:
@@ -175,24 +206,30 @@ def test_calc_visibility_cupy_recovers_spatially_varying_fringe_contrast() -> No
 
 
 def test_qpi_cuda_matches_jax_single_center() -> None:
-    params, array, reference, offaxis_center = _qpi_fixture()
+    phase = 0.6
+    params, array, reference, offaxis_center = _offaxis_phase_fixture(phase)
 
     expected = jax_qpi(array, reference, params, offaxis_center)
     observed = cupy_qpi.qpi(_cp_array(array), _cp_array(reference), params, offaxis_center)
 
-    assert observed.shape == expected.shape
+    assert observed.shape == (params.aperturesize_px, params.aperturesize_px)
+    assert_allclose(_np_array(observed), phase, atol=1e-6)
     assert_allclose(_np_array(observed), np.asarray(expected), atol=1e-5)
 
 
 def test_qpi_cuda_matches_jax_multiple_centers() -> None:
-    params, array, reference, offaxis_center = _qpi_fixture()
-    offaxis_centers = [offaxis_center, offaxis_center]
+    phase = 0.6
+    params, array, reference, offaxis_center = _offaxis_phase_fixture(phase)
+    opposite_center = (2 * params.img_center[0] - offaxis_center[0], 2 * params.img_center[1] - offaxis_center[1])
+    offaxis_centers = [offaxis_center, opposite_center]
 
     expected = jax_qpi(array, reference, params, offaxis_centers)
     observed = cupy_qpi.qpi(_cp_array(array), _cp_array(reference), params, offaxis_centers)
 
     assert isinstance(observed, list)
-    assert len(observed) == len(expected)
+    assert len(observed) == len(expected) == 2
+    assert_allclose(_np_array(observed[0]), phase, atol=1e-6)
+    assert_allclose(_np_array(observed[1]), -phase, atol=1e-6)
     for observed_array, expected_array in zip(observed, expected, strict=True):
         assert_allclose(_np_array(observed_array), np.asarray(expected_array), atol=1e-5)
 
@@ -249,9 +286,22 @@ def test_mip_qpi_cuda_shape_mismatch() -> None:
         cupy_qpi.mip_qpi(_cp_array(np.ones((16, 16))), _cp_array(np.ones((8, 8))), params, (8, 8))
 
 
-def test_mip_qpi_cuda_center_region_inversion() -> None:
-    params, array_off, _, offaxis_center = _qpi_fixture()
-    array_on = array_off * 1.03
+@pytest.mark.parametrize("phase", [-0.6, 0.0, 0.6], ids=["negative", "zero", "positive"])
+def test_mip_qpi_cuda_center_region_inversion_stays_on_device(phase: float, monkeypatch: pytest.MonkeyPatch) -> None:
+    class DeviceScalar(np.ndarray):
+        def __bool__(self) -> bool:
+            msg = "Phase sign selection must stay on the device"
+            raise AssertionError(msg)
+
+        def __float__(self) -> float:
+            msg = "Phase sign selection must stay on the device"
+            raise AssertionError(msg)
+
+    def device_mean(array: np.ndarray) -> np.ndarray:
+        return np.asarray(np.mean(array)).view(DeviceScalar)
+
+    monkeypatch.setattr(sys.modules["cupy"], "mean", device_mean)
+    params, array_on, array_off, offaxis_center = _offaxis_phase_fixture(phase)
 
     no_region = cupy_qpi.mip_qpi(_cp_array(array_on), _cp_array(array_off), params, offaxis_center)
     with_region = cupy_qpi.mip_qpi(
@@ -262,7 +312,8 @@ def test_mip_qpi_cuda_center_region_inversion() -> None:
         mip_center_reg=((0, 3), (0, 3)),
     )
 
-    assert_allclose(_np_array(with_region), _np_array(no_region), atol=1e-5)
+    assert_allclose(_np_array(no_region), phase, atol=1e-6)
+    assert_allclose(_np_array(with_region), abs(phase), atol=1e-6)
 
 
 def test_correct_phase_offset_cupy_matches_jax() -> None:

@@ -16,7 +16,7 @@ from typing import TypedDict
 PARITY_RULES: dict[str, dict[str, tuple[str, ...]]] = {
     "dh": {
         "make_disk": ("make_disk", "_make_disk"),
-        "crop_array": ("crop_array", "_crop_array"),
+        "crop_array": ("crop_array", "_crop_array", "_crop_slices"),
         "get_spectrum": ("get_spectrum", "_get_spectrum"),
         "get_spectrums": ("get_spectrums", "_get_spectrum"),
         "correct_aberration": ("correct_aberration", "_correct_aberration"),

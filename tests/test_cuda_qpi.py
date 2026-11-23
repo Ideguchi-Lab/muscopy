@@ -15,6 +15,7 @@ from numpy.testing import assert_allclose
 
 from muscopy.dh import MuParameters
 from muscopy.dh import offaxis_dh as jax_offaxis_dh
+from muscopy.phase_noise import calc_visibility as jax_calc_visibility
 from muscopy.qpi import correct_phase_offset as jax_correct_phase_offset
 from muscopy.qpi import mip_qpi as jax_mip_qpi
 from muscopy.qpi import qpi as jax_qpi
@@ -90,6 +91,7 @@ def _install_fake_cupy() -> None:
 _install_fake_cupy()
 
 from muscopy.cuda import dh as cupy_dh  # noqa: E402
+from muscopy.cuda import phase_noise as cupy_phase_noise  # noqa: E402
 from muscopy.cuda import qpi as cupy_qpi  # noqa: E402
 from muscopy.cuda import qpi_utils as cupy_qpi_utils  # noqa: E402
 
@@ -149,6 +151,27 @@ def test_offaxis_dh_cupy_matches_jax_multiple_centers() -> None:
     assert len(observed) == len(expected)
     for observed_array, expected_array in zip(observed, expected, strict=True):
         assert_allclose(_np_array(observed_array), np.asarray(expected_array), atol=1e-5)
+
+
+def test_calc_visibility_cupy_recovers_spatially_varying_fringe_contrast() -> None:
+    size = 64
+    params = MuParameters(na=0.03, wavelength_m=500e-9, img_size_px=size, px_size_m=1e-6, n_sol=1.33)
+    coordinates = jnp.arange(size) / size
+    rows, cols = jnp.meshgrid(coordinates, coordinates, indexing="ij")
+    row_offset, col_offset = 7, 16
+    carrier = 2 * jnp.pi * (row_offset * rows + col_offset * cols)
+    dc = 100 + 20 * jnp.sin(2 * jnp.pi * rows)
+    contrast = 0.3 + 0.1 * jnp.cos(2 * jnp.pi * cols)
+    hologram = dc * (1 + contrast * jnp.cos(carrier))
+    offaxis_center = (params.img_center[0] + row_offset, params.img_center[1] + col_offset)
+
+    observed = _np_array(cupy_phase_noise.calc_visibility(_cp_array(hologram), params, offaxis_center))
+
+    width = params.aperturesize_px
+    expected_contrast = 0.3 + 0.1 * np.cos(2 * np.pi * np.arange(width) / width)
+    assert observed.shape == (width, width)
+    assert_allclose(observed, np.broadcast_to(expected_contrast, (width, width)), atol=1e-6)
+    assert_allclose(observed, np.asarray(jax_calc_visibility(hologram, params, offaxis_center)), atol=1e-6)
 
 
 def test_qpi_cuda_matches_jax_single_center() -> None:

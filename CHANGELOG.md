@@ -5,6 +5,7 @@
 ### Added
 
 - Added optional CuPy/CUDA QPI helpers under `muscopy.cuda` for Windows GPU workflows, including `offaxis_dh()`, `qpi()`, `mip_qpi()`, and `unwrap_phase()` [[#70](https://github.com/Ideguchi-Lab/muscopy/issues/70)].
+- Added `muscopy.cuda.phase_noise.calc_visibility()` for hologram fringe visibility with CuPy arrays.
 - Read the Docs configuration (`.readthedocs.yaml`) to host the documentation at <https://muscopy.readthedocs.io>.
 - Documentation link in the project metadata and README.
 

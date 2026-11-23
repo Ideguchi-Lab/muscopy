@@ -41,6 +41,23 @@ Install documentation dependencies when building docs locally.
 uv sync --extra doc
 ```
 
+## Optional CuPy support
+
+Install the CuPy extra for CUDA 12 environments.
+
+```sh
+uv sync --extra cupy
+```
+
+Import CuPy helpers from `muscopy.cuda` submodules.
+
+```python
+from muscopy.cuda.dh import offaxis_dh
+from muscopy.cuda.phase_noise import calc_visibility
+from muscopy.cuda.qpi import mip_qpi, qpi
+from muscopy.cuda.qpi_utils import unwrap_phase
+```
+
 ## Optional MLB simulation examples
 
 `examples/odt_with_mlb_simulation.py` and
@@ -53,22 +70,6 @@ and the other examples do not require it.
 See the [separate MLB installation guide](https://github.com/Ideguchi-Lab/muscopy/blob/main/docs/source/mlb_installation.rst)
 for access requirements, installation commands, and how to run these examples.
 This replaces the former `uv sync --extra extra` installation method.
-
-Install the optional CuPy QPI implementation for CUDA 12 environments when
-needed.
-
-```sh
-uv sync --extra cupy
-```
-
-CuPy-based QPI helpers live in a separate module so the default JAX API remains
-unchanged.
-
-```python
-from muscopy.cuda.dh import offaxis_dh
-from muscopy.cuda.qpi import mip_qpi, qpi
-from muscopy.cuda.qpi_utils import unwrap_phase
-```
 
 ## Public API compatibility
 

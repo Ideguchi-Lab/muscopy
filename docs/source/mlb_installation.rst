@@ -50,7 +50,7 @@ Alternatively, activate your environment and install both packages with pip:
 
 .. code-block:: sh
 
-   python -m pip install "muscopy[doc]==1.0.2"
+   python -m pip install "muscopy[doc]==1.1.0"
    python -m pip install \
      "muscopy-mlbsim @ git+ssh://git@github.com/Ideguchi-Lab/muscopy-mlbsim.git"
 

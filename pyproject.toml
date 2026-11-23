@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "muscopy"
-version = "1.0.2"
+version = "1.1.0"
 description = "Microscopy analysis utilities for quantitative phase imaging and optical tomography"
 readme = "README.md"
 authors = [

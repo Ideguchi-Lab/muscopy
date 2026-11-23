@@ -2,9 +2,13 @@
 
 ## Unreleased
 
+---
+
+## Version 1.1.0 [2026-11-23]
+
 ### Added
 
-- Added the optional `cupy` extra for CUDA 12 with off-axis digital holography, QPI, MIP-QPI, phase offset correction, and phase unwrapping under `muscopy.cuda` [[#70](https://github.com/Ideguchi-Lab/muscopy/issues/70)].
+- Added the optional `cupy` extra for CUDA 12 with off-axis digital holography, QPI, MIP-QPI, phase offset correction, and phase unwrapping under `muscopy.cuda` [[#70](https://github.com/Ideguchi-Lab/muscopy/issues/70), [#134](https://github.com/Ideguchi-Lab/muscopy/pull/134)].
 - Added `muscopy.cuda.phase_noise.calc_visibility()` for hologram fringe visibility with CuPy arrays.
 - Added `muscopy-generate-hologram` to save a synthetic off-axis hologram pair and its microscope parameters.
 - Added a CI reminder on pull requests that change tracked JAX functions without editing their CuPy counterparts.
@@ -13,7 +17,7 @@
 
 ### Changed
 
-- Shared synthetic hologram and intensity generation across the reconstruction examples via `examples/muscopy_example_data/`. The IDT example now passes simulated images directly to reconstruction in memory.
+- Shared synthetic hologram and intensity generation across the reconstruction examples via `examples/muscopy_example_data/`. The IDT example now passes simulated images directly to reconstruction in memory [[#158](https://github.com/Ideguchi-Lab/muscopy/pull/158)].
 - Sphinx configuration resolves source paths relative to `conf.py` and skips the private MLB simulation examples on Read the Docs as well as in CI.
 
 ### Fixed
